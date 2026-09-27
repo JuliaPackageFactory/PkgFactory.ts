@@ -50,6 +50,7 @@ export default {
       if (url.origin !== env.ORIGIN) return json({error: 'Invalid host'}, 403);
       const origin = request.headers.get('origin');
       if (origin && origin !== env.ORIGIN) return json({error: 'Invalid Origin'}, 403);
+      if (url.pathname !== '/health' && (!env.SESSION_KEY || !env.GITHUB_OAUTH_CLIENT_SECRET || !env.GITHUB_OAUTH_CLIENT_ID || env.GITHUB_OAUTH_CLIENT_ID === 'CONFIGURE_ME')) return json({error: 'GitHub OAuth is not configured'}, 503);
       if (env.MAINTENANCE === 'true' && (url.pathname === '/mcp' || url.pathname === '/api/create' || url.pathname === '/api/resume')) return json({error: 'Maintenance: creation is temporarily paused'}, 503);
       if (request.body) {
         const body = await limitedBody(request, 131072);

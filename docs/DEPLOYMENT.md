@@ -55,16 +55,30 @@ Client IDは変数、Client secretはWorker secretへ設定します。チャッ
 
 ## 3. Cloudflareステージング
 
-Workers PaidとDurable Objectsを使えるアカウント、Workers/KV/DOを配備できるAPI tokenを用意します。
-`apps/cloudflare/wrangler.jsonc` の `ORIGIN`、`GITHUB_OAUTH_CLIENT_ID`、KV IDのプレースホルダーを実値へ変更します。
-旧WorkerのKVやDOは流用せず、新版専用に作ります。
+2026-09-28時点で [pkgfactory-ts-staging](https://pkgfactory-ts-staging.ohnolab.workers.dev/health) は配備済みです。
+新版専用のOAuth KV `PKGFACTORY_TS_STAGING_OAUTH`、SQLite DO、32バイトの `SESSION_KEY` secretを準備しました。
+旧WorkerのKVやDOは流用していません。`MAINTENANCE=true` とOAuth未設定時の503で受付を停止しています。
+
+このステージングでは `apps/cloudflare/wrangler.jsonc` のトップレベル `GITHUB_OAUTH_CLIENT_ID` を設定し、
+次のsecretを登録してください。既存のSESSION_KEYやKVを作り直す必要はありません。
+
+```sh
+npx wrangler secret put GITHUB_OAUTH_CLIENT_SECRET --config apps/cloudflare/wrangler.jsonc
+```
+
+Client ID/secretを設定した後、トップレベル `MAINTENANCE` を `false` に変更し、
+`npm run check` → `npm run deploy:staging` を実行して、下記の受入検証を行います。
+
+別アカウントや新環境を準備する場合のみ、以下の初期設定を実施します。
+Workers PaidとDurable Objectsを使えるアカウント、Workers/KV/DOを配備できる認証が必要です。
+`ORIGIN`、`GITHUB_OAUTH_CLIENT_ID`、KV IDをその環境の実値へ変更します。
 
 ```sh
 npm ci
 npm run check
 node scripts/pack-smoke.mjs
 npx wrangler login
-npx wrangler kv namespace create OAUTH_KV --config apps/cloudflare/wrangler.jsonc
+npx wrangler kv namespace create PKGFACTORY_TS_STAGING_OAUTH --config apps/cloudflare/wrangler.jsonc
 ```
 
 返されたIDをトップレベルの `kv_namespaces[0].id` に入れます。
@@ -74,7 +88,7 @@ npx wrangler secret put GITHUB_OAUTH_CLIENT_SECRET --config apps/cloudflare/wran
 npx wrangler secret put SESSION_KEY --config apps/cloudflare/wrangler.jsonc
 ```
 
-`SESSION_KEY` は暗号学的乱数32バイトのBase64文字列です。パスワードマネージャーで生成・保管し、
+新環境の `SESSION_KEY` は暗号学的乱数32バイトのBase64文字列です。パスワードマネージャーで生成・保管し、
 secret入力プロンプトへ渡してください。CLIで生成するなら
 `node -e "console.log(require('node:crypto').randomBytes(32).toString('base64'))"` を手元で実行します。
 キー変更は既存Webセッションを復号できなくするため、ログインし直しが必要です。
