@@ -99,8 +99,10 @@ export class Factory {
         op.reconciliation = {at: this.now(), repositoryId: remote.repository?.id, head: remote.head?.object.sha, pending: op.pending?.stage};
         await persist();
       }
+      if (op.repositoryId && !remote.repository) throw new FactoryError('missing', 'Saved repository is no longer visible. Inspect access and deletion before continuing.');
       if (remote.repository) {
         if (!resume) throw new FactoryError('exists', 'Repository already exists. Use explicit resume only for this saved plan.');
+        if (op.repositoryId && op.repositoryId !== remote.repository.id) throw new FactoryError('ownership', 'Repository was replaced. Automatic resume refused.');
         const ours = remote.marker?.planId === id && remote.marker?.digest === op.plan.digest;
         const bootstrap = remote.repository.description === this.bootstrapDescription(op) && (!op.repositoryId || op.repositoryId === remote.repository.id);
         if (!ours && !bootstrap) throw new FactoryError('ownership', 'Repository cannot be proven to belong to this plan. Manual inspection required.');

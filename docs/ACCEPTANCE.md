@@ -6,7 +6,8 @@
 | 検証 | 結果 |
 |---|---|
 | Node.js 24 / TypeScript strict | 成功 |
-| Nodeテスト | 27件成功 |
+| リポジトリCI | [Windows/macOS/Linux＋Julia 3テンプレートの全6ジョブ成功](https://github.com/JuliaPackageFactory/PkgFactory.ts/actions/runs/36354386685) |
+| Nodeテスト | 28件成功 |
 | workerdテスト | 3件成功 |
 | 3テンプレート | 指定コミットの58原本＋回復マーカー、TOML/YAML/CFF/JSONの構文検証成功 |
 | Node/workerdのプラン一致 | 固定UUID・日付・日本語著者を含めて一致 |
@@ -14,11 +15,11 @@
 | GitHub Secret暗号化 | Node/workerdでsealed box生成、独立libsodiumで復号成功 |
 | 作成・明示的再開 | 3テンプレートの模擬GitHub完走。8工程で応答喪失→ロック保持→照合→再開成功 |
 | 切断 | Node AbortSignalとworkerd実HTTP接続の切断後、後続コミットなし |
-| 排他・所有者 | 他人のプラン、別プランの同一repo、改変Project.tomlを拒否 |
+| 排他・所有者 | 他人のプラン、別プランの同一repo、改変Project.toml、置換・削除されたrepoの再開を拒否 |
 | ローカルWeb | ブラウザでプレビュー・ファイル表示・未確認作成の拒否を確認。Host/Origin/CSRFテスト成功 |
 | MCP | stdioとStreamable HTTPのinitialize・tools/list・preview/create検証成功 |
 | 公開認証のローカル検証 | S256 challenge、一回限りstate、ブラウザ不一致、暗号文改変・ID入替、CSRF、ログアウト成功 |
-| npm tarball | Windowsで別ディレクトリへインストール後、CLI/オフライン生成/Web/stdioが起動 |
+| npm tarball | Windows/macOS/LinuxのCIで別ディレクトリへインストール後、CLI/オフライン生成/Web/stdioが起動 |
 | Wrangler dry-run | 成功。Worker約1.2MiB、gzip約250KiB。Julia/Containersなし |
 
 workerdの鍵生成は一例でEd25519約1ms、RSA約0.4–2.1秒でした。これはローカルの経過時間で、
@@ -56,7 +57,6 @@ Documenterの公開は生成Workflowの `GITHUB_TOKEN` によるもので、Ed25
 3. 非互換ならRSA-4096の新規PoCを通し、既定値を変更する。組織ポリシーの422はアルゴリズム非互換と判定しない。
 4. ステージングのGitHub OAuthアプリ、Cloudflare KV/DO/secretsを設定し、Web/MCPからの認可→作成→再開を確認する。
 5. 公開Edge経由の切断伝播・8同時実行・CPU/メモリを計測する。
-6. リポジトリCIのLinux/macOS/Windowsでnpm tarballを検証する（設定済み。ローカルで実行したのはWindows）。
-7. 本番成果と切替手順をレビューし、承認後に本番・npm公開と旧リポジトリのアーカイブへ進む。
+6. 本番成果と切替手順をレビューし、承認後に本番・npm公開と旧リポジトリのアーカイブへ進む。
 
 旧リポジトリ `PkgFactory.jl` の内容、設定、アーカイブ状態は変更していません。

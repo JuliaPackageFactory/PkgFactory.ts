@@ -54,3 +54,14 @@ test('competing plans and changed Project.toml are refused', async () => {
   const other = await factory.preview(input(), '42'); await assert.rejects(factory.execute(other.id, credentials), /holds this repository lock/);
   remote.files['Project.toml'] += '\n# user change'; await assert.rejects(factory.execute(plan.id, credentials, true), /Project.toml changed/);
 });
+test('replaced or missing repository cannot inherit a saved operation', async () => {
+  const {factory, remote, advance} = fixture(); const plan = await factory.preview(input(), '42');
+  remote.after = (method, path) => {if (method === 'POST' && path.endsWith('/keys')) throw new Error('stop');};
+  await assert.rejects(factory.execute(plan.id, credentials)); remote.after = undefined; advance();
+  remote.repository.id = 99;
+  await assert.rejects(factory.execute(plan.id, credentials, true), /Repository was replaced/);
+  advance(); remote.repository = null;
+  const count = remote.calls.filter(c => c.method !== 'GET').length;
+  await assert.rejects(factory.execute(plan.id, credentials, true), /no longer visible/);
+  assert.equal(remote.calls.filter(c => c.method !== 'GET').length, count);
+});
