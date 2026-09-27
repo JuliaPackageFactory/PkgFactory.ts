@@ -1,0 +1,51 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  node:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - run: node scripts/pack-smoke.mjs
+      - run: npm run test:worker
+        if: runner.os == 'Linux'
+  generated-julia:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        template: [minimum, simple, all-in-one]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npx tsx scripts/generate-fixtures.ts
+      - uses: julia-actions/setup-julia@v3
+        with:
+          version: '1.12'
+      - uses: julia-actions/cache@v3
+      - run: julia --project=. --startup-file=no -e 'using Pkg; Pkg.instantiate(); Pkg.test()'
+        working-directory: artifacts/generated/${{ matrix.template }}
+      - if: matrix.template != 'minimum'
+        run: julia --project=docs --startup-file=no -e 'using Pkg; Pkg.develop(PackageSpec(path=pwd())); Pkg.instantiate(); include("docs/make.jl")'
+        working-directory: artifacts/generated/${{ matrix.template }}

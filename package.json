@@ -1,0 +1,37 @@
+{
+  "name": "pkgfactory-repository",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test test/*.test.ts",
+    "test:worker": "tsx --test test/worker/*.test.ts",
+    "check": "npm run typecheck && npm test && npm run build && npm run test:worker",
+    "poc": "tsx scripts/key-poc.ts",
+    "e2e": "tsx scripts/github-e2e.ts",
+    "dev:worker": "wrangler dev --config apps/cloudflare/wrangler.jsonc",
+    "deploy:staging": "wrangler deploy --config apps/cloudflare/wrangler.jsonc",
+    "deploy:production": "wrangler deploy --config apps/cloudflare/wrangler.jsonc --env production"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20260927.1",
+    "@types/mustache": "4.2.6",
+    "@types/node": "24.19.0",
+    "@iarna/toml": "2.2.5",
+    "esbuild": "0.28.2",
+    "libsodium-wrappers": "0.7.16",
+    "miniflare": "5.20260926.0-alpha",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2",
+    "wrangler": "4.142.0",
+    "yaml": "2.9.1"
+  }
+}

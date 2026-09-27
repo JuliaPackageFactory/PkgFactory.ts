@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "pkgfactory": {
+      "command": "npx",
+      "args": ["--yes", "@juliapackagefactory/pkgfactory@0.1.0", "mcp", "--stdio"],
+      "env": {"GITHUB_TOKEN": "SET_IN_YOUR_CLIENT_SECRET_STORE"}
+    }
+  }
+}

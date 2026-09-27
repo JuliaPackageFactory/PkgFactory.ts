@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {"noEmit": false, "declaration": true, "emitDeclarationOnly": true, "rootDir": "packages/pkgfactory/src", "outDir": "packages/pkgfactory/dist", "allowImportingTsExtensions": true},
+  "include": ["packages/pkgfactory/src/index.ts"], "exclude": []
+}

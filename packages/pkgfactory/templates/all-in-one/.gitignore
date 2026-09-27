@@ -1,0 +1,11 @@
+*.jl.*.cov
+*.jl.cov
+*.jl.mem
+**/Manifest*.toml
+LocalPreferences.toml
+.DS_Store
+/docs/build/
+/docs/src/assets/citation.bib
+
+# Jupyter Notebook
+.ipynb_checkpoints/

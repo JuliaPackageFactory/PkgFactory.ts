@@ -1,0 +1,43 @@
+name: Release (manual)
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        type: choice
+        options: [staging, production, npm]
+        required: true
+      confirmation:
+        description: 'Enter publish after reviewing docs/DEPLOYMENT.md and the acceptance report'
+        required: true
+permissions:
+  contents: read
+jobs:
+  release:
+    if: inputs.confirmation == 'publish'
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.target }}
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          registry-url: https://registry.npmjs.org
+      - run: npm ci
+      - run: npm run check
+      - run: node scripts/pack-smoke.mjs
+      - if: inputs.target == 'npm'
+        run: npm publish --workspace @juliapackagefactory/pkgfactory --provenance --access public
+      - if: inputs.target == 'staging'
+        run: npm run deploy:staging
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      - if: inputs.target == 'production'
+        run: npm run deploy:production
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
