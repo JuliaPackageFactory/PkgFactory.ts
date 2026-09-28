@@ -49,6 +49,26 @@ test('Worker routes, Durable Object persistence, OAuth PKCE and CSRF rejection',
     // Browser mismatch consumes the one-time state without contacting GitHub.
     assert.equal((await mf.dispatchFetch(bad, {headers: {Cookie: '__Host-pkgfactory-login=wrong'}})).status, 400);
     assert.equal((await mf.dispatchFetch(bad, {headers: {Cookie: cookie}})).status, 400);
+    // Consent POST must end in a document before cross-origin navigation, so
+    // Chromium's form-action 'self' does not block GitHub or the MCP callback.
+    const registration = await mf.dispatchFetch('https://pkgfactory.test/oauth/register', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({client_name: 'Acceptance', redirect_uris: ['http://127.0.0.1:12345/callback'], token_endpoint_auth_method: 'none', grant_types: ['authorization_code'], response_types: ['code']})});
+    assert.equal(registration.status, 201);
+    const registered = await registration.json() as any;
+    const authorize = 'https://pkgfactory.test/authorize?' + new URLSearchParams({client_id: registered.client_id, redirect_uri: 'http://127.0.0.1:12345/callback', response_type: 'code', scope: 'pkgfactory', resource: 'https://pkgfactory.test/mcp', state: 'test-state', code_challenge: 'a'.repeat(43), code_challenge_method: 'S256'});
+    for (const decision of ['approve', 'deny']) {
+      const consent = await mf.dispatchFetch(authorize);
+      assert.equal(consent.status, 200);
+      const handle = (await consent.text()).match(/name="handle" value="([^"]+)"/)![1];
+      const consentCookie = consent.headers.get('set-cookie')!.split(';')[0];
+      const submit = () => mf.dispatchFetch('https://pkgfactory.test/authorize', {method: 'POST', redirect: 'manual', headers: {Origin: 'https://pkgfactory.test', Cookie: consentCookie, 'Content-Type': 'application/x-www-form-urlencoded'}, body: new URLSearchParams({handle, decision}).toString()});
+      const next = await submit(); assert.equal(next.status, 200);
+      assert.match(next.headers.get('content-security-policy')!, /form-action 'self'/);
+      assert.equal(next.headers.get('location'), null);
+      const navigation = await next.text(); assert.match(navigation, /http-equiv="refresh"/);
+      if (decision === 'approve') {assert.match(navigation, /https:\/\/github.com\/login\/oauth\/authorize/); assert.match(navigation, /code_challenge_method=S256/);}
+      else {assert.match(navigation, /http:\/\/127.0.0.1:12345\/callback/); assert.match(navigation, /error=access_denied/);}
+      assert.equal((await submit()).status, 400);
+    }
     const state = await mf.getDurableObjectNamespace('STATE'); const stub = state.get(state.idFromName('test'));
     const snapshot = await stub.fetch('https://state', {method: 'POST', body: JSON.stringify({action: 'snapshot'})});
     assert.deepEqual(await snapshot.json(), {revision: 0, entries: []});

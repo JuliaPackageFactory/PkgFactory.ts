@@ -83,7 +83,7 @@ CLI既定値とWorker `KEY_ALGORITHM` をRSAへ合わせます。成功済みプ
 
 **Client IDは公開識別子なのでチャットで共有できます。**
 受け取ったIDを `apps/cloudflare/wrangler.jsonc` のトップレベル `GITHUB_OAUTH_CLIENT_ID` に設定します。
-本番用の `env.production` はまだ変更しません。
+本番Client IDは `env.production.vars.GITHUB_OAUTH_CLIENT_ID` に分けて設定しています。
 
 **Client secretはチャットやGitへ貼らず、Cloudflareへ直接登録します。**
 
@@ -93,7 +93,7 @@ CLI既定値とWorker `KEY_ALGORITHM` をRSAへ合わせます。成功済みプ
 4. 画面の **Add / Deploy** または保存ボタンで反映します。
 
 `SESSION_KEY` はすでに登録済みです。GitHubのClient secretで上書きしないでください。
-Client IDの共有とsecretの登録が終われば、こちらで設定を配備してWeb/MCPのログイン検証へ進めます。
+このステージングではClient IDとsecretの登録を確認し、受付を有効化しました。Web/MCPのログイン検証を進めています。
 CLIで登録する場合のコマンドは次節にあります。
 
 ### 2.3 本番用OAuthアプリ（作成済み）
@@ -138,17 +138,35 @@ Client IDは変数、Client secretはWorker secretへ設定します。チャッ
 
 2026-09-28時点で [pkgfactory-staging](https://pkgfactory-staging.ohnolab.workers.dev/health) は配備済みです。
 新版専用のOAuth KV `PKGFACTORY_TS_STAGING_OAUTH`、SQLite DO、32バイトの `SESSION_KEY` secretを準備しました。
-旧WorkerのKVやDOは流用していません。`MAINTENANCE=true` とOAuth未設定時の503で受付を停止しています。
+旧WorkerのKVやDOは流用していません。Client secret登録後、トップレベルの `MAINTENANCE=false` を配備し、受付を有効化しました。
+本番の `env.production.vars.MAINTENANCE` は `true` のままです。
 
-このステージングのClient IDは設定済みです。残りは次のsecret登録です。
+このステージングのClient ID/secretは設定済みです。以下はsecretを更新する場合のコマンドです。
 既存のSESSION_KEYやKVを作り直す必要はありません。
 
 ```sh
 npx wrangler secret put GITHUB_OAUTH_CLIENT_SECRET --config apps/cloudflare/wrangler.jsonc
 ```
 
-Client ID/secretを設定した後、トップレベル `MAINTENANCE` を `false` に変更し、
-`npm run check` → `npm run deploy:staging` を実行して、下記の受入検証を行います。
+登録後に `npm run check` → `npm run deploy:staging` を実行済みです。下記の受入検証を続けます。
+
+MCPの対話検証は次のコマンドで起動します。表示されたlocalhost URLを通常のブラウザーで開き、
+クライアントとGitHubの認可を行います。認証情報はプロセスのメモリだけに保持し、ファイルや標準出力へ出しません。
+
+```sh
+# 読み取り検証: 5ツールの確認と8同時プレビュー（3テンプレート）
+npx tsx scripts/staging-mcp-e2e.ts
+# 明示的な実リポジトリ作成: JuliaPackageFactory/PkgFactoryEdge<日時><番号>.jl の3件
+npx tsx scripts/staging-mcp-e2e.ts --confirm-create-test-repositories
+# 途中停止した場合: 状態を再取得し、リース満了後に明示的に再開
+npx tsx scripts/staging-mcp-e2e.ts --confirm-create-test-repositories --resume-plan=PLAN_ID
+```
+
+認可入口は30分有効です。結果は `artifacts/staging-mcp-e2e.json` に記録します。
+書き込みを自動再送しません。実行が停止したら結果に記録されたplanIdを確認してください。
+MCPの同意フォームは、外部へのHTTPリダイレクトをCSPが遮断するブラウザーに対応するため、
+同意後に遷移用HTMLを返します。`form-action 'self'` は維持します。
+[MDNのform-action仕様説明](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy/form-action)
 
 別アカウントや新環境を準備する場合のみ、以下の初期設定を実施します。
 Workers PaidとDurable Objectsを使えるアカウント、Workers/KV/DOを配備できる認証が必要です。

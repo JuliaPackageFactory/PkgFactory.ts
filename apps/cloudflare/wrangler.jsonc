@@ -7,7 +7,7 @@
   "workers_dev": true,
   "limits": {"cpu_ms": 30000},
   "observability": {"enabled": false},
-  "vars": {"ORIGIN": "https://pkgfactory-staging.ohnolab.workers.dev", "GITHUB_OAUTH_CLIENT_ID": "Ov23li7iF0SLvIWtqPyX", "KEY_ALGORITHM": "ed25519", "MAINTENANCE": "true"},
+  "vars": {"ORIGIN": "https://pkgfactory-staging.ohnolab.workers.dev", "GITHUB_OAUTH_CLIENT_ID": "Ov23li7iF0SLvIWtqPyX", "KEY_ALGORITHM": "ed25519", "MAINTENANCE": "false"},
   "durable_objects": {"bindings": [{"name": "STATE", "class_name": "ApplicationState"}, {"name": "AUTH", "class_name": "AuthState"}]},
   "migrations": [{"tag": "v1", "new_sqlite_classes": ["ApplicationState", "AuthState"]}],
   "kv_namespaces": [{"binding": "OAUTH_KV", "id": "646e8c10e0ac4f089ae34654751aa2cd"}],

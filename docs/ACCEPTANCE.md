@@ -4,7 +4,8 @@
 ステージングは配備済みです。組織のDeploy key許可後の再開とEd25519の実サービス互換を確認しました。
 ステージングのGitHub OAuth Client IDは反映・配備済みです。
 本番用の新しいClient IDも設定ファイルへ反映済みです（本番は未配備）。
-残りはClient secretの登録と認可後の実測、本番公開準備です。
+ステージングのClient secret登録を確認し、受付を有効化しました。
+残りはブラウザー認可後の実測、本番公開準備です。
 
 | 検証 | 結果 |
 |---|---|
@@ -21,11 +22,11 @@
 | 排他・所有者 | 他人のプラン、別プランの同一repo、改変Project.toml、置換・削除されたrepoの再開を拒否 |
 | ローカルWeb | ブラウザでプレビュー・ファイル表示・未確認作成の拒否を確認。Host/Origin/CSRFテスト成功 |
 | MCP | stdioとStreamable HTTPのinitialize・tools/list・preview/create検証成功 |
-| 公開認証のローカル検証 | S256 challenge、一回限りstate、ブラウザ不一致、暗号文改変・ID入替、CSRF、ログアウト成功 |
+| 公開認証のローカル検証 | S256 challenge、一回限りstate、ブラウザ不一致、暗号文改変・ID入替、CSRF、ログアウト成功。MCPクライアント登録→同意/取消→遷移ページ、一回限り同意の検証も成功 |
 | npm tarball | Windows/macOS/LinuxのCIで別ディレクトリへインストール後、CLI/オフライン生成/Web/stdioが起動 |
 | Wrangler dry-run | 成功。Worker約1.2MiB、gzip約250KiB。Julia/Containersなし |
-| Cloudflareステージング配備 | 専用KV・SQLite DO・SESSION_KEY作成済み。短い名前へ配備成功、報告された起動時間36ms |
-| 公開Edgeの疎通 | [health](https://pkgfactory-staging.ohnolab.workers.dev/health)は200/maintenance。OAuth未設定のWeb/MCP/作成APIは503、異なるOriginは403 |
+| Cloudflareステージング配備 | 専用KV・SQLite DO・SESSION_KEY・GitHub Client secret設定済み。受付有効、報告された起動時間35ms。version `2c5f7444-6c0d-4ac7-8319-009d66b1d3eb` |
+| 公開Edgeの疎通 | [health](https://pkgfactory-staging.ohnolab.workers.dev/health)は200/ok、Webは200。未認証API/MCPは401。MCPの認証案内・resource metadata・authorization metadataは正常、S256のみを案内 |
 
 workerdの鍵生成は一例でEd25519約1ms、RSA約0.4–2.1秒でした。これはローカルの経過時間で、
 Cloudflare本番CPU/メモリ測定ではありません。高負荷・8同時実行の容量測定はステージングで行います。
@@ -67,7 +68,7 @@ DocumenterのGitHubActions認証実装はこの条件でSSHを選びます。
 
 ## リリース前に残る確認
 
-1. ステージングのGitHub OAuth Client secretを登録し、受付を有効化してWeb/MCPからの認可→作成→再開を確認する。Client ID/KV/DO/SESSION_KEYは配備済み。
+1. Web/MCPからの認可→作成→再開を確認する。secret登録と受付有効化は完了。内蔵ブラウザーではGitHub認可画面の組織一覧がLoadingのまま停止したため、通常のブラウザーによる認可を依頼中。
 2. 公開Edge経由の切断伝播・8同時実行・CPU/メモリを計測する。
 3. 本番成果と切替手順をレビューし、承認後に本番・npm公開と旧リポジトリのアーカイブへ進む。
 

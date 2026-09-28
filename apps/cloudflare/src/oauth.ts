@@ -3,6 +3,12 @@ import { json, escapeHtml as e } from '../../../packages/pkgfactory/src/web/http
 import { randomToken } from '../../../packages/pkgfactory/src/core/encoding.js';
 import { GitHub } from '../../../packages/pkgfactory/src/github/client.js';
 import { githubAuthorize, exchangeGitHub, type Env } from './auth.js';
+// A document navigation ends the form submission before leaving this origin.
+// Chromium applies form-action 'self' to cross-origin HTTP redirects after POST.
+function navigateAfterConsent(target: string, headers: Headers, label: string) {
+  headers.delete('Location'); headers.set('Content-Type', 'text/html; charset=utf-8');
+  return new Response(`<!doctype html><html lang="en"><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=${e(target)}"><title>${e(label)}</title><p><a href="${e(target)}">${e(label)}</a></p></html>`, {headers});
+}
 export async function refreshGitHub({grantType, props}: TokenExchangeCallbackOptions) {
   if (grantType !== 'refresh_token') return;
   try {
@@ -20,11 +26,10 @@ export async function oauthRoutes(request: Request, env: Env): Promise<Response 
     }
     if (url.pathname === '/authorize' && request.method === 'POST') {
       const form = await request.formData(); const handle = String(form.get('handle'));
-      if (form.get('decision') !== 'approve') {const denied = await oauth.denyConsent(request, handle); return new Response(null, {status: 302, headers: denied.headers});}
+      if (form.get('decision') !== 'approve') {const denied = await oauth.denyConsent(request, handle); return navigateAfterConsent(denied.headers.get('Location')!, denied.headers, 'Return to client');}
       const approved = await oauth.approveConsent(request, handle, {scope: ['pkgfactory']});
       const verifier = randomToken(); const {state, headers} = await oauth.beginUpstream(approved.request, {data: {verifier}, headers: approved.headers});
-      headers.set('Location', await githubAuthorize(env, state, verifier, '/callback'));
-      return new Response(null, {status: 302, headers});
+      return navigateAfterConsent(await githubAuthorize(env, state, verifier, '/callback'), headers, 'Continue to GitHub');
     }
     if (url.pathname === '/callback' && request.method === 'GET') {
       const {request: original, data, headers} = await oauth.finishUpstream(request);
