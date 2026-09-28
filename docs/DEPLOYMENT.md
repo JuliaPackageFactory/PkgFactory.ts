@@ -173,6 +173,16 @@ MCPの同意フォームは、外部へのHTTPリダイレクトをCSPが遮断�
 `Origin: null` や異なるOrigin自体は引き続き拒否します。
 [MDNのOriginへの影響](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Referrer-Policy#effect_on_the_origin_header)
 
+GitHubがパスキーによる本人確認を求める場合、普段使っているChrome/Edge等でlocalhost入口から
+認可を開始し、同じブラウザーで完了してください。OAuth Appへの権限付与はGitHubのAuthorizeで行います。
+途中でcallback URLを別ブラウザーへコピーせず、入口からやり直します（stateはブラウザーに結び付いています）。
+
+認証エラーは作成操作のresumeでは回復しません。新しい認可を開始します。
+エラーの `code` が `oauth_client_credentials` なら、設定中のClient IDと同じOAuth AppのClient secretか確認します。
+`oauth_redirect_uri` なら登録済みcallback URLを確認し、`oauth_code_invalid` なら期限切れ/使用済みコードなので入口からやり直します。
+`oauth_scopes` ならrepo/workflow権限、`oauth_mcp_grant` ならMCPの認可保存処理を確認します。
+トークン応答・秘密鍵・Client secret・認可コードはログにも診断表示にも含めません。
+
 別アカウントや新環境を準備する場合のみ、以下の初期設定を実施します。
 Workers PaidとDurable Objectsを使えるアカウント、Workers/KV/DOを配備できる認証が必要です。
 `ORIGIN`、`GITHUB_OAUTH_CLIENT_ID`、KV IDをその環境の実値へ変更します。

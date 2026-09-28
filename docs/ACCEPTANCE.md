@@ -11,7 +11,7 @@
 |---|---|
 | Node.js 24 / TypeScript strict | 成功 |
 | リポジトリCI | [Windows/macOS/Linux＋Julia 3テンプレートの全6ジョブ成功](https://github.com/JuliaPackageFactory/PkgFactory.ts/actions/runs/36355182632) |
-| Nodeテスト | 28件成功 |
+| Nodeテスト | 29件成功 |
 | workerdテスト | 3件成功 |
 | 3テンプレート | 指定コミットの58原本＋回復マーカー、TOML/YAML/CFF/JSONの構文検証成功 |
 | Node/workerdのプラン一致 | 固定UUID・日付・日本語著者を含めて一致 |
@@ -25,7 +25,7 @@
 | 公開認証のローカル検証 | S256 challenge、一回限りstate、ブラウザ不一致、暗号文改変・ID入替、CSRF、ログアウト成功。MCPクライアント登録→同意/取消→遷移ページ、一回限り同意の検証も成功 |
 | npm tarball | Windows/macOS/LinuxのCIで別ディレクトリへインストール後、CLI/オフライン生成/Web/stdioが起動 |
 | Wrangler dry-run | 成功。Worker約1.2MiB、gzip約250KiB。Julia/Containersなし |
-| Cloudflareステージング配備 | 専用KV・SQLite DO・SESSION_KEY・GitHub Client secret設定済み。受付有効、報告された起動時間41ms。version `48510566-3097-43d9-807d-b0ce15bf6528` |
+| Cloudflareステージング配備 | 専用KV・SQLite DO・SESSION_KEY・GitHub Client secret設定済み。受付有効、報告された起動時間40ms。version `5c3b422b-ebad-4cfd-8d03-0704574028cb` |
 | 公開Edgeの疎通 | [health](https://pkgfactory-staging.ohnolab.workers.dev/health)は200/ok、Webは200。未認証API/MCPは401。MCPの認証案内・resource metadata・authorization metadataは正常、S256のみを案内 |
 
 workerdの鍵生成は一例でEd25519約1ms、RSA約0.4–2.1秒でした。これはローカルの経過時間で、
@@ -68,7 +68,7 @@ DocumenterのGitHubActions認証実装はこの条件でSSHを選びます。
 
 ## リリース前に残る確認
 
-1. Web/MCPからの認可→作成→再開を確認する。secret登録と受付有効化は完了。内蔵ブラウザーではGitHub認可画面の組織一覧がLoadingのまま停止したため、通常のブラウザーによる認可を依頼中。実ブラウザーで発見した同意POSTのInvalid Originは、認可画面のReferrer-Policy修正と回帰テストを終え、ステージングへ配備済み。
+1. Web/MCPからの認可→作成→再開を確認する。secret登録と受付有効化は完了。同意POSTのInvalid Originは、Referrer-Policy修正と回帰テストを終え配備済み。その後GitHub callbackで認証処理の失敗を確認したため、安全なエラー分類を追加した。原因の確定と正常完了はまだ確認できていない。内蔵ブラウザーではパスキーを使えず、通常のブラウザーによる認可を依頼中。
 2. 公開Edge経由の切断伝播・8同時実行・CPU/メモリを計測する。
 3. 本番成果と切替手順をレビューし、承認後に本番・npm公開と旧リポジトリのアーカイブへ進む。
 

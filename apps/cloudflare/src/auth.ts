@@ -2,6 +2,7 @@ import type { OAuthHelpers } from '@cloudflare/workers-oauth-provider';
 import { base64, base64url, unbase64, randomToken, sha256, utf8, decode } from '../../../packages/pkgfactory/src/core/encoding.js';
 import { GitHub } from '../../../packages/pkgfactory/src/github/client.js';
 import { json } from '../../../packages/pkgfactory/src/web/http.js';
+import { FactoryError } from '../../../packages/pkgfactory/src/application/engine.js';
 export interface Env {
   STATE: DurableObjectNamespace; AUTH: DurableObjectNamespace; OAUTH_KV: KVNamespace; OAUTH_PROVIDER: OAuthHelpers;
   ORIGIN: string; GITHUB_OAUTH_CLIENT_ID: string; GITHUB_OAUTH_CLIENT_SECRET: string; SESSION_KEY: string;
@@ -38,14 +39,30 @@ export async function githubAuthorize(env: Env, state: string, verifier: string,
   url.search = new URLSearchParams({client_id: env.GITHUB_OAUTH_CLIENT_ID, redirect_uri: env.ORIGIN + callback, scope: 'repo workflow read:user', state, code_challenge: challenge, code_challenge_method: 'S256'}).toString();
   return url.href;
 }
-export async function exchangeGitHub(request: Request, env: Env, verifier: string, callback: string): Promise<Session> {
-  const code = new URL(request.url).searchParams.get('code'); if (!code) throw new Error('Authorization code missing');
-  const result = await fetch('https://github.com/login/oauth/access_token', {method: 'POST', headers: {Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded'}, body: new URLSearchParams({client_id: env.GITHUB_OAUTH_CLIENT_ID, client_secret: env.GITHUB_OAUTH_CLIENT_SECRET, code, code_verifier: verifier, redirect_uri: env.ORIGIN + callback}), redirect: 'error', signal: AbortSignal.any([request.signal, AbortSignal.timeout(30000)])});
-  const tokens = await result.json() as any;
-  if (!result.ok || typeof tokens.access_token !== 'string') throw new Error('GitHub authorization failed');
-  const scopes = String(tokens.scope).split(/[ ,]+/); if (!scopes.includes('repo') || !scopes.includes('workflow')) throw new Error('Repository and workflow scopes required');
-  const user = await new GitHub(tokens.access_token, request.signal).request('GET', '/user');
-  if (!Number.isSafeInteger(user.id)) throw new Error('Invalid identity');
+export async function exchangeGitHub(request: Request, env: Env, verifier: string, callback: string, fetcher: typeof fetch = fetch): Promise<Session> {
+  const url = new URL(request.url);
+  if (url.searchParams.has('error')) throw new FactoryError('oauth_denied', 'GitHub authorization was not granted. Start sign-in again.', 400);
+  const code = url.searchParams.get('code'); if (!code) throw new FactoryError('oauth_code_missing', 'GitHub authorization code missing. Start sign-in again.', 400);
+  if (url.searchParams.has('iss') && url.searchParams.get('iss') !== 'https://github.com/login/oauth') throw new FactoryError('oauth_issuer', 'Unexpected GitHub authorization issuer. Start sign-in again.', 400);
+  let result: Response;
+  try {
+    result = await fetcher('https://github.com/login/oauth/access_token', {method: 'POST', headers: {Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'PkgFactory'}, body: new URLSearchParams({client_id: env.GITHUB_OAUTH_CLIENT_ID, client_secret: env.GITHUB_OAUTH_CLIENT_SECRET, code, code_verifier: verifier, redirect_uri: env.ORIGIN + callback}), redirect: 'error', signal: AbortSignal.any([request.signal, AbortSignal.timeout(30000)])});
+  } catch {throw new FactoryError('oauth_exchange_network', 'GitHub token exchange could not be completed. Start sign-in again.', 502);}
+  let tokens: any;
+  try {tokens = await result.json();}
+  catch {throw new FactoryError('oauth_exchange_response', 'GitHub returned an invalid token response. Start sign-in again.', 502);}
+  // Only fixed messages/codes are exposed. Never log a token response, code or secret.
+  if (!result.ok || typeof tokens?.access_token !== 'string') {
+    if (tokens?.error === 'incorrect_client_credentials') throw new FactoryError('oauth_client_credentials', 'GitHub rejected the OAuth client credentials. The operator must check the Client ID and matching Client secret.', 502);
+    if (tokens?.error === 'redirect_uri_mismatch') throw new FactoryError('oauth_redirect_uri', 'GitHub rejected the callback URL. The operator must check the registered OAuth callback URLs.', 502);
+    if (tokens?.error === 'bad_verification_code') throw new FactoryError('oauth_code_invalid', 'GitHub authorization code expired, was already used, or failed verification. Start sign-in again.', 400);
+    throw new FactoryError('oauth_exchange_rejected', 'GitHub rejected the token exchange. Start sign-in again.', 502);
+  }
+  const scopes = String(tokens.scope).split(/[ ,]+/); if (!scopes.includes('repo') || !scopes.includes('workflow')) throw new FactoryError('oauth_scopes', 'GitHub repository and workflow permissions are required. Start sign-in again and grant both permissions.', 403);
+  let user: any;
+  try {user = await new GitHub(tokens.access_token, request.signal, fetcher).request('GET', '/user');}
+  catch {throw new FactoryError('oauth_identity_request', 'The GitHub token could not read your identity. Start sign-in again.', 502);}
+  if (!Number.isSafeInteger(user?.id)) throw new FactoryError('oauth_identity_invalid', 'GitHub returned an invalid identity. Start sign-in again.', 502);
   return {subject: String(user.id), token: tokens.access_token, csrf: randomToken()};
 }
 export async function webAuth(request: Request, env: Env): Promise<Response | null> {
