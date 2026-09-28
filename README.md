@@ -43,7 +43,7 @@ pkgfactory mcp --stdio
 | `simple` | 上記＋Documenter、TagBot |
 | `all-in-one` | 上記＋Aqua、JET、書式検証、引用情報、ノートブック |
 
-プレビューはオフラインで動作し、UUIDと全ファイルの内容を固定します。
+CLIのプレビューはオフラインで動作し、UUIDと全ファイルの内容を固定します。
 作成には確認済みプランと `--yes` が必要です。再開では設定の再入力やUUIDの再生成をしません。
 状態は既定で `~/.pkgfactory` に保存します。`--state-dir` または `PKGFACTORY_STATE_DIR` で変更できます。
 同じ状態ディレクトリを使えばCLI・Web・stdio MCP間で状態を共有できます。
@@ -56,9 +56,15 @@ pkgfactory mcp --stdio
 - 公開Web: GitHub OAuth認可コード＋S256 PKCE。HttpOnly・Secure・SameSite Cookie。
 - 公開MCP: OAuth 2.1、S256 PKCE、GitHubへの上流認可。GitHub PATをMCPのBearerとして受け付けません。
 
-GitHubのclassic PAT/OAuthは `repo`・`workflow` が必要です。組織側のOAuth承認とDeploy key許可も確認してください。
+GitHubのclassic PAT/OAuthは `repo`・`workflow` が必要です。Webでのプロフィール・組織一覧には `read:user`・`read:org` も要求します。組織側のOAuth承認とDeploy key許可も確認してください。
 Fine-grained PATでは対象リポジトリの作成、Administration、Contents、Workflows、Secrets、Pagesの権限が必要です。
 ローカルWebは `127.0.0.1` のみで待受し、Host・Origin・CSRFを検証します。
+
+Web画面は旧版の認証から始まる手順、ロゴ、配色を引き継いでいます。
+認証後に個人アカウントとオーナー権限のある組織を選択でき、著者名はGitHubの表示名（未設定ならlogin）から補完されます。
+入力中とプレビュー保存時に、名前の形式・作成先の権限・既存リポジトリの有無を確認します。
+作成時にも権限を確認します。組織のポリシーやトークンの権限によってGitHubが作成を拒否する場合は、その結果を表示します。
+既存リポジトリへ新規作成せず、途中停止した操作は保存済みplanIdで状態を確認して再開します。
 
 ## MCPとAPI
 

@@ -1,4 +1,5 @@
 import { planPackage, validatePlan, markerPath, type PackagePlan } from '../core/plan.js';
+import { specSchema } from '../core/spec.js';
 import { base64, decode, sha256, unbase64, utf8 } from '../core/encoding.js';
 import { GitHub, GitHubError } from '../github/client.js';
 import { generateDeployKey, sealSecret, type KeyAlgorithm } from '../github/keys.js';
@@ -34,6 +35,49 @@ export class Factory {
     return op;
   }
   private client(c: Credentials, signal: AbortSignal) {return new GitHub(c.token, signal, this.options.fetcher, this.options.beforeRequest);}
+  private async viewer(github: GitHub, c: Credentials) {
+    const viewer = await github.request('GET', '/user');
+    if (!this.options.local && String(viewer.id) !== c.subject) throw new FactoryError('identity', 'GitHub identity changed. Sign in again.', 403);
+    return viewer;
+  }
+  private async requireOwner(github: GitHub, login: string, owner: string) {
+    if (login.toLowerCase() === owner.toLowerCase()) return;
+    const membership = await github.request('GET', `/user/memberships/orgs/${encodeURIComponent(owner)}`, undefined, true);
+    if (membership?.state !== 'active' || membership?.role !== 'admin') {
+      throw new FactoryError('owner', 'Choose your own account or an organization where you are an owner and have granted PkgFactory access.', 403);
+    }
+  }
+  async githubProfile(c: Credentials, signal = new AbortController().signal) {
+    const github = this.client(c, signal);
+    try {
+      const viewer = await this.viewer(github, c);
+      const memberships = await github.pages<any>('/user/memberships/orgs?state=active');
+      const user = {login: viewer.login as string, name: (viewer.name?.trim() || viewer.login) as string, kind: 'user' as const};
+      const organizations = memberships.filter(m => m.state === 'active' && m.role === 'admin')
+        .map(m => ({login: m.organization.login as string, name: (m.organization.name || m.organization.login) as string, kind: 'organization' as const}))
+        .sort((a, b) => a.login.toLowerCase().localeCompare(b.login.toLowerCase()));
+      return {user, owners: [user, ...organizations]};
+    } catch (error) {throw this.accountError(error);}
+  }
+  async repositoryAvailability(input: unknown, c: Credentials, signal = new AbortController().signal) {
+    const parsed = specSchema.pick({owner: true, name: true}).safeParse(input);
+    if (!parsed.success) throw new FactoryError('name', 'Enter a valid GitHub owner and a Julia package name starting with A–Z (letters and digits only).', 400);
+    const {owner, name} = parsed.data;
+    const github = this.client(c, signal);
+    try {
+      const viewer = await this.viewer(github, c);
+      await this.requireOwner(github, viewer.login, owner);
+      const repository = `${owner}/${name}.jl`;
+      const existing = await github.request('GET', `/repos/${repository}`, undefined, true);
+      return {repository, available: !existing};
+    } catch (error) {throw this.accountError(error);}
+  }
+  private accountError(error: unknown) {
+    if (!(error instanceof GitHubError)) return error;
+    if (error.status === 401) return new FactoryError('auth', 'GitHub authorization expired or was revoked. Connect GitHub again.', 401);
+    if (error.status === 403) return new FactoryError('github_access', 'GitHub access could not be verified. Check token permissions, organization access, or the GitHub rate limit, then retry.', 403);
+    return new FactoryError('github_lookup', 'Could not check GitHub. Retry before continuing.', 502);
+  }
   private async inspect(op: Operation, github: GitHub) {
     const root = `/repos/${op.plan.repository}`;
     const repository = await github.request('GET', root, undefined, true);
@@ -66,8 +110,7 @@ export class Factory {
     const op = await this.owned(id, c.subject);
     if (op.state === 'complete') return this.result(op);
     // Confirm that the credential really belongs to the bound GitHub identity.
-    const viewer = await github.request('GET', '/user');
-    if (!this.options.local && String(viewer.id) !== c.subject) throw new FactoryError('identity', 'GitHub identity changed', 403);
+    const viewer = await this.viewer(github, c);
     await this.store.transaction(items => {
       const current = items.get(id)!;
       if (current.leaseUntil && current.leaseUntil > this.now()) throw new FactoryError('busy', 'Wait for the recorded lease deadline, then inspect and resume');
@@ -113,6 +156,7 @@ export class Factory {
           op.commit = remote.head.object.sha;
         }
       } else {
+        await this.requireOwner(github, viewer.login, op.plan.spec.owner);
         const endpoint = viewer.login.toLowerCase() === op.plan.spec.owner.toLowerCase() ? '/user/repos' : `/orgs/${op.plan.spec.owner}/repos`;
         const repo = await write('repository', 'POST', endpoint, {name: `${op.plan.spec.name}.jl`, description: this.bootstrapDescription(op), private: op.plan.spec.visibility === 'private', auto_init: true});
         op.repositoryId = repo.id; await checkpoint();

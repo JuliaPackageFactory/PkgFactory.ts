@@ -13,7 +13,7 @@
 |---|---|
 | Node.js 24 / TypeScript strict | 成功 |
 | リポジトリCI | [Windows/macOS/Linux＋Julia 3テンプレートの全6ジョブ成功](https://github.com/JuliaPackageFactory/PkgFactory.ts/actions/runs/36391031646) |
-| Nodeテスト | 29件成功 |
+| Nodeテスト | 33件成功 |
 | workerdテスト | 4件成功 |
 | 3テンプレート | 指定コミットの58原本＋回復マーカー、TOML/YAML/CFF/JSONの構文検証成功 |
 | Node/workerdのプラン一致 | 固定UUID・日付・日本語著者を含めて一致 |
@@ -22,13 +22,13 @@
 | 作成・明示的再開 | 3テンプレートの模擬GitHub完走。8工程で応答喪失→ロック保持→照合→再開成功 |
 | 切断 | Node AbortSignalとworkerd実HTTP接続の切断後、後続コミットなし |
 | 排他・所有者 | 他人のプラン、別プランの同一repo、改変Project.toml、置換・削除されたrepoの再開を拒否 |
-| ローカルWeb | ブラウザでプレビュー・ファイル表示・未確認作成の拒否を確認。Host/Origin/CSRFテスト成功 |
+| ローカルWeb | 認証前はフォーム非表示。認証後の作成先選択・著者補完・既存名拒否をブラウザーで確認。Host/Origin/CSRFテスト成功 |
 | MCP | stdioとStreamable HTTPのinitialize・tools/list・preview/create検証成功 |
 | 公開認証のローカル検証 | S256 challenge、一回限りstate、ブラウザ不一致、暗号文改変・ID入替、CSRF、ログアウト成功。MCPクライアント登録→同意/取消→遷移ページ、一回限り同意の検証も成功 |
 | ネイティブworkerd通信 | 実fetchを通るWeb/MCP認可・3テンプレート作成・Deploy key/Secret/Pages設定成功（送信先のみ模擬GitHub）。転送拒否と、認可コード/保存状態の期限切れも確認 |
 | npm tarball | Windows/macOS/LinuxのCIで別ディレクトリへインストール後、CLI/オフライン生成/Web/stdioが起動 |
 | Wrangler dry-run | 成功。Worker約1.2MiB、gzip約250KiB。Julia/Containersなし |
-| Cloudflareステージング配備 | 専用KV・SQLite DO・SESSION_KEY・GitHub Client secret設定済み。受付有効、報告された起動時間39ms。version `9f3f57ed-1644-408d-803f-37dda60fdaeb` |
+| Cloudflareステージング配備 | 専用KV・SQLite DO・SESSION_KEY・GitHub Client secret設定済み。受付有効、報告された起動時間35ms。Web UX修正版 version `35c74ba9-857a-4476-96d8-0ac852a2b6f4` |
 | 公開Edgeの疎通 | [health](https://pkgfactory-staging.ohnolab.workers.dev/health)は200/ok、Webは200。未認証API/MCPは401。MCPの認証案内・resource metadata・authorization metadataは正常、S256のみを案内 |
 | 公開MCPの実認可・作成 | GitHub OAuth→MCPトークン交換→5ツールの呼び出し成功。3テンプレートの実作成・状態照合がすべてcomplete |
 | 公開Edgeの実測 | 8同時プレビュー710ms。作成minimum 8.875秒、simple 12.551秒、all-in-one 11.965秒（クライアント実測） |
@@ -38,6 +38,21 @@ workerdの鍵生成は一例でEd25519約1ms、RSA約0.4–2.1秒でした。こ
 CloudflareのCPU/メモリ測定ではありません。ステージングでの実測は次節を参照してください。
 
 ## Cloudflare公開MCPでの受入
+
+### Web UXの修正
+
+当初の新版は生成エンジンの検証を優先し、旧版の認証→作成先選択→著者補完→名前確認を落としていました。
+`7c7d4af` のWeb画面構成・stylesheet・logoを参照し、上記の導線を復元しました。
+公開認証は合意済みの認可コード＋S256 PKCE、再開は保存済みplanIdを使います。
+追加テストは、組織一覧のページ送り・active/admin判定、表示名のフォールバック、
+権限不足/照会失敗の拒否、接続中断、プレビュー時の再照会、作成時の権限剥奪を対象としています。
+Webの実GitHub認証後の表示確認は、この修正版について行う必要があります。
+ローカルの実GitHub資格情報で、表示名取得・本人とJuliaPackageFactoryの選択肢・既存名の拒否・未使用名の照会を読み取りだけで確認しました。
+ブラウザーでは模擬GitHubを使い、著者名の編集を維持したプレビュー・確認チェック・作成完了まで検証しました。
+ステージングは修正版を配備済みで、未認証時に認証カードだけが表示されること、プロフィールAPIが401になること、
+認可URLが `read:org` とS256 PKCEを要求することを確認しています。
+
+### 実GitHubでの作成結果
 
 GitHub OAuth認可と公開MCPへの接続後、8件の同時プレビューを保存し、先頭3件を作成しました。
 statusでマーカー・鍵・Secret・Pages設定を照合し、すべてcompleteを確認しています。

@@ -36,7 +36,7 @@ export async function session(request: Request, env: Env): Promise<Session | nul
 export async function githubAuthorize(env: Env, state: string, verifier: string, callback: string) {
   const challenge = base64url(new Uint8Array(await crypto.subtle.digest('SHA-256', utf8(verifier))));
   const url = new URL('https://github.com/login/oauth/authorize');
-  url.search = new URLSearchParams({client_id: env.GITHUB_OAUTH_CLIENT_ID, redirect_uri: env.ORIGIN + callback, scope: 'repo workflow read:user', state, code_challenge: challenge, code_challenge_method: 'S256'}).toString();
+  url.search = new URLSearchParams({client_id: env.GITHUB_OAUTH_CLIENT_ID, redirect_uri: env.ORIGIN + callback, scope: 'repo workflow read:user read:org', state, code_challenge: challenge, code_challenge_method: 'S256'}).toString();
   return url.href;
 }
 export async function exchangeGitHub(request: Request, env: Env, verifier: string, callback: string, fetcher: typeof fetch = fetch): Promise<Session> {

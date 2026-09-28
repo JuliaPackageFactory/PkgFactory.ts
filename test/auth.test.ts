@@ -13,7 +13,8 @@ test('session ciphertext is authenticated and bound to its server-side identifie
 });
 test('Device Flow polls only after user-code notification and respects cancellation', async () => {
   const controller = new AbortController(); let calls = 0, notified = false;
-  const fetcher: typeof fetch = async () => {
+  const fetcher: typeof fetch = async (_input, init) => {
+    assert.match(new URLSearchParams(String(init?.body)).get('scope')!, /read:org/);
     calls++; return Response.json({device_code: 'secret-device-code', user_code: 'ABCD', verification_uri: 'https://github.com/login/device', expires_in: 30, interval: 1});
   };
   await assert.rejects(deviceLogin('client', (url, code) => {assert.equal(code, 'ABCD'); assert.equal(url, 'https://github.com/login/device'); notified = true; controller.abort();}, controller.signal, fetcher));

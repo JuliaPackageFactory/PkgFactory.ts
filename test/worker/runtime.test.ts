@@ -31,9 +31,11 @@ test('workerd: deterministic templates, Ed25519/RSA and sealed-box without Node 
   } finally {await mf.dispose();}
 });
 test('Worker routes, Durable Object persistence, OAuth PKCE and CSRF rejection', async () => {
+  const remote = new FakeGitHub();
   const mf = new Miniflare(convertV4MiniflareOptions({...options, scriptPath: resolve('apps/cloudflare/dist/worker.js'),
     durableObjects: {STATE: {className: 'ApplicationState', useSQLite: true}, AUTH: {className: 'AuthState', useSQLite: true}}, kvNamespaces: ['OAUTH_KV'],
     bindings: {ORIGIN: 'https://pkgfactory.test', GITHUB_OAUTH_CLIENT_ID: 'test-client', SESSION_KEY: btoa('a'.repeat(32)), GITHUB_OAUTH_CLIENT_SECRET: 'test-secret'},
+    outboundService: async (request: any) => remote.fetch(request.url, {method: request.method}),
   }));
   try {
     const health = await mf.dispatchFetch('https://pkgfactory.test/health');
@@ -44,6 +46,7 @@ test('Worker routes, Durable Object persistence, OAuth PKCE and CSRF rejection',
     const login = await mf.dispatchFetch('https://pkgfactory.test/auth/login', {redirect: 'manual'}); assert.equal(login.status, 302);
     const location = new URL(login.headers.get('location')!); assert.equal(location.searchParams.get('code_challenge_method'), 'S256');
     assert.equal(location.searchParams.get('code_challenge')?.length, 43);
+    assert.match(location.searchParams.get('scope')!, /read:org/);
     const bad = `https://pkgfactory.test/auth/callback?state=${location.searchParams.get('state')}&code=fake`;
     assert.equal((await mf.dispatchFetch(bad)).status, 400);
     const cookie = login.headers.get('set-cookie')!.split(';')[0];
@@ -178,6 +181,8 @@ test('Worker native fetch completes Web/MCP OAuth and 3 templates without follow
     const cookie = success.headers.getSetCookie().find(c => c.startsWith('__Host-pkgfactory-session='))!.split(';')[0];
     const page = await (await mf.dispatchFetch('https://pkgfactory.test/', {headers: {Cookie: cookie}})).text();
     const csrf = page.match(/name="csrf-token" content="([^"]+)"/)![1];
+    const profile = await (await mf.dispatchFetch('https://pkgfactory.test/api/github/profile', {headers: {Cookie: cookie}})).json() as any;
+    assert.equal(profile.user.name, 'Test Author'); assert.equal(profile.owners[0].login, 'tester');
     const post = async (path: string, body: unknown) => (await mf.dispatchFetch(`https://pkgfactory.test/api/${path}`, {method: 'POST', headers: {Cookie: cookie, Origin: 'https://pkgfactory.test', 'X-PkgFactory-CSRF': csrf, 'Content-Type': 'application/json'}, body: JSON.stringify(body)})).json() as Promise<any>;
     for (const [i, template] of ['minimum', 'simple', 'all-in-one'].entries()) {
       remote = new FakeGitHub();

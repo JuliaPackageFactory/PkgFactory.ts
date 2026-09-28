@@ -131,7 +131,11 @@ CLIで登録する場合のコマンドは次節にあります。
 旧本番で使用中のOAuthアプリは、新版への切替が完了するまで残します。
 不要アプリは表示名だけで判断せず、所有者・Client ID・callbackを照合してから整理します。
 
-`repo workflow read:user` を要求します。組織にOAuthアプリ制限がある場合は、そのアプリを承認します。
+`repo workflow read:user read:org` を要求します。組織にOAuthアプリ制限がある場合は、そのアプリを承認します。
+以前の認可で組織の読み取り権限が不足する場合は、Webの「Connect with GitHub」から再認可します。
+OAuth AppのClient IDやsecretを作り直す必要はありません。
+Webは認証後にプロフィールと作成先を読み込み、本人とactive/adminの組織を選択肢にします。
+[組織membership API](https://docs.github.com/en/rest/orgs/members#list-organization-memberships-for-the-authenticated-user)
 Client IDは変数、Client secretはWorker secretへ設定します。チャットやGitにsecretを貼らないでください。
 
 ## 3. Cloudflareステージング

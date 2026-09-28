@@ -5,7 +5,7 @@ export async function deviceLogin(clientId: string, inform: (url: string, code: 
     if (!response.ok) throw new Error(`GitHub Device Flow failed (${response.status})`);
     return await response.json() as any;
   };
-  const device = await post('device/code', {client_id: clientId, scope: 'repo workflow read:user'});
+  const device = await post('device/code', {client_id: clientId, scope: 'repo workflow read:user read:org'});
   if (!device.device_code || !device.user_code || !Number.isFinite(device.expires_in)) throw new Error('GitHub did not return a device code');
   inform(device.verification_uri, device.user_code);
   const expires = Date.now() + device.expires_in * 1000;

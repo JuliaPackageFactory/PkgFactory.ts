@@ -17,6 +17,10 @@ test('local Web previews, creates, and refuses invalid Origin, CSRF, and Host', 
   try {
     const html = await (await fetch(origin)).text(); const csrf = html.match(/name="csrf-token" content="([^"]+)"/)![1];
     const headers = {'Content-Type': 'application/json', Origin: origin, 'X-PkgFactory-CSRF': csrf};
+    const profile = await (await fetch(origin + '/api/github/profile')).json() as any;
+    assert.equal(profile.user.name, 'Test Author');
+    const availability = await fetch(origin + '/api/github/availability', {method: 'POST', headers, body: JSON.stringify({owner: 'tester', name: 'Local'})});
+    assert.equal((await availability.json() as any).available, true);
     const body = JSON.stringify({owner: 'tester', name: 'Local', authors: ['Tester'], template: 'minimum'});
     const preview = await fetch(origin + '/api/preview', {method: 'POST', headers, body}); assert.equal(preview.status, 200);
     const plan = await preview.json() as any;

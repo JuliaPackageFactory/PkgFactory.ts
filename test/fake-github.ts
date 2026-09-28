@@ -17,7 +17,8 @@ export class FakeGitHub {
     const body = init?.body ? JSON.parse(String(init.body)) : null;
     this.calls.push({method, path, body});
     const respond = (value: unknown, status = 200) => {this.after?.(method, path); return new Response(status === 204 ? null : JSON.stringify(value), {status, headers: {'Content-Type': 'application/json'}});};
-    if (path === '/user') return respond({id: 42, login: 'tester'});
+    if (path === '/user') return respond({id: 42, login: 'tester', name: 'Test Author'});
+    if (path === '/user/memberships/orgs') return respond([]);
     if (path === '/user/repos' || /\/orgs\/.*\/repos/.test(path)) {
       this.repository = {id: 10, default_branch: 'main', description: body.description}; this.refs.main = 'initial'; return respond(this.repository, 201);
     }
