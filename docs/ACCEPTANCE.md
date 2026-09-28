@@ -76,6 +76,7 @@ CPUの単位がmicroseconds、メモリがbytesであることをGraphQL schema�
 2. 切断後2秒・5秒の照合で、head `b67315301f8bef2e223ded05596899c1f23e42c0` が同一、回復マーカーなし、Deploy keyなし、Secretなしを確認しました。操作はrunning、リース期限は07:38:27.960 UTCのままでした。
 3. 期限後にも同じGitHub状態であり、勝手に再開していないことを確認しました。
 4. 検証スクリプトの明示的resumeを1回実行し、complete・一致するマーカー・Ed25519鍵・Documenter Secret・Pages設定を確認しました。
+5. 再開後の [Julia/Documenter CI](https://github.com/JuliaPackageFactory/PkgFactoryEdge202609280735569.jl/actions/runs/36392772784) が成功し、[公開docs](https://juliapackagefactory.github.io/PkgFactoryEdge202609280735569.jl/dev/) のHTTP 200と生成したパッケージ名を確認しました。
 
 Cloudflareのメトリクスにも `clientDisconnected` が1件記録されています。
 結果は `artifacts/staging-disconnect-e2e.json` に保存しています。
