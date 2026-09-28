@@ -43,7 +43,7 @@ export async function main(args = process.argv.slice(2)) {
     const {origin} = await localWeb(factory, token, port, controller.signal); console.error(`PkgFactory: ${origin}`); return;
   }
   if (command === 'mcp') {
-    const server = mcpServer(factory, 'local', credentials, controller.signal, values['read-only']);
+    const server = mcpServer(factory, 'local', () => token ? credentials() : undefined, controller.signal, values['read-only']);
     process.stdin.once('end', () => {controller.abort(); void server.close();});
     controller.signal.addEventListener('abort', () => {void server.close();}, {once: true});
     await server.connect(new StdioServerTransport()); return;

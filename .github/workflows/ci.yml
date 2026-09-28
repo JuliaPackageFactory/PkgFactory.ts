@@ -51,3 +51,5 @@ jobs:
       - if: matrix.template != 'minimum'
         run: julia --project=docs --startup-file=no -e 'using Pkg; Pkg.develop(PackageSpec(path=pwd())); Pkg.instantiate(); include("docs/make.jl")'
         working-directory: artifacts/generated/${{ matrix.template }}
+      - if: matrix.template != 'minimum'
+        run: node scripts/check-description.mjs artifacts/generated/${{ matrix.template }}

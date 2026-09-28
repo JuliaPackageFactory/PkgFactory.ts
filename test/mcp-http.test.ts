@@ -14,6 +14,9 @@ test('Streamable HTTP negotiates, lists tools, previews and creates with request
   const initialized = await call('initialize', {protocolVersion: '2025-11-25', capabilities: {}, clientInfo: {name: 'test', version: '1'}});
   assert.equal(initialized.result.serverInfo.name, 'PkgFactory');
   assert.equal((await call('tools/list', {})).result.tools.length, 5);
+  const denied = await call('tools/call', {name: 'preview_package', arguments: {owner: 'unowned', name: 'Foreign', authors: ['Tester']}});
+  assert.equal(denied.result.isError, true);
+  assert.equal(await store.transaction(items => items.size), 0, 'Unauthorized MCP previews must not consume a plan slot');
   const preview = await call('tools/call', {name: 'preview_package', arguments: {owner: 'tester', name: 'Remote', authors: ['Tester'], template: 'minimum'}});
   const plan = JSON.parse(preview.result.content[0].text);
   const result = await call('tools/call', {name: 'create_package', arguments: {planId: plan.id, confirm: true}});

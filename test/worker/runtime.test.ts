@@ -5,8 +5,8 @@ import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import { resolve } from 'node:path';
 import { createRequire } from 'node:module';
 import { planPackage } from '../../packages/pkgfactory/src/core/plan.js';
-import { encrypt } from '../../apps/cloudflare/src/auth.js';
-import { sha256, base64url, utf8 } from '../../packages/pkgfactory/src/core/encoding.js';
+import { encrypt, decrypt } from '../../apps/cloudflare/src/auth.js';
+import { sha256, base64url, unbase64url, decode, utf8 } from '../../packages/pkgfactory/src/core/encoding.js';
 import { FakeGitHub } from '../fake-github.js';
 const options = {modules: true as const, compatibilityDate: '2026-09-27', compatibilityFlags: ['enable_request_signal', 'global_fetch_strictly_public']};
 test('workerd: deterministic templates, Ed25519/RSA and sealed-box without Node or Julia', async () => {
@@ -51,8 +51,9 @@ test('Worker routes, Durable Object persistence, OAuth PKCE and CSRF rejection',
     assert.equal((await mf.dispatchFetch(bad)).status, 400);
     const cookie = login.headers.get('set-cookie')!.split(';')[0];
     assert.match(cookie, /__Host-pkgfactory-login=/);
-    // Browser mismatch consumes the one-time state without contacting GitHub.
+    // A wrong browser must not consume a legitimate browser's state.
     assert.equal((await mf.dispatchFetch(bad, {headers: {Cookie: '__Host-pkgfactory-login=wrong'}})).status, 400);
+    assert.equal((await mf.dispatchFetch(bad, {headers: {Cookie: cookie}})).status, 502);
     assert.equal((await mf.dispatchFetch(bad, {headers: {Cookie: cookie}})).status, 400);
     // Consent POST must end in a document before cross-origin navigation, so
     // Chromium's form-action 'self' does not block GitHub or the MCP callback.
@@ -64,7 +65,8 @@ test('Worker routes, Durable Object persistence, OAuth PKCE and CSRF rejection',
       const consent = await mf.dispatchFetch(authorize);
       assert.equal(consent.status, 200);
       assert.equal(consent.headers.get('referrer-policy'), 'same-origin');
-      const handle = (await consent.text()).match(/name="handle" value="([^"]+)"/)![1];
+      const consentHtml = await consent.text(); assert.match(consentHtml, /Local application/);
+      const handle = consentHtml.match(/name="handle" value="([^"]+)"/)![1];
       const consentCookie = consent.headers.get('set-cookie')!.split(';')[0];
       assert.equal((await mf.dispatchFetch('https://pkgfactory.test/authorize', {method: 'POST', headers: {Origin: 'null', Cookie: consentCookie, 'Content-Type': 'application/x-www-form-urlencoded'}, body: new URLSearchParams({handle, decision}).toString()})).status, 403);
       const submit = () => mf.dispatchFetch('https://pkgfactory.test/authorize', {method: 'POST', redirect: 'manual', headers: {Origin: 'https://pkgfactory.test', Cookie: consentCookie, 'Content-Type': 'application/x-www-form-urlencoded'}, body: new URLSearchParams({handle, decision}).toString()});
@@ -77,9 +79,9 @@ test('Worker routes, Durable Object persistence, OAuth PKCE and CSRF rejection',
       assert.equal((await submit()).status, 400);
     }
     const state = await mf.getDurableObjectNamespace('STATE'); const stub = state.get(state.idFromName('test'));
-    const snapshot = await stub.fetch('https://state', {method: 'POST', body: JSON.stringify({action: 'snapshot'})});
+    const snapshot = await stub.fetch('https://state', {method: 'POST', body: JSON.stringify({action: 'snapshot', subject: '42'})});
     assert.deepEqual(await snapshot.json(), {revision: 0, entries: []});
-    const cas = (revision: number) => stub.fetch('https://state', {method: 'POST', body: JSON.stringify({action: 'cas', revision, put: [], remove: []})});
+    const cas = (revision: number) => stub.fetch('https://state', {method: 'POST', body: JSON.stringify({action: 'cas', subject: '42', revision, put: [], remove: []})});
     assert.equal((await cas(0)).status, 200); assert.equal((await cas(0)).status, 409);
     // Seed an encrypted authenticated session to exercise the production route and store.
     const authNs = await mf.getDurableObjectNamespace('AUTH'); const authStub = authNs.get(authNs.idFromName('auth-v1'));
@@ -89,7 +91,7 @@ test('Worker routes, Durable Object persistence, OAuth PKCE and CSRF rejection',
     const preview = await mf.dispatchFetch('https://pkgfactory.test/api/preview', {method: 'POST', headers, body: JSON.stringify({owner: 'tester', name: 'Cloud', authors: ['T']})});
     assert.equal(preview.status, 200); const plan = await preview.json() as any;
     const shared = state.get(state.idFromName('pkgfactory-v1'));
-    const saved = await (await shared.fetch('https://state', {method: 'POST', body: JSON.stringify({action: 'get', id: plan.id})})).json() as any;
+    const saved = await (await shared.fetch('https://state', {method: 'POST', body: JSON.stringify({action: 'get', subject: '42', id: plan.id})})).json() as any;
     assert.equal(saved.subject, '42'); assert.equal(saved.plan.files['Project.toml'], plan.files['Project.toml']);
     const noCsrf = await mf.dispatchFetch('https://pkgfactory.test/api/create', {method: 'POST', headers: {...headers, 'X-PkgFactory-CSRF': 'wrong'}, body: JSON.stringify({planId: plan.id, confirm: true})}); assert.equal(noCsrf.status, 403);
     const logout = await mf.dispatchFetch('https://pkgfactory.test/auth/logout', {method: 'POST', headers, body: '{}'}); assert.equal(logout.status, 200);
@@ -169,13 +171,13 @@ test('Worker native fetch completes Web/MCP OAuth and 3 templates without follow
     assert.equal(calls.length, 6);
     const expiring = await mf.dispatchFetch('https://pkgfactory.test/auth/login', {redirect: 'manual'});
     const expiringState = new URL(expiring.headers.get('location')!).searchParams.get('state')!;
-    const auth = await mf.getDurableObjectNamespace('AUTH'); const authStub = auth.get(auth.idFromName('auth-v1'));
-    const stateKey = `pending:${await sha256(expiringState)}`;
-    const saved = await (await authStub.fetch('https://auth', {method: 'POST', body: JSON.stringify({action: 'get', key: stateKey})})).json();
-    // Move only this test state's deadline into the past; no wall-clock sleep.
-    await authStub.fetch('https://auth', {method: 'POST', body: JSON.stringify({action: 'put', key: stateKey, ttl: -1, value: saved})});
-    const expiredState = await mf.dispatchFetch(`https://pkgfactory.test/auth/callback?state=${expiringState}&code=valid`, {headers: {Cookie: expiring.headers.get('set-cookie')!.split(';')[0]}});
-    assert.equal(expiredState.status, 400); assert.match((await expiredState.json() as any).error, /Expired or reused OAuth state/);
+    const context = 'web-login:https://pkgfactory.test', crypt = {SESSION_KEY: btoa('a'.repeat(32))};
+    const encryptedCookie = expiring.headers.get('set-cookie')!.split(';')[0].split('=')[1];
+    const pending = await decrypt(crypt, JSON.parse(decode(unbase64url(encryptedCookie))), context);
+    // Re-encrypt a past deadline using only this test's key; no wall-clock sleep.
+    const expiredCookie = base64url(utf8(JSON.stringify(await encrypt(crypt, {...pending, expiresAt: Date.now() - 1}, context))));
+    const expiredState = await mf.dispatchFetch(`https://pkgfactory.test/auth/callback?state=${expiringState}&code=valid`, {headers: {Cookie: `__Host-pkgfactory-login=${expiredCookie}`}});
+    assert.equal(expiredState.status, 400); assert.match((await expiredState.json() as any).error, /Expired OAuth state/);
     assert.equal(calls.length, 6, 'Expired state must stop before contacting GitHub');
 
     const cookie = success.headers.getSetCookie().find(c => c.startsWith('__Host-pkgfactory-session='))!.split(';')[0];

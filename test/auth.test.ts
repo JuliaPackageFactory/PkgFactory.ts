@@ -3,6 +3,15 @@ import assert from 'node:assert/strict';
 import { encrypt, decrypt, exchangeGitHub, type Env } from '../apps/cloudflare/src/auth.js';
 import { errorResponse } from '../packages/pkgfactory/src/web/http.js';
 import { deviceLogin } from '../packages/pkgfactory/src/github/device.js';
+import { consentNotices } from '../apps/cloudflare/src/consent.js';
+
+test('consent identifies loopback redirects and the actual CIMD domain', () => {
+  for (const address of ['http://localhost:3000/callback', 'http://127.0.0.2:3000/callback', 'http://[::1]:3000/callback']) assert.match(consentNotices('registered-client', address), /your own device/);
+  assert.doesNotMatch(consentNotices('registered-client', 'https://localhost.example/callback'), /your own device/);
+  const notices = consentNotices('https://client.example/metadata.json?label=<img>', 'https://app.example/callback');
+  assert.match(notices, /Client metadata domain: <strong>client.example<\/strong>/);
+  assert.doesNotMatch(notices, /<img>/); assert.match(notices, /&lt;img&gt;/);
+});
 test('session ciphertext is authenticated and bound to its server-side identifier', async () => {
   const env = {SESSION_KEY: btoa('s'.repeat(32))}; const session = {token: 'never-log', subject: '42'};
   const encrypted = await encrypt(env, session, 'session:one');

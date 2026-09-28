@@ -2,6 +2,7 @@ import Mustache from 'mustache';
 import sources from './templates.json' with {type: 'json'};
 import { specSchema, type PackageSpec } from './spec.js';
 import { sha256 } from './encoding.js';
+import { markdownText } from './markdown.js';
 export interface PackagePlan {
   version: 1; id: string; createdAt: string; spec: PackageSpec; uuid: string;
   repository: string; files: Record<string, string>; digest: string;
@@ -13,7 +14,7 @@ export async function planPackage(input: unknown, fixed?: {id: string; uuid: str
   const uuid = fixed?.uuid ?? crypto.randomUUID();
   const createdAt = fixed?.date ?? new Date().toISOString();
   const repo = `${spec.name}.jl`;
-  const context = {PKG: spec.name, REPO: repo, OWNER: spec.owner, DESCR: spec.description,
+  const context = {PKG: spec.name, REPO: repo, OWNER: spec.owner, DESCR: markdownText(spec.description),
     UUID: uuid, AUTHORS: JSON.stringify(spec.authors), CFF_AUTHORS: spec.authors.map(a => `  - family-names: ${JSON.stringify(a)}`).join('\n'),
     LICENSOR: spec.authors.join(', '), URL: `https://github.com/${spec.owner}/${repo}`, VERSION: '0.0.1', YEAR: createdAt.slice(0, 4), RELEASE_DATE: createdAt.slice(0, 10)};
   const files: Record<string, string> = {};

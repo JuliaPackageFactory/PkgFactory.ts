@@ -17,10 +17,17 @@ export class Factory {
     const plan = await planPackage(input);
     await this.store.transaction(items => {
       for (const [id, op] of items) if ((op.state === 'preview' || op.state === 'complete') && op.expiresAt < this.now()) items.delete(id);
-      if (items.size >= 256 || [...items.values()].filter(o => o.subject === subject).length >= 16) throw new FactoryError('capacity', 'Too many saved plans', 429);
+      if ([...items.values()].filter(o => o.subject === subject).length >= 16) throw new FactoryError('capacity', 'Too many saved plans for this account. Inspect and resume unfinished operations.', 429);
       items.set(plan.id, {plan, subject, expiresAt: this.now() + 15 * 60000, state: 'preview'});
     });
     return plan;
+  }
+  async previewForAccount(input: unknown, c: Credentials, signal = new AbortController().signal) {
+    const spec = specSchema.parse(input);
+    const check = await this.repositoryAvailability({owner: spec.owner, name: spec.name}, c, signal);
+    if (!check.available) throw new FactoryError('exists', `${check.repository} already exists. Use the saved plan ID to inspect or resume your interrupted setup.`);
+    signal.throwIfAborted();
+    return this.preview(spec, c.subject);
   }
   async importPlan(plan: PackagePlan, subject: string) {
     await validatePlan(plan);
@@ -132,7 +139,7 @@ export class Factory {
       Object.assign(op, metadata);
       current.state = 'running'; current.leaseUntil = this.now() + 150000;
       op.state = current.state; op.leaseUntil = current.leaseUntil;
-    });
+    }, {repository: op.plan.repository, now: this.now()});
     const root = `/repos/${op.plan.repository}`;
     const persist = () => this.store.put(op);
     const write = async (stage: string, method: string, path: string, body?: unknown) => {

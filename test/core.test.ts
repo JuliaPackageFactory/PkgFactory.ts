@@ -4,6 +4,18 @@ import TOML from '@iarna/toml';
 import YAML from 'yaml';
 import { planPackage, validatePlan } from '../packages/pkgfactory/src/core/plan.js';
 import { templates } from '../packages/pkgfactory/src/core/spec.js';
+import { descriptionPayload } from './description-payload.js';
+import { markdownText } from '../packages/pkgfactory/src/core/markdown.js';
+
+test('description is literal Markdown in README and Documenter, while repository metadata stays original', async () => {
+  for (const template of templates) {
+    const plan = await planPackage({owner: 'tester', name: 'Safe', authors: ['Tester'], template, description: descriptionPayload});
+    assert.equal(plan.spec.description, descriptionPayload);
+    assert(plan.files['README.md'].includes(markdownText(descriptionPayload)));
+    if (template !== 'minimum') assert(plan.files['docs/src/index.md'].includes(markdownText(descriptionPayload)));
+  }
+  assert.doesNotMatch(markdownText(descriptionPayload), /```|~~~|<script>/);
+});
 for (const template of templates) test(`render and parse ${template}`, async () => {
   const plan = await planPackage({owner: 'JuliaPackageFactory', name: 'Example.jl', authors: ['大野 "Shuhei" \\ $x\nName', 'Alice'], template},
     {id: 'plan', uuid: 'f5dc8578-e5a2-4e82-bf9a-9022e5ef4973', date: '2026-09-28T00:00:00.000Z'});

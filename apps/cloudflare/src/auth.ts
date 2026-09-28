@@ -1,5 +1,5 @@
 import type { OAuthHelpers } from '@cloudflare/workers-oauth-provider';
-import { base64, base64url, unbase64, randomToken, sha256, utf8, decode } from '../../../packages/pkgfactory/src/core/encoding.js';
+import { base64, base64url, unbase64, unbase64url, randomToken, sha256, utf8, decode } from '../../../packages/pkgfactory/src/core/encoding.js';
 import { GitHub } from '../../../packages/pkgfactory/src/github/client.js';
 import { json } from '../../../packages/pkgfactory/src/web/http.js';
 import { FactoryError } from '../../../packages/pkgfactory/src/application/engine.js';
@@ -69,18 +69,26 @@ export async function exchangeGitHub(request: Request, env: Env, verifier: strin
 export async function webAuth(request: Request, env: Env): Promise<Response | null> {
   const url = new URL(request.url);
   if (url.pathname === '/auth/login' && request.method === 'GET') {
-    const state = randomToken(), browser = randomToken(), verifier = randomToken();
-    const key = `pending:${await sha256(state)}`;
-    await authState(env, 'put', key, await encrypt(env, {browser: await sha256(browser), verifier}, key), 600000);
+    // Cloudflare supplies this header at the edge. Store only a keyed hash;
+    // each source gets its own counter, independent of authenticated sessions.
+    const source = await sha256(env.SESSION_KEY + ':' + (request.headers.get('CF-Connecting-IP') ?? 'unknown'));
+    if (!await authState(env, 'limit', `login-rate:${source}`, {limit: 20}, 60000)) return new Response(JSON.stringify({error: 'Too many sign-in attempts. Try again in one minute.'}), {status: 429, headers: {'Content-Type': 'application/json', 'Retry-After': '60'}});
+    const state = randomToken(), verifier = randomToken();
+    const encrypted = await encrypt(env, {state, verifier, expiresAt: Date.now() + 600000}, `web-login:${env.ORIGIN}`);
+    const browser = base64url(utf8(JSON.stringify(encrypted)));
     return new Response(null, {status: 302, headers: {Location: await githubAuthorize(env, state, verifier, '/auth/callback'), 'Set-Cookie': cookie('__Host-pkgfactory-login', browser, 600)}});
   }
   if (url.pathname === '/auth/callback' && request.method === 'GET') {
     const state = url.searchParams.get('state'), browser = cookieValue(request, '__Host-pkgfactory-login');
-    if (!state || !browser) return json({error: 'Invalid OAuth state'}, 400);
-    const key = `pending:${await sha256(state)}`;
-    const saved = await authState(env, 'take', key); if (!saved) return json({error: 'Expired or reused OAuth state'}, 400);
-    const pending = await decrypt(env, saved, key);
-    if (pending.browser !== await sha256(browser)) return json({error: 'OAuth browser mismatch'}, 400);
+    if (!state || !/^[A-Za-z0-9_-]{43}$/.test(state) || !browser || browser.length > 2048) return json({error: 'Invalid OAuth state'}, 400);
+    let pending: {state: string; verifier: string; expiresAt: number};
+    try {pending = await decrypt(env, JSON.parse(decode(unbase64url(browser))), `web-login:${env.ORIGIN}`);}
+    catch {return json({error: 'Invalid OAuth browser state. Start sign-in again.'}, 400);}
+    if (pending.state !== state) return json({error: 'OAuth browser mismatch'}, 400);
+    if (!Number.isFinite(pending.expiresAt) || pending.expiresAt <= Date.now()) return json({error: 'Expired OAuth state. Start sign-in again.'}, 400);
+    // A valid browser-bound callback consumes its state before token exchange.
+    // Parallel callbacks and uncertain exchange responses cannot reuse it.
+    if (!await authState(env, 'claim', `used:${await sha256(state)}`, undefined, 600000)) return json({error: 'Reused OAuth state. Start sign-in again.'}, 400);
     const value = await exchangeGitHub(request, env, pending.verifier, '/auth/callback');
     const id = randomToken(); const sessionKey = `session:${await sha256(id)}`;
     await authState(env, 'put', sessionKey, await encrypt(env, value, sessionKey), 8 * 3600000);

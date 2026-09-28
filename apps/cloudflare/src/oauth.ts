@@ -4,6 +4,7 @@ import { randomToken } from '../../../packages/pkgfactory/src/core/encoding.js';
 import { GitHub } from '../../../packages/pkgfactory/src/github/client.js';
 import { githubAuthorize, exchangeGitHub, type Env } from './auth.js';
 import { FactoryError } from '../../../packages/pkgfactory/src/application/engine.js';
+import { consentNotices } from './consent.js';
 // A document navigation ends the form submission before leaving this origin.
 // Chromium applies form-action 'self' to cross-origin HTTP redirects after POST.
 function navigateAfterConsent(target: string, headers: Headers, label: string) {
@@ -24,7 +25,7 @@ export async function oauthRoutes(request: Request, env: Env): Promise<Response 
     if (url.pathname === '/authorize' && request.method === 'GET') {
       const auth = await oauth.parseAuthRequest(request); const client = await oauth.lookupClient(auth.clientId);
       const consent = await oauth.beginConsent(auth); consent.headers.set('Content-Type', 'text/html; charset=utf-8');
-      return new Response(`<!doctype html><html lang="en"><meta charset="utf-8"><title>Connect PkgFactory</title><h1>Connect ${e(client?.clientName || auth.clientId)}?</h1><p>Return address: ${e(auth.redirectUri)}</p><p>This client may preview and create Julia repositories using your GitHub account. Its displayed name is not verified. Confirm repository creation in your client.</p><form method="post" action="/authorize"><input type="hidden" name="handle" value="${e(consent.handle)}"><button name="decision" value="approve">Continue to GitHub</button><button name="decision" value="deny">Cancel</button></form></html>`, {headers: consent.headers});
+      return new Response(`<!doctype html><html lang="en"><meta charset="utf-8"><title>Connect PkgFactory</title><h1>Connect ${e(client?.clientName || auth.clientId)}?</h1><p>Return address: ${e(auth.redirectUri)}</p>${consentNotices(auth.clientId, auth.redirectUri)}<p>This client may preview and create Julia repositories using your GitHub account. Its displayed name is not verified. Confirm repository creation in your client.</p><form method="post" action="/authorize"><input type="hidden" name="handle" value="${e(consent.handle)}"><button name="decision" value="approve">Continue to GitHub</button><button name="decision" value="deny">Cancel</button></form></html>`, {headers: consent.headers});
     }
     if (url.pathname === '/authorize' && request.method === 'POST') {
       const form = await request.formData(); const handle = String(form.get('handle'));

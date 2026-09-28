@@ -1,4 +1,4 @@
-# 受入結果（2026-09-28 JST）
+# 受入結果（2026-09-29 JST）
 
 **実装とローカル検証は完了。本番公開可能という判定はまだしていません。**
 ステージングは配備済みです。組織のDeploy key許可後の再開とEd25519の実サービス互換を確認しました。
@@ -7,14 +7,14 @@
 ステージングのClient secret登録を確認し、受付を有効化しました。
 公開MCPのOAuth認可・3テンプレートの実作成・Documenter公開を確認しました。
 公開Edgeでの接続切断・ロック保持・状態照合・明示的再開も完了しました。
-公開Webからの利用者による実作成も成功しました。残りは本番公開準備と、固定リポジトリE2EのCI資格情報・切替設定です。
+公開Webからの利用者による実作成も成功しました。固定リポジトリE2Eの専用Secretは登録確認済みです。残りは本番公開準備とE2Eの切替設定です。
 
 | 検証 | 結果 |
 |---|---|
 | Node.js 24 / TypeScript strict | 成功 |
 | リポジトリCI | [固定E2E・パス修正版のWindows/macOS/Linux＋Julia 3テンプレートの全6ジョブ成功](https://github.com/JuliaPackageFactory/PkgFactory.ts/actions/runs/36400259851) |
-| Nodeテスト | 38件成功（固定リポジトリの改名/UUID/履歴/競合、新規作成1件制限を含む） |
-| workerdテスト | 4件成功 |
+| Nodeテスト | 40件成功（固定リポジトリの改名/UUID/履歴/競合、新規作成1件制限、同意表示、descriptionの無害化を含む） |
+| workerdテスト | 7件成功（容量分離、旧保存形式の移行、ログイン連打と同時callbackを含む） |
 | 3テンプレート | 指定コミットの58原本＋回復マーカー、TOML/YAML/CFF/JSONの構文検証成功 |
 | Node/workerdのプラン一致 | 固定UUID・日付・日本語著者を含めて一致 |
 | Ed25519 / RSA-4096 | Nodeとworkerdで生成成功。OpenSSHが秘密鍵を読み、公開鍵が一致 |
@@ -57,8 +57,13 @@ Node/workerdは計42件成功しました。新規作成のrunnerはNode/MCP共�
 All-in-oneのAqua・JET・Runicも成功しました。Documenterは両方とも既存のGITHUB_TOKEN認証で公開し、鍵・Secret・Pages設定は変更していません。
 新しいGit回帰テストで見つかったWindows短縮パス/macOSのパス別名の誤判定は、実パスの照合で修正しました。
 
-継続CI用の `PKGFACTORY_E2E_TOKEN` は新版に未登録です。旧E2Eも有効なので、同時更新を避けるため
+継続CI用の `PKGFACTORY_E2E_TOKEN` は新版への登録を確認しました（2026-09-28 15:39:26 UTC更新）。Secretの値・権限の実行検証はmainへの切替後です。旧E2Eも有効なので、同時更新を避けるため
 新版の自動書込みは `PKGFACTORY_TEMPLATE_E2E_ENABLED=true` の設定後に開始します。[設定手順](TESTING.md)
+
+## Opusレビューへの対応
+
+[レビューの4指摘](https://github.com/JuliaPackageFactory/PkgFactory.ts/pull/1#issuecomment-5873460848)への修正・検証内容は [SECURITY_REVIEW.md](SECURITY_REVIEW.md) に記載しています。
+ローカルではNode 40件・workerd 7件が成功しました。追加のworkerd検証は272件のプラン、130件の旧形式ジャーナル、ログインの連続要求を使い、実GitHubへの書込みなしで確認しています。
 
 ## Cloudflare公開MCPでの受入
 

@@ -10,7 +10,7 @@ import { oauthRoutes, refreshGitHub } from './oauth.js';
 import { DurableStore } from './state.js';
 import { connectedJson } from './connection.js';
 export { ApplicationState, AuthState } from './state.js';
-const factory = (env: Env, beforeRequest?: () => Promise<void>) => new Factory(new DurableStore(env.STATE), {algorithm: env.KEY_ALGORITHM ?? 'ed25519', beforeRequest});
+const factory = (env: Env, subject: string, beforeRequest?: () => Promise<void>) => new Factory(new DurableStore(env.STATE, subject), {algorithm: env.KEY_ALGORITHM ?? 'ed25519', beforeRequest});
 async function web(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   const oauth = await oauthRoutes(request, env); if (oauth) return oauth;
@@ -24,8 +24,8 @@ async function web(request: Request, env: Env): Promise<Response> {
   if (url.pathname.startsWith('/api/')) {
     if (!identity) return json({error: 'Connect GitHub to save and execute a preview'}, 401);
     if (request.method !== 'GET' && (request.headers.get('origin') !== env.ORIGIN || request.headers.get('x-pkgfactory-csrf') !== identity.csrf)) return json({error: 'Invalid CSRF token or Origin'}, 403);
-    if (url.pathname === '/api/create' || url.pathname === '/api/resume') return connectedJson(request, (signal, check) => api(new Request(request, {signal}), factory(env, check), identity.subject, () => identity));
-    return api(request, factory(env), identity.subject, () => identity);
+    if (url.pathname === '/api/create' || url.pathname === '/api/resume') return connectedJson(request, (signal, check) => api(new Request(request, {signal}), factory(env, identity.subject, check), identity.subject, () => identity));
+    return api(request, factory(env, identity.subject), identity.subject, () => identity);
   }
   return json({error: 'Not found'}, 404);
 }
@@ -33,11 +33,11 @@ function oauthProvider(env: Env) {return new OAuthProvider<Env>({
   apiRoute: '/mcp',
   apiHandler: {async fetch(request, env, ctx) {
     const props = ctx.props as {userId: string; githubToken: string};
-    if (request.method !== 'POST') return mcpHttp(request, factory(env), {subject: props.userId, token: props.githubToken});
+    if (request.method !== 'POST') return mcpHttp(request, factory(env, props.userId), {subject: props.userId, token: props.githubToken});
     // Notifications and protocol handshakes retain SDK status/header semantics.
     const payload = await request.clone().json() as any;
-    if (payload.method !== 'tools/call') return mcpHttp(request, factory(env), {subject: props.userId, token: props.githubToken});
-    return connectedJson(request, (signal, check) => mcpHttp(new Request(request, {signal}), factory(env, check), {subject: props.userId, token: props.githubToken}));
+    if (payload.method !== 'tools/call') return mcpHttp(request, factory(env, props.userId), {subject: props.userId, token: props.githubToken});
+    return connectedJson(request, (signal, check) => mcpHttp(new Request(request, {signal}), factory(env, props.userId, check), {subject: props.userId, token: props.githubToken}));
   }},
   defaultHandler: {fetch: web}, authorizeEndpoint: '/authorize', tokenEndpoint: '/oauth/token', clientRegistrationEndpoint: '/oauth/register',
   scopesSupported: ['pkgfactory'], resourceMetadata: {resource: env.ORIGIN + '/mcp', scopes_supported: ['pkgfactory']},

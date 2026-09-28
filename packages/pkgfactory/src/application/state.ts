@@ -12,7 +12,7 @@ export interface StateStore {
   get(id: string): Promise<Operation | undefined>;
   put(operation: Operation): Promise<void>;
   /** Atomic local mutation. Never perform network I/O inside this callback. */
-  transaction<T>(fn: (items: Map<string, Operation>) => T): Promise<T>;
+  transaction<T>(fn: (items: Map<string, Operation>) => T, lock?: {repository: string; now: number}): Promise<T>;
 }
 export class MemoryStore implements StateStore {
   protected items = new Map<string, Operation>();
