@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import TOML from '@iarna/toml';
@@ -19,10 +19,12 @@ async function fixture() {
 }
 const uuid = 'c1295625-87ea-430b-8a8e-cec21038bef7';
 test('persistent snapshots initialize, preserve history, remove stale files and skip identical output', async () => {
-  const {checkout, remote} = await fixture();
+  const {checkout, remote, root} = await fixture();
   assert.equal(head(checkout), null);
   const files = {'Project.toml': `name = "TestMinimum"\nuuid = "${uuid}"\n`, 'README.md': 'first\n', 'obsolete.txt': 'obsolete\n'};
-  const first = await publishSnapshot(checkout, files, 'Initial snapshot');
+  const alias = join(root, 'checkout-alias');
+  await symlink(checkout, alias, process.platform === 'win32' ? 'junction' : 'dir');
+  const first = await publishSnapshot(alias, files, 'Initial snapshot');
   assert.equal(first.before, null); assert(first.changed);
   assert.equal(git(remote, 'rev-parse', 'main'), first.after);
   assert.equal((await publishSnapshot(checkout, files, 'Identical')).changed, false);

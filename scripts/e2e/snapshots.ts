@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import TOML from '@iarna/toml';
 import { markerPath, planPackage } from '../../packages/pkgfactory/src/core/plan.js';
@@ -34,7 +34,9 @@ export async function snapshot(directory: string, target: Target) {
   return {files: plan.files, uuid};
 }
 export async function publishSnapshot(directory: string, files: Record<string, string>, message: string, push: () => void = () => {git(directory, 'push', 'origin', 'HEAD:refs/heads/main');}) {
-  assert.equal(resolve(git(directory, 'rev-parse', '--show-toplevel')), resolve(directory), 'Expected the snapshot checkout root');
+  // Git expands Windows short names and macOS /var symlinks; compare the
+  // actual filesystem paths before allowing any snapshot file removal.
+  assert.equal(await realpath(git(directory, 'rev-parse', '--show-toplevel')), await realpath(directory), 'Expected the snapshot checkout root');
   assert.equal(git(directory, 'symbolic-ref', '--short', 'HEAD'), 'main', 'Expected main branch');
   assert.equal(git(directory, 'status', '--porcelain', '--untracked-files=all'), '', 'Refusing a dirty snapshot checkout');
   const paths = Object.keys(files).sort();
