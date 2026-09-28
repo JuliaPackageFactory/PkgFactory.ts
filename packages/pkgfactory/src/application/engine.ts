@@ -16,7 +16,7 @@ export class Factory {
   async preview(input: unknown, subject: string): Promise<PackagePlan> {
     const plan = await planPackage(input);
     await this.store.transaction(items => {
-      for (const [id, op] of items) if ((op.state === 'preview' || op.state === 'complete') && op.expiresAt < this.now()) items.delete(id);
+      for (const [id, op] of items) if (!op.recoveryError && (op.state === 'preview' || op.state === 'complete') && op.expiresAt < this.now()) items.delete(id);
       if ([...items.values()].filter(o => o.subject === subject).length >= 16) throw new FactoryError('capacity', 'Too many saved plans for this account. Inspect and resume unfinished operations.', 429);
       items.set(plan.id, {plan, subject, expiresAt: this.now() + 15 * 60000, state: 'preview'});
     });
@@ -40,6 +40,7 @@ export class Factory {
   private async owned(id: string, subject: string) {
     const op = await this.store.get(id);
     if (!op || op.subject !== subject) throw new FactoryError('plan', 'Plan not found', 404);
+    if (op.recoveryError) throw new FactoryError('recovery', 'Saved files for this plan are missing. Its journal and repository lock are retained for manual recovery.');
     return op;
   }
   private client(c: Credentials, signal: AbortSignal) {return new GitHub(c.token, signal, this.options.fetcher, this.options.beforeRequest);}

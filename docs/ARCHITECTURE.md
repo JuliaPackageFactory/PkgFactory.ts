@@ -40,6 +40,7 @@ CloudflareのApplicationStateはSQLite Durable Object上でメタデータをCAS
 大きな不変プランを別カラムへ保存します。subject・リポジトリ・実行中リースに索引を置き、
 対象subjectの記録と排他判定に必要な記録だけを読みます。WebとMCPが同じ排他対象を共有します。
 従来のKV記録は同じDurable Object内で初回起動時に移し、プラン・ジャーナル・残存ロックを保持します。
+不変プランの実体が欠けた旧記録は `recoveryError=missing_plan` として隔離します。ジャーナル・ロックを保持し、実行と期限削除を拒否しますが、正常な記録の移行・利用は続行します。
 NodeのFileStoreは同じディレクトリを利用する複数プロセスをファイルロックとatomic renameで直列化します。
 別ディレクトリ、別ホスト、Cloudflareとローカルの間に共通ロックはありません。
 GitHub上のマーカーと非強制ref更新が衝突を検出します。
@@ -75,7 +76,7 @@ Secretの値をGitHubから読み戻すことはできません。Secret結果�
 
 Web OAuth state・PKCE verifier・10分の期限をAES-256-GCMで暗号化したHttpOnly/Secure Cookieに保存し、AADをサービスoriginに結び付けます。
 認可待ちのサーバーレコードは作りません。コールバックでブラウザとの一致・期限を検証後、stateのハッシュを原子的に一度だけ消費し、認可コードを交換します。
-ログイン開始はCloudflareの接続元IPの鍵付きハッシュごとに毎分20回までです。生のIPは保存しません。
+ログイン開始はCloudflareの接続元IPv4アドレスまたはIPv6 /64の鍵付きハッシュごとに毎分20回までです。IPv4射影アドレスは対応するIPv4と同じ枠を使います。生のIPは保存しません。
 AuthStateは索引による点検索と期限削除を使い、認証待ち・セッション共通の件数上限はありません。
 セッションCookieにはランダムIDのみ、サーバーにはIDハッシュと暗号化したセッションを保存し、有効期限は8時間です。
 セッション暗号文のAADは保存先IDに結び付け、既存セッションはストレージ更新後も保持します。
@@ -84,10 +85,12 @@ AuthStateは索引による点検索と期限削除を使い、認証待ち・�
 WorkerのリクエストログはOAuth codeの記録を防ぐため既定無効です。
 公開Web/MCPのプレビューは、保存前にGitHubの所有権と既存リポジトリを照会します。
 資格情報を持たないローカルCLI/stdioのオフライン生成は引き続き利用できます。
-MCP同意画面ではlocalhostへの転送を明示し、CIMDクライアントはclient_idのドメインとメタデータURLを表示します。
+MCP同意画面ではlocalhost（末尾ドットを含む）、ループバック・未指定アドレス、IPv4射影アドレスへの転送を明示します。カスタムスキームには端末内アプリ、外部HTTPには暗号化されない接続である旨を表示します。CIMDクライアントはclient_idのドメインとメタデータURLを表示します。
 
-descriptionはREADME・DocumenterではMarkdownの記法をエスケープした文字列として扱います。
-GitHubリポジトリのdescriptionには元の入力を使います。利用者入力からDocumenterの`@eval`や`@raw`ブロックを作りません。
+descriptionのREADME用描画はCommonMarkの記法をエスケープします。DocumenterのJulia Markdownとはエスケープ規則が異なるため、docs用には固定の `@raw html` ブロック内のテキストとして描画します。
+利用者の `&<>` とコードフェンスの記号はHTMLエンティティ、改行は固定の `<br>` へ変換し、ブロックの内容を1行に限定します。利用者はタグ・リンク・属性・別のDocumenterブロックを追加できません。通常の句読点、URL、チルダも余分なバックスラッシュなしで表示します。
+これはテンプレートで使用するHTML出力用です。[Documenterのrawブロック仕様](https://documenter.juliadocs.org/stable/man/syntax/#@raw-%3Cformat%3E-block)
+GitHubリポジトリのdescriptionには元の入力を使います。
 
 鍵はWeb Cryptoで生成し、Ed25519はOpenSSH形式、RSA-4096はPKCS#1 PEM形式へ変換します。
 Documenter/TagBot用Secretは秘密鍵のBase64、GitHubへの送信はlibsodium互換sealed boxです。

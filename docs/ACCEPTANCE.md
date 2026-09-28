@@ -12,9 +12,9 @@
 | 検証 | 結果 |
 |---|---|
 | Node.js 24 / TypeScript strict | 成功 |
-| リポジトリCI | [レビュー修正版のWindows/macOS/Linux＋Julia 3テンプレートの全6ジョブ成功](https://github.com/JuliaPackageFactory/PkgFactory.ts/actions/runs/36448728883) |
-| Nodeテスト | 40件成功（固定リポジトリの改名/UUID/履歴/競合、新規作成1件制限、同意表示、descriptionの無害化を含む） |
-| workerdテスト | 7件成功（容量分離、旧保存形式の移行、ログイン連打と同時callbackを含む） |
+| リポジトリCI | [最新PRのWindows/macOS/Linux＋Julia 3テンプレートのCI結果](https://github.com/JuliaPackageFactory/PkgFactory.ts/pull/1/checks) |
+| Nodeテスト | 41件成功（固定リポジトリの改名/UUID/履歴/競合、新規作成1件制限、同意表示、descriptionの無害化、IPv6正規化を含む） |
+| workerdテスト | 8件成功（容量分離、旧保存形式の移行、欠損プラン隔離、IPv6 /64制限、ログイン連打と同時callbackを含む） |
 | 3テンプレート | 指定コミットの58原本＋回復マーカー、TOML/YAML/CFF/JSONの構文検証成功 |
 | Node/workerdのプラン一致 | 固定UUID・日付・日本語著者を含めて一致 |
 | Ed25519 / RSA-4096 | Nodeとworkerdで生成成功。OpenSSHが秘密鍵を読み、公開鍵が一致 |

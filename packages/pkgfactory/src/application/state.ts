@@ -6,6 +6,7 @@ export interface Operation {
   leaseUntil?: number; pending?: PendingWrite; error?: string;
   repositoryId?: number; commit?: string; tree?: string; base?: string;
   keyTitle?: string; keyReady?: boolean;
+  recoveryError?: 'missing_plan';
   reconciliation?: {at: number; repositoryId?: number; head?: string; pending?: string};
 }
 export interface StateStore {

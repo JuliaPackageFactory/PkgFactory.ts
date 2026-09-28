@@ -4,10 +4,24 @@ import { encrypt, decrypt, exchangeGitHub, type Env } from '../apps/cloudflare/s
 import { errorResponse } from '../packages/pkgfactory/src/web/http.js';
 import { deviceLogin } from '../packages/pkgfactory/src/github/device.js';
 import { consentNotices } from '../apps/cloudflare/src/consent.js';
+import { loginSource } from '../apps/cloudflare/src/ip.js';
+
+test('login source groups IPv6 by /64 and canonicalizes IPv4-mapped aliases', () => {
+  assert.equal(loginSource('2001:db8:1:2::1'), loginSource('2001:0DB8:0001:0002:ffff:ffff:ffff:ffff'));
+  assert.notEqual(loginSource('2001:db8:1:2::1'), loginSource('2001:db8:1:3::1'));
+  assert.equal(loginSource('::ffff:192.0.2.1'), loginSource('::FFFF:c000:201'));
+  assert.equal(loginSource('::ffff:192.0.2.1'), loginSource('192.0.2.1'));
+  assert.notEqual(loginSource('192.0.2.1'), loginSource('192.0.2.2'));
+  for (const bad of [null, 'garbage', '2001:db8:::1', '::1%eth0', '192.0.2.999']) assert.equal(loginSource(bad), 'unknown');
+});
 
 test('consent identifies loopback redirects and the actual CIMD domain', () => {
-  for (const address of ['http://localhost:3000/callback', 'http://127.0.0.2:3000/callback', 'http://[::1]:3000/callback']) assert.match(consentNotices('registered-client', address), /your own device/);
+  for (const address of ['http://localhost:3000/callback', 'http://127.0.0.2:3000/callback', 'http://[::1]:3000/callback', 'http://localhost.:3000/callback', 'http://app.localhost.:3000/callback', 'http://0.0.0.0/callback', 'http://[::]/callback', 'http://[::ffff:7f00:1]/callback', 'http://[::ffff:127.0.0.2]/callback']) assert.match(consentNotices('registered-client', address), /your own device/, address);
   assert.doesNotMatch(consentNotices('registered-client', 'https://localhost.example/callback'), /your own device/);
+  assert.match(consentNotices('registered-client', 'cursor://client/callback'), /Native application/);
+  assert.match(consentNotices('registered-client', 'http://remote.example/callback'), /not encrypted/);
+  assert.doesNotMatch(consentNotices('registered-client', 'https://remote.example/callback'), /not encrypted/);
+  assert.match(consentNotices('HTTPS://client.example/metadata.json', 'https://app.example/callback'), /<strong>client.example<\/strong>/);
   const notices = consentNotices('https://client.example/metadata.json?label=<img>', 'https://app.example/callback');
   assert.match(notices, /Client metadata domain: <strong>client.example<\/strong>/);
   assert.doesNotMatch(notices, /<img>/); assert.match(notices, /&lt;img&gt;/);

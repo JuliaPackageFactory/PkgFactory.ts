@@ -10,7 +10,7 @@ CurrentModule = {{{PKG}}}
 [![CI](https://github.com/{{{OWNER}}}/{{{PKG}}}.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/{{{OWNER}}}/{{{PKG}}}.jl/actions/workflows/CI.yml?query=branch%3Amain)
 [![coverage](https://codecov.io/gh/{{{OWNER}}}/{{{PKG}}}.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/{{{OWNER}}}/{{{PKG}}}.jl)
 
-{{{DESCR}}}
+{{{DOC_DESCR}}}
 
 This package requires Julia 1.12 or later because it uses Pkg workspaces.
 See `[compat]` in [Project.toml](https://github.com/{{{OWNER}}}/{{{REPO}}}/blob/main/Project.toml)

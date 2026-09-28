@@ -5,16 +5,20 @@ import YAML from 'yaml';
 import { planPackage, validatePlan } from '../packages/pkgfactory/src/core/plan.js';
 import { templates } from '../packages/pkgfactory/src/core/spec.js';
 import { descriptionPayload } from './description-payload.js';
-import { markdownText } from '../packages/pkgfactory/src/core/markdown.js';
+import { markdownText, documenterText } from '../packages/pkgfactory/src/core/markdown.js';
 
 test('description is literal Markdown in README and Documenter, while repository metadata stays original', async () => {
   for (const template of templates) {
     const plan = await planPackage({owner: 'tester', name: 'Safe', authors: ['Tester'], template, description: descriptionPayload});
     assert.equal(plan.spec.description, descriptionPayload);
     assert(plan.files['README.md'].includes(markdownText(descriptionPayload)));
-    if (template !== 'minimum') assert(plan.files['docs/src/index.md'].includes(markdownText(descriptionPayload)));
+    if (template !== 'minimum') assert(plan.files['docs/src/index.md'].includes(documenterText(descriptionPayload)));
   }
   assert.doesNotMatch(markdownText(descriptionPayload), /```|~~~|<script>/);
+  const block = documenterText(descriptionPayload).split('\n');
+  assert.equal(block.length, 3);
+  assert.doesNotMatch(block[1], /```|~~~|<script>|<img|<javascript:/);
+  assert(block[1].includes("Fast, simple. It's here."));
 });
 for (const template of templates) test(`render and parse ${template}`, async () => {
   const plan = await planPackage({owner: 'JuliaPackageFactory', name: 'Example.jl', authors: ['大野 "Shuhei" \\ $x\nName', 'Alice'], template},

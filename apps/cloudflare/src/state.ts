@@ -31,8 +31,9 @@ export class ApplicationState extends DurableObject {
         const operations: Operation[] = [];
         for (const [id, op] of legacy) {
           const plan = await ctx.storage.get<Operation['plan']>(`plan:${id}`);
-          if (!plan) throw new Error('Saved plan missing; preserve storage and inspect it');
-          operations.push({...op, plan});
+          // Isolate a missing blob without losing its journal/lock or making
+          // every other account unavailable. The engine refuses its execution.
+          operations.push(plan ? {...op, plan} : {...op, recoveryError: 'missing_plan'});
         }
         ctx.storage.transactionSync(() => {
           for (const op of operations) this.save(op);
@@ -46,7 +47,7 @@ export class ApplicationState extends DurableObject {
   private save(op: Operation) {
     const sql = this.ctx.storage.sql;
     const values = [op.subject, op.plan.repository.toLowerCase(), op.state, op.expiresAt, op.leaseUntil ?? 0, JSON.stringify(summary(op))];
-    if (op.plan.files) sql.exec(`INSERT INTO operations_v2 (subject, repository, state, expires_at, lease_until, metadata, id, plan)
+    if (op.plan.files || op.recoveryError) sql.exec(`INSERT INTO operations_v2 (subject, repository, state, expires_at, lease_until, metadata, id, plan)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET
       state=excluded.state, expires_at=excluded.expires_at, lease_until=excluded.lease_until, metadata=excluded.metadata`, ...values, op.plan.id, JSON.stringify(op.plan));
     else sql.exec('UPDATE operations_v2 SET subject=?, repository=?, state=?, expires_at=?, lease_until=?, metadata=? WHERE id=?', ...values, op.plan.id);
@@ -75,7 +76,7 @@ export class ApplicationState extends DurableObject {
         if (op.plan.files && JSON.stringify(op.plan).length > 100000) return json({error: 'Plan too large'}, 413);
         if (!old && !op.plan.files) return json({error: 'Plan required'}, 400);
       }
-      for (const id of data.remove ?? []) sql.exec("DELETE FROM operations_v2 WHERE id=? AND subject=? AND state IN ('preview','complete')", id, data.subject);
+      for (const id of data.remove ?? []) sql.exec("DELETE FROM operations_v2 WHERE id=? AND subject=? AND state IN ('preview','complete') AND json_extract(metadata, '$.recoveryError') IS NULL", id, data.subject);
       for (const op of data.put ?? []) this.save(op);
       sql.exec("UPDATE state_meta SET value=value+1 WHERE key='revision'"); return json({ok: true});
     });
@@ -86,10 +87,10 @@ export class ApplicationState extends DurableObject {
     const sql = this.ctx.storage.sql;
     this.ctx.storage.transactionSync(() => {
       // Uncertain writes and their repository locks are never expired here.
-      sql.exec("DELETE FROM operations_v2 WHERE state IN ('preview','complete') AND expires_at<=?", Date.now());
+      sql.exec("DELETE FROM operations_v2 WHERE state IN ('preview','complete') AND expires_at<=? AND json_extract(metadata, '$.recoveryError') IS NULL", Date.now());
       sql.exec("UPDATE state_meta SET value=value+1 WHERE key='revision'");
     });
-    if (sql.exec("SELECT 1 FROM operations_v2 WHERE state IN ('preview','complete') LIMIT 1").toArray().length) await this.ctx.storage.setAlarm(Date.now() + 60000);
+    if (sql.exec("SELECT 1 FROM operations_v2 WHERE state IN ('preview','complete') AND json_extract(metadata, '$.recoveryError') IS NULL LIMIT 1").toArray().length) await this.ctx.storage.setAlarm(Date.now() + 60000);
   }
 }
 export class DurableStore implements StateStore {

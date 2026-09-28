@@ -3,6 +3,7 @@ import { base64, base64url, unbase64, unbase64url, randomToken, sha256, utf8, de
 import { GitHub } from '../../../packages/pkgfactory/src/github/client.js';
 import { json } from '../../../packages/pkgfactory/src/web/http.js';
 import { FactoryError } from '../../../packages/pkgfactory/src/application/engine.js';
+import { loginSource } from './ip.js';
 export interface Env {
   STATE: DurableObjectNamespace; AUTH: DurableObjectNamespace; OAUTH_KV: KVNamespace; OAUTH_PROVIDER: OAuthHelpers;
   ORIGIN: string; GITHUB_OAUTH_CLIENT_ID: string; GITHUB_OAUTH_CLIENT_SECRET: string; SESSION_KEY: string;
@@ -71,7 +72,7 @@ export async function webAuth(request: Request, env: Env): Promise<Response | nu
   if (url.pathname === '/auth/login' && request.method === 'GET') {
     // Cloudflare supplies this header at the edge. Store only a keyed hash;
     // each source gets its own counter, independent of authenticated sessions.
-    const source = await sha256(env.SESSION_KEY + ':' + (request.headers.get('CF-Connecting-IP') ?? 'unknown'));
+    const source = await sha256(env.SESSION_KEY + ':' + loginSource(request.headers.get('CF-Connecting-IP')));
     if (!await authState(env, 'limit', `login-rate:${source}`, {limit: 20}, 60000)) return new Response(JSON.stringify({error: 'Too many sign-in attempts. Try again in one minute.'}), {status: 429, headers: {'Content-Type': 'application/json', 'Retry-After': '60'}});
     const state = randomToken(), verifier = randomToken();
     const encrypted = await encrypt(env, {state, verifier, expiresAt: Date.now() + 600000}, `web-login:${env.ORIGIN}`);
