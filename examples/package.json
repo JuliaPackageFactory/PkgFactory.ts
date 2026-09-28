@@ -1,0 +1,8 @@
+{
+  "owner": "YOUR_GITHUB_OWNER",
+  "name": "MyPackage",
+  "authors": ["Your Name"],
+  "description": "My Julia package",
+  "template": "simple",
+  "visibility": "public"
+}

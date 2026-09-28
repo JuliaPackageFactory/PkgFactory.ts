@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.wrangler/
+.pkgfactory/
+.dev.vars*
+.env*
+!.env.example
+*.tgz
+.tmp/
+artifacts/
+packages/pkgfactory/docs/
+packages/pkgfactory/examples/
