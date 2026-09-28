@@ -15,5 +15,9 @@ const text = block.replaceAll('<br>', '\n').replace(/&(amp|lt|gt|#\d+);/g, (_, e
 assert.equal(text, descriptionPayload, 'Documenter must display the entire original description without extra backslashes');
 assert(html.includes("Fast, simple. It's here."), 'Ordinary punctuation must appear unchanged');
 assert(!html.includes('<script>alert(1)</script>'), 'User HTML must remain inert');
-assert(!/href\s*=\s*["']\s*javascript:/i.test(html), 'Description must not create javascript links');
+// Documenter's own header has a javascript:; disclosure button. Check the
+// article containing generated/user content, not that built-in navigation.
+const article = html.match(/<article\b(?=[^>]*\bid="documenter-page")[^>]*>([\s\S]*?)<\/article>/)?.[1];
+assert(article, 'Documenter article is missing');
+assert(!/<a\b[^>]*\bhref\s*=\s*["']\s*javascript:/i.test(article), 'Description must not create javascript links');
 console.log('Documenter rendered the adversarial description without executing it.');
