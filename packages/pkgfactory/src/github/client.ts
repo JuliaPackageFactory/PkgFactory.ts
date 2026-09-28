@@ -10,14 +10,19 @@ export class GitHub {
     await this.beforeRequest?.();
     this.signal.throwIfAborted();
     let response: Response;
+    // Native workerd fetch must not receive this GitHub instance as its receiver.
+    const fetcher = this.fetcher;
     try {
-      response = await this.fetcher(`https://api.github.com${path}`, {
+      response = await fetcher(`https://api.github.com${path}`, {
         method, headers: {Authorization: `Bearer ${this.token}`, Accept: 'application/vnd.github+json',
           'User-Agent': 'PkgFactory', 'X-GitHub-Api-Version': '2022-11-28', ...(body ? {'Content-Type': 'application/json'} : {})},
-        body: body === undefined ? undefined : JSON.stringify(body), redirect: 'error',
+        // workerd rejects redirect: 'error' before sending. Inspect 3xx ourselves;
+        // never forward an Authorization header or write body to another URL.
+        body: body === undefined ? undefined : JSON.stringify(body), redirect: 'manual',
         signal: AbortSignal.any([this.signal, AbortSignal.timeout(30000)]),
       });
     } catch { throw new GitHubError(0, method !== 'GET'); }
+    if (response.status >= 300 && response.status < 400) throw new GitHubError(response.status, method !== 'GET');
     if (missing && response.status === 404) return null as T;
     if (!response.ok) {
       const error = await response.json().catch(() => ({})) as any;

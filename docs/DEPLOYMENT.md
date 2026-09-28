@@ -183,6 +183,12 @@ GitHubがパスキーによる本人確認を求める場合、普段使って�
 `oauth_scopes` ならrepo/workflow権限、`oauth_mcp_grant` ならMCPの認可保存処理を確認します。
 トークン応答・秘密鍵・Client secret・認可コードはログにも診断表示にも含めません。
 
+認可の失敗時は、まず保存状態と認可コードの期限切れを切り分けます。保存状態は10分で失効し、
+GitHubのコードが失効していれば `oauth_code_invalid` になります。今回の `oauth_exchange_network` は、
+待ち時間を入れないworkerd検証でも再現した実行環境の非互換が原因でした。
+GitHubへの通信は `redirect: 'manual'` と3xxの拒否を用い、ネイティブfetchをクラスメソッドとして呼ばない実装に修正済みです。
+Nodeのモックfetchだけでなく、workerdのRequest/fetchを通る回帰テストで確認します。
+
 別アカウントや新環境を準備する場合のみ、以下の初期設定を実施します。
 Workers PaidとDurable Objectsを使えるアカウント、Workers/KV/DOを配備できる認証が必要です。
 `ORIGIN`、`GITHUB_OAUTH_CLIENT_ID`、KV IDをその環境の実値へ変更します。

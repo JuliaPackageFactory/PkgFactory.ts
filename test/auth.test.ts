@@ -28,7 +28,7 @@ test('GitHub code exchange uses PKCE, validates scope and identity, and redacts 
     calls.push(String(input));
     if (String(input).endsWith('/access_token')) {
       assert.equal(new Headers(init?.headers).get('User-Agent'), 'PkgFactory');
-      assert.equal(init?.redirect, 'error');
+      assert.equal(init?.redirect, 'manual');
       const body = new URLSearchParams(String(init?.body));
       assert.equal(body.get('code_verifier'), 'verifier'); assert.equal(body.get('redirect_uri'), env.ORIGIN + '/callback');
       return Response.json({access_token: 'hidden-token', scope: 'read:user,repo,workflow'});

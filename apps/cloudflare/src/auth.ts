@@ -46,8 +46,9 @@ export async function exchangeGitHub(request: Request, env: Env, verifier: strin
   if (url.searchParams.has('iss') && url.searchParams.get('iss') !== 'https://github.com/login/oauth') throw new FactoryError('oauth_issuer', 'Unexpected GitHub authorization issuer. Start sign-in again.', 400);
   let result: Response;
   try {
-    result = await fetcher('https://github.com/login/oauth/access_token', {method: 'POST', headers: {Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'PkgFactory'}, body: new URLSearchParams({client_id: env.GITHUB_OAUTH_CLIENT_ID, client_secret: env.GITHUB_OAUTH_CLIENT_SECRET, code, code_verifier: verifier, redirect_uri: env.ORIGIN + callback}), redirect: 'error', signal: AbortSignal.any([request.signal, AbortSignal.timeout(30000)])});
+    result = await fetcher('https://github.com/login/oauth/access_token', {method: 'POST', headers: {Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'PkgFactory'}, body: new URLSearchParams({client_id: env.GITHUB_OAUTH_CLIENT_ID, client_secret: env.GITHUB_OAUTH_CLIENT_SECRET, code, code_verifier: verifier, redirect_uri: env.ORIGIN + callback}), redirect: 'manual', signal: AbortSignal.any([request.signal, AbortSignal.timeout(30000)])});
   } catch {throw new FactoryError('oauth_exchange_network', 'GitHub token exchange could not be completed. Start sign-in again.', 502);}
+  if (result.status >= 300 && result.status < 400) throw new FactoryError('oauth_exchange_redirect', 'GitHub token exchange returned an unexpected redirect. Authorization stopped without following it.', 502);
   let tokens: any;
   try {tokens = await result.json();}
   catch {throw new FactoryError('oauth_exchange_response', 'GitHub returned an invalid token response. Start sign-in again.', 502);}
