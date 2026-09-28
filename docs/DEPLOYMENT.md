@@ -46,9 +46,11 @@ CLI既定値とWorker `KEY_ALGORITHM` をRSAへ合わせます。成功済みプ
 旧検証Worker `pkgfactory-ts-staging` は短い名前への配備確認後に削除済みです。
 旧版 `pkgfactory-web`・`pkgfactory-mcp` の切替・撤去は本番公開の承認後に行います。
 
-### 2.1 今回作成するOAuthアプリ
+### 2.1 検証用OAuthアプリ（作成済み）
 
-今回は検証用を一つ作ります。本番用は公開前に別のアプリとして作成します。
+検証用 `PkgFactory Staging` は作成済みです。Client ID `Ov23li7iF0SLvIWtqPyX` を
+検証用Worker設定へ反映しています。このアプリを作り直す必要はありません。
+以下は設定値の確認と、別環境を用意する場合の手順です。
 
 1. GitHubで `JuliaPackageFactory` 組織の **Settings → Developer settings → OAuth apps → New OAuth App** を開きます。
    [組織のOAuthアプリ設定](https://github.com/organizations/JuliaPackageFactory/settings/applications)
@@ -63,6 +65,7 @@ CLI既定値とWorker `KEY_ALGORITHM` をRSAへ合わせます。成功済みプ
 | Authorization callback URL 2（Add callback URLで追加） | `https://pkgfactory-staging.ohnolab.workers.dev/callback` |
 | callbackのwildcard matching | 両方とも無効 |
 | Enable Device Flow | 有効（ローカルCLIのDevice Flowでも使えるようにする） |
+| Expire user access tokens | 有効（期限切れ時は再認可） |
 
 3. **Register application** を押します。作成後の画面で **Client ID** を控えます。
 4. **Generate a new client secret** を押してsecretを生成します。再認証を求められた場合はGitHubで完了してください。
@@ -93,12 +96,38 @@ CLI既定値とWorker `KEY_ALGORITHM` をRSAへ合わせます。成功済みプ
 Client IDの共有とsecretの登録が終われば、こちらで設定を配備してWeb/MCPのログイン検証へ進めます。
 CLIで登録する場合のコマンドは次節にあります。
 
-### 2.3 公開前に作成する本番用アプリ
+### 2.3 新しく作成する本番用OAuthアプリ
 
-Application nameは `PkgFactory`、Homepage URLは `https://pkgfactory.ohnolab.workers.dev/`、
-callbackは `https://pkgfactory.ohnolab.workers.dev/auth/callback` と
-`https://pkgfactory.ohnolab.workers.dev/callback` にします。
-本番用のClient ID/secretは本番Workerへ登録し、検証用と分けます。
+管理対象は `PkgFactory`（本番用）と `PkgFactory Staging`（検証用）の2つに整理します。
+本番用は新しく作成し、既存の検証用はそのまま使います。
+所有者をリポジトリと揃える場合は `JuliaPackageFactory` 組織を選びます。
+
+1. [JuliaPackageFactoryのOAuth apps](https://github.com/organizations/JuliaPackageFactory/settings/applications)
+   で **New OAuth App** を開きます。別の運営組織で管理する場合は、その組織の設定画面を使用します。
+2. 次の値を入力します。
+
+| GitHubの入力欄 | 本番用の入力値 |
+|---|---|
+| Application name | `PkgFactory` |
+| Homepage URL | `https://pkgfactory.ohnolab.workers.dev/` |
+| Application description（任意） | `Create Julia packages with PkgFactory` |
+| Authorization callback URL 1 | `https://pkgfactory.ohnolab.workers.dev/auth/callback` |
+| Authorization callback URL 2（Add callback URLで追加） | `https://pkgfactory.ohnolab.workers.dev/callback` |
+| callbackのwildcard matching | 両方とも無効 |
+| Enable Device Flow | 有効 |
+| Expire user access tokens | 有効（期限切れ時は再認可） |
+
+3. **Register application** を押します。表示された本番用Client IDを共有してください。
+   こちらで `env.production.vars.GITHUB_OAUTH_CLIENT_ID` に設定します。
+4. **Generate a new client secret** で本番用secretを作り、パスワードマネージャー等へ保存します。
+   チャットやGitには貼りません。検証用secretとは別の値です。
+5. 本番Worker `pkgfactory` の配備準備時に、そのWorkerの **Settings → Variables and Secrets** へ
+   Type **Secret**、名前 **GITHUB_OAUTH_CLIENT_SECRET** で登録します。
+   本番Workerはまだ未配備なので、この登録は配備準備の案内後に行います。
+
+本番用secretを検証用Worker `pkgfactory-staging` に登録しないでください。
+旧本番で使用中のOAuthアプリは、新版への切替が完了するまで残します。
+不要アプリは表示名だけで判断せず、所有者・Client ID・callbackを照合してから整理します。
 
 `repo workflow read:user` を要求します。組織にOAuthアプリ制限がある場合は、そのアプリを承認します。
 Client IDは変数、Client secretはWorker secretへ設定します。チャットやGitにsecretを貼らないでください。
@@ -109,8 +138,8 @@ Client IDは変数、Client secretはWorker secretへ設定します。チャッ
 新版専用のOAuth KV `PKGFACTORY_TS_STAGING_OAUTH`、SQLite DO、32バイトの `SESSION_KEY` secretを準備しました。
 旧WorkerのKVやDOは流用していません。`MAINTENANCE=true` とOAuth未設定時の503で受付を停止しています。
 
-このステージングでは `apps/cloudflare/wrangler.jsonc` のトップレベル `GITHUB_OAUTH_CLIENT_ID` を設定し、
-次のsecretを登録してください。既存のSESSION_KEYやKVを作り直す必要はありません。
+このステージングのClient IDは設定済みです。残りは次のsecret登録です。
+既存のSESSION_KEYやKVを作り直す必要はありません。
 
 ```sh
 npx wrangler secret put GITHUB_OAUTH_CLIENT_SECRET --config apps/cloudflare/wrangler.jsonc

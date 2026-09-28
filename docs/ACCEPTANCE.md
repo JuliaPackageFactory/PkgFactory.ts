@@ -2,7 +2,8 @@
 
 **実装とローカル検証は完了。本番公開可能という判定はまだしていません。**
 ステージングは配備済みです。組織のDeploy key許可後の再開とEd25519の実サービス互換を確認しました。
-残りはステージングのGitHub OAuth設定と認可後の実測、本番公開準備です。
+ステージングのGitHub OAuth Client IDは反映・配備済みです。
+残りはClient secretの登録と認可後の実測、本番公開準備です。
 
 | 検証 | 結果 |
 |---|---|
@@ -65,7 +66,7 @@ DocumenterのGitHubActions認証実装はこの条件でSSHを選びます。
 
 ## リリース前に残る確認
 
-1. ステージングのGitHub OAuth Client ID/secretを設定し、受付を有効化してWeb/MCPからの認可→作成→再開を確認する。KV/DO/SESSION_KEYは配備済み。
+1. ステージングのGitHub OAuth Client secretを登録し、受付を有効化してWeb/MCPからの認可→作成→再開を確認する。Client ID/KV/DO/SESSION_KEYは配備済み。
 2. 公開Edge経由の切断伝播・8同時実行・CPU/メモリを計測する。
 3. 本番成果と切替手順をレビューし、承認後に本番・npm公開と旧リポジトリのアーカイブへ進む。
 
