@@ -96,10 +96,12 @@ CLI既定値とWorker `KEY_ALGORITHM` をRSAへ合わせます。成功済みプ
 Client IDの共有とsecretの登録が終われば、こちらで設定を配備してWeb/MCPのログイン検証へ進めます。
 CLIで登録する場合のコマンドは次節にあります。
 
-### 2.3 新しく作成する本番用OAuthアプリ
+### 2.3 本番用OAuthアプリ（作成済み）
 
 管理対象は `PkgFactory`（本番用）と `PkgFactory Staging`（検証用）の2つに整理します。
-本番用は新しく作成し、既存の検証用はそのまま使います。
+新しい本番用 `PkgFactory` のClient ID `Ov23liW9Mpoaeo70n071` は
+`env.production.vars.GITHUB_OAUTH_CLIENT_ID` に反映済みです。本番配備・公開はまだ実施していません。
+以下は設定値の確認と、別環境を用意する場合の手順です。
 所有者をリポジトリと揃える場合は `JuliaPackageFactory` 組織を選びます。
 
 1. [JuliaPackageFactoryのOAuth apps](https://github.com/organizations/JuliaPackageFactory/settings/applications)
