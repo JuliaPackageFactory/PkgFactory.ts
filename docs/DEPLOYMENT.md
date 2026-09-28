@@ -14,15 +14,15 @@
 Enterprise管理下では上位ポリシーの変更も必要です。[GitHub公式手順](https://docs.github.com/en/enterprise-cloud@latest/organizations/managing-organization-settings/restricting-deploy-keys-in-your-organization)
 
 設定後は既存のテストリポジトリを明示的に再開します。新規作成を繰り返す必要はありません。
-この検証を実行したワークスペースには `.tmp/e2e-state/journal.json` と `artifacts/github-e2e.json` が残っています。
+Nodeのプランは `.tmp/e2e-state/journal.json`、planIdは各実行の `artifacts/github-e2e-*.json` に残します。
+過去の3件作成の記録は `artifacts/github-e2e.json` として保持していますが、現行runnerは1件だけを作成・再開します。
 
 ```sh
-npm run e2e -- --confirm-create-test-repositories --resume-file=artifacts/github-e2e.json
-npx tsx scripts/install-key-poc.ts JuliaPackageFactory/PkgFactoryPoc202609272136301.jl --confirm
-npx tsx scripts/install-key-poc.ts JuliaPackageFactory/PkgFactoryPoc202609272136302.jl --confirm
+npm run e2e -- --gh --resume-plan=PLAN_ID --confirm-resume
+npx tsx scripts/install-key-poc.ts JuliaPackageFactory/TestYYYYMMDDHHMMSS.jl --confirm
 ```
 
-後半のスクリプトは検証リポジトリに手動実行用Workflowを追加し、固定コミットのTagBotから
+後半のスクリプトはその実行で既に作成した1件に手動実行用Workflowを追加し、固定コミットのTagBotから
 実際のSSH設定・Git pushを行います。登録処理やGitHub Releaseは作成せず、`pkgfactory-key-poc-RUN_ID` の検証タグを作ります。
 同時にDocumenterのCIを再実行します。Documenterログで `DOCUMENTER_KEY` を使用したことを確認してください。
 
@@ -160,16 +160,16 @@ MCPの対話検証は次のコマンドで起動します。表示されたlocal
 ```sh
 # 読み取り検証: 5ツールの確認と8同時プレビュー（3テンプレート）
 npx tsx scripts/staging-mcp-e2e.ts
-# 明示的な実リポジトリ作成: JuliaPackageFactory/PkgFactoryEdge<日時><番号>.jl の3件
-npx tsx scripts/staging-mcp-e2e.ts --confirm-create-test-repositories
+# 明示的な実リポジトリ作成: JuliaPackageFactory/TestYYYYMMDDHHMMSS.jl の1件（UTC）
+npm run e2e:staging -- --template=simple --confirm-create-test-repository
 # 途中停止した場合: 状態を再取得し、リース満了後に明示的に再開
-npx tsx scripts/staging-mcp-e2e.ts --confirm-create-test-repositories --resume-plan=PLAN_ID
+npm run e2e:staging -- --resume-plan=PLAN_ID --confirm-resume
 # 実HTTP切断後の停止確認→リース満了→照合→明示的再開（検証repoを1件作成）
-npx tsx scripts/staging-mcp-e2e.ts --confirm-create-test-repositories --confirm-disconnect-and-resume
+npm run e2e:staging -- --template=simple --confirm-create-test-repository --confirm-disconnect-and-resume
 ```
 
-認可入口は30分有効です。結果は通常 `artifacts/staging-mcp-e2e.json`、
-切断テストは `artifacts/staging-disconnect-e2e.json`、既存プランの再開は `artifacts/staging-resume-e2e.json` に記録します。
+認可入口は30分有効です。結果は `artifacts/staging-{mcp,disconnect,resume}-Test<日時>-<run ID>.json` に記録し、
+認可の開始時にファイル名を表示します。過去の報告を上書きしません。
 書き込みを自動再送しません。実行が停止したら結果に記録されたplanIdを確認してください。
 MCPの同意フォームは、外部へのHTTPリダイレクトをCSPが遮断するブラウザーに対応するため、
 同意後に遷移用HTMLを返します。`form-action 'self'` は維持します。
@@ -225,11 +225,13 @@ npx wrangler deploy --config apps/cloudflare/wrangler.jsonc --dry-run
 npm run deploy:staging
 ```
 
-ステージングで `/health`、Web OAuth、MCP OAuth、3テンプレートの作成を確認します。
+ステージングで `/health`、Web OAuth、MCP OAuth、選択したテンプレートの作成1件を確認します。
+3テンプレートの継続的な生成検証には既存のTestMinimum.jl・TestSimple.jl・TestAllInOne.jlを使います。
+[固定リポジトリE2Eの設定](TESTING.md) を参照してください。
 WebとMCPで同じsubject・repositoryへの作成を競合させ、片方がロックで停止することを確認します。
 作成中にHTTP接続を切り、GitHubの操作が止まること、リース後の明示的再開で回復することを確認します。
 公開Edgeでの切断伝播と実CPU・メモリを確認します。今回の負荷測定は8同時プレビューと
-3テンプレートの逐次作成です。8件同時作成の最大容量は未実測なので、受入結果と区別して記録します。
+3テンプレートの逐次作成でした。今後の作成受入は1回に1件とします。8件同時作成の最大容量は未実測なので、受入結果と区別して記録します。
 
 ## 4. npm公開準備
 

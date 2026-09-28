@@ -45,6 +45,8 @@ jobs:
           version: '1.12'
       - uses: julia-actions/cache@v3
       - run: julia --project=. --startup-file=no -e 'using Pkg; Pkg.instantiate(); Pkg.test()'
+        env:
+          JET_TEST: 'true'
         working-directory: artifacts/generated/${{ matrix.template }}
       - if: matrix.template != 'minimum'
         run: julia --project=docs --startup-file=no -e 'using Pkg; Pkg.develop(PackageSpec(path=pwd())); Pkg.instantiate(); include("docs/make.jl")'

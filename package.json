@@ -17,6 +17,8 @@
     "check": "npm run typecheck && npm test && npm run build && npm run test:worker",
     "poc": "tsx scripts/key-poc.ts",
     "e2e": "tsx scripts/github-e2e.ts",
+    "e2e:templates": "tsx scripts/template-repositories.ts",
+    "e2e:staging": "tsx scripts/staging-mcp-e2e.ts",
     "dev:worker": "wrangler dev --config apps/cloudflare/wrangler.jsonc",
     "deploy:staging": "wrangler deploy --config apps/cloudflare/wrangler.jsonc",
     "deploy:production": "wrangler deploy --config apps/cloudflare/wrangler.jsonc --env production"

@@ -103,14 +103,19 @@ npm ci
 npm run check
 node scripts/pack-smoke.mjs
 npm run poc
-npm run e2e -- --confirm-create-test-repositories
+# 既存の固定3リポジトリを読み取り、更新内容をローカルに生成
+npm run e2e:templates -- --gh
+# 新規作成が必要な検証だけ、1回に1件
+npm run e2e -- --gh --template=simple --confirm-create-test-repository
 ```
 
-最後のコマンドは実際の検証用GitHubリポジトリを作成します。既定ownerはJuliaPackageFactoryで、
-`PKGFACTORY_E2E_OWNER` により変更できます。自動削除はしません。
+通常のテンプレートE2Eは既存の `TestMinimum.jl`・`TestSimple.jl`・`TestAllInOne.jl` を継続更新します。
+新規作成E2Eは `JuliaPackageFactory/TestYYYYMMDDHHMMSS.jl`（UTC）の1件だけです。
+テンプレートを選択して実行し、途中停止時は保存済みplanIdを明示的に再開します。自動削除はしません。
 OpenSSHとJuliaは開発時の鍵PoC・生成パッケージ検証にのみ使用します。
 
 - [構成と安全な再開](docs/ARCHITECTURE.md)
+- [固定リポジトリのE2E・CI設定](docs/TESTING.md)
 - [配備・外部設定・切替手順](docs/DEPLOYMENT.md)
 - [実施した検証と未完了の受入条件](docs/ACCEPTANCE.md)
 

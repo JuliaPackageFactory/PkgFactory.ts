@@ -7,13 +7,13 @@
 ステージングのClient secret登録を確認し、受付を有効化しました。
 公開MCPのOAuth認可・3テンプレートの実作成・Documenter公開を確認しました。
 公開Edgeでの接続切断・ロック保持・状態照合・明示的再開も完了しました。
-公開Webからの利用者による実作成も成功しました。残りは本番公開準備です。
+公開Webからの利用者による実作成も成功しました。残りは本番公開準備と、固定リポジトリE2EのCI資格情報・切替設定です。
 
 | 検証 | 結果 |
 |---|---|
 | Node.js 24 / TypeScript strict | 成功 |
 | リポジトリCI | [Web UX修正版のWindows/macOS/Linux＋Julia 3テンプレートの全6ジョブ成功](https://github.com/JuliaPackageFactory/PkgFactory.ts/actions/runs/36395565308) |
-| Nodeテスト | 34件成功 |
+| Nodeテスト | 38件成功（固定リポジトリの改名/UUID/履歴/競合、新規作成1件制限を含む） |
 | workerdテスト | 4件成功 |
 | 3テンプレート | 指定コミットの58原本＋回復マーカー、TOML/YAML/CFF/JSONの構文検証成功 |
 | Node/workerdのプラン一致 | 固定UUID・日付・日本語著者を含めて一致 |
@@ -36,6 +36,17 @@
 
 workerdの鍵生成は一例でEd25519約1ms、RSA約0.4–2.1秒でした。これはローカルの経過時間で、
 CloudflareのCPU/メモリ測定ではありません。ステージングでの実測は次節を参照してください。
+
+## 固定リポジトリE2Eの移植
+
+旧版の固定3リポジトリ更新テストが当初の新版から抜けていたため、TypeScriptの共通生成器を使って移植しました。
+対象は改名後のTestMinimum.jl・TestSimple.jl・TestAllInOne.jlです。パッケージ名も更新し、既存UUIDと履歴を維持します。
+ローカルGitによる初回生成・削除のみの変更・改名・差分なし・競合停止・不正UUID拒否を検証しました。
+Node/workerdは計42件成功しました。新規作成のrunnerはNode/MCP共通で最大1件、名前はTestYYYYMMDDHHMMSS.jlです。
+今回は新規リポジトリを作成しません。
+
+継続CI用の `PKGFACTORY_E2E_TOKEN` は新版に未登録です。旧E2Eも有効なので、同時更新を避けるため
+新版の自動書込みは `PKGFACTORY_TEMPLATE_E2E_ENABLED=true` の設定後に開始します。[設定手順](TESTING.md)
 
 ## Cloudflare公開MCPでの受入
 
