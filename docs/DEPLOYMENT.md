@@ -5,8 +5,9 @@
 
 ## 1. GitHubのDeploy key許可
 
-今回の実リポジトリ作成では、GitHub APIが `Deploy keys are disabled for this repository` を返しました。
-RSAへ変更してもこの組織ポリシーは解消しません。
+2026-09-28に組織所有者がDeploy keysを有効化し、停止していたsimple/all-in-oneの両プランを
+明示的に再開して完了しました。検証結果は [ACCEPTANCE.md](ACCEPTANCE.md) に記録しています。
+最初の実行で返された `Deploy keys are disabled for this repository` は組織ポリシーによるもので、鍵方式の非互換ではありませんでした。
 
 組織所有者が [JuliaPackageFactory / Settings / Member privileges](https://github.com/organizations/JuliaPackageFactory/settings/member_privileges)
 を開き、**Deploy keys → Enabled → Save** と設定します。組織全体への許可なので、実装作業から勝手に変更していません。
@@ -28,34 +29,83 @@ npx tsx scripts/install-key-poc.ts JuliaPackageFactory/PkgFactoryPoc202609272136
 Ed25519がDocumenterまたはTagBotと非互換なら、エラーを記録してRSA-4096へ切り替えます。
 新しいPoCプランを `--key-algorithm rsa4096` で作り、同じテストを通した後、
 CLI既定値とWorker `KEY_ALGORITHM` をRSAへ合わせます。成功済みプランの `resume` は鍵を勝手に変更しません。
-鍵方式が確定するまで本番公開を行いません。
+今回の両テンプレートの実機検証ではEd25519が成功したため、既定値をEd25519のまま採用しています。
 
 ## 2. GitHub OAuthアプリ
 
-ステージングと本番で別のOAuthアプリを作成します。例の本番originは
-`https://pkgfactory.ohnolab.workers.dev`、ステージングは `https://pkgfactory-ts-staging.ohnolab.workers.dev` です。
-実際に使うCloudflareアカウントのsubdomainに合わせてください。
+`-ts`・`-web`・`-mcp` はWorker名に不要です。WebとMCPは同じWorkerが提供し、パスで分けます。
 
-| 項目 | 設定 |
+| 用途 | URL |
 |---|---|
-| Application name | `PkgFactory` / `PkgFactory Staging` |
-| Homepage URL | 対象のorigin |
-| Authorization callback URL | `https://対象origin/`（末尾 `/`、ルート） |
-| Webの実際のredirect_uri | `https://対象origin/auth/callback` |
-| MCPの実際のredirect_uri | `https://対象origin/callback` |
-| Device Flow | ローカル用Client IDでも使う場合は有効化 |
+| 本番Web（公開前） | `https://pkgfactory.ohnolab.workers.dev/` |
+| 本番MCP（公開前） | `https://pkgfactory.ohnolab.workers.dev/mcp` |
+| 検証Web | `https://pkgfactory-staging.ohnolab.workers.dev/` |
+| 検証MCP | `https://pkgfactory-staging.ohnolab.workers.dev/mcp` |
 
-一つのOAuthアプリで同一hostの二つの固定callbackを利用するため、登録callbackはルートにします。
-実装が利用者入力からredirect_uriを組み立てることはありません。
-GitHub OAuthは登録callbackの下位パスを許可します。
-[GitHub OAuth・PKCE・Device Flow仕様](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps)
+本番URLは設定済みですが、公開はまだ実施していません。検証用の `-staging` は本番と区別するために残します。
+旧検証Worker `pkgfactory-ts-staging` は短い名前への配備確認後に削除済みです。
+旧版 `pkgfactory-web`・`pkgfactory-mcp` の切替・撤去は本番公開の承認後に行います。
+
+### 2.1 今回作成するOAuthアプリ
+
+今回は検証用を一つ作ります。本番用は公開前に別のアプリとして作成します。
+
+1. GitHubで `JuliaPackageFactory` 組織の **Settings → Developer settings → OAuth apps → New OAuth App** を開きます。
+   [組織のOAuthアプリ設定](https://github.com/organizations/JuliaPackageFactory/settings/applications)
+2. 次の値を入力します。対象は **OAuth App** です。
+
+| GitHubの入力欄 | 検証用の入力値 |
+|---|---|
+| Application name | `PkgFactory Staging` |
+| Homepage URL | `https://pkgfactory-staging.ohnolab.workers.dev/` |
+| Application description（任意） | `Julia package generator — staging` |
+| Authorization callback URL 1 | `https://pkgfactory-staging.ohnolab.workers.dev/auth/callback` |
+| Authorization callback URL 2（Add callback URLで追加） | `https://pkgfactory-staging.ohnolab.workers.dev/callback` |
+| callbackのwildcard matching | 両方とも無効 |
+| Enable Device Flow | 有効（ローカルCLIのDevice Flowでも使えるようにする） |
+
+3. **Register application** を押します。作成後の画面で **Client ID** を控えます。
+4. **Generate a new client secret** を押してsecretを生成します。再認証を求められた場合はGitHubで完了してください。
+
+**以前の「callbackにルートURLを一つ登録する」という説明は訂正します。**
+現在のGitHubはcallbackを複数登録でき、wildcard無効時は完全一致です。上記2つの実際のcallbackを登録します。
+ルートURLだけの登録やwildcard有効化は不要です。
+[GitHubの作成手順](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/creating-an-oauth-app)・
+[callback/PKCE仕様](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps#redirect-urls)
+
+`Expire user access tokens` が表示される場合は、有効のままで構いません。
+現実装はGitHub tokenを自動更新せず、期限切れ時にログアウト・再認可します。Webセッションの上限も8時間です。
+
+### 2.2 Client IDとsecretの登録先
+
+**Client IDは公開識別子なのでチャットで共有できます。**
+受け取ったIDを `apps/cloudflare/wrangler.jsonc` のトップレベル `GITHUB_OAUTH_CLIENT_ID` に設定します。
+本番用の `env.production` はまだ変更しません。
+
+**Client secretはチャットやGitへ貼らず、Cloudflareへ直接登録します。**
+
+1. [Cloudflare Dashboard](https://dash.cloudflare.com/) を開きます。
+2. **Workers & Pages → pkgfactory-staging → Settings → Variables and Secrets → Add** を開きます。
+3. Typeを **Secret**、名前を **GITHUB_OAUTH_CLIENT_SECRET**、ValueをGitHubで生成したsecretにします。
+4. 画面の **Add / Deploy** または保存ボタンで反映します。
+
+`SESSION_KEY` はすでに登録済みです。GitHubのClient secretで上書きしないでください。
+Client IDの共有とsecretの登録が終われば、こちらで設定を配備してWeb/MCPのログイン検証へ進めます。
+CLIで登録する場合のコマンドは次節にあります。
+
+### 2.3 公開前に作成する本番用アプリ
+
+Application nameは `PkgFactory`、Homepage URLは `https://pkgfactory.ohnolab.workers.dev/`、
+callbackは `https://pkgfactory.ohnolab.workers.dev/auth/callback` と
+`https://pkgfactory.ohnolab.workers.dev/callback` にします。
+本番用のClient ID/secretは本番Workerへ登録し、検証用と分けます。
 
 `repo workflow read:user` を要求します。組織にOAuthアプリ制限がある場合は、そのアプリを承認します。
 Client IDは変数、Client secretはWorker secretへ設定します。チャットやGitにsecretを貼らないでください。
 
 ## 3. Cloudflareステージング
 
-2026-09-28時点で [pkgfactory-ts-staging](https://pkgfactory-ts-staging.ohnolab.workers.dev/health) は配備済みです。
+2026-09-28時点で [pkgfactory-staging](https://pkgfactory-staging.ohnolab.workers.dev/health) は配備済みです。
 新版専用のOAuth KV `PKGFACTORY_TS_STAGING_OAUTH`、SQLite DO、32バイトの `SESSION_KEY` secretを準備しました。
 旧WorkerのKVやDOは流用していません。`MAINTENANCE=true` とOAuth未設定時の503で受付を停止しています。
 
