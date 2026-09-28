@@ -15,7 +15,9 @@ const workflow = `name: Deploy key acceptance\non:\n  workflow_dispatch:\npermis
 const path = `/repos/${repository}/contents/.github/workflows/DeployKeyPoc.yml`;
 const existing = await github.request('GET', path, undefined, true);
 if (!existing || decode(unbase64(existing.content.replace(/\s/g, ''))) !== workflow) {
-  await github.request('PUT', path, {message: 'Add explicit deploy-key acceptance test', content: base64(utf8(workflow)), ...(existing ? {sha: existing.sha} : {})});
+  // The explicit dispatch below runs CI once; do not also start push CI merely
+  // for installing this manual PoC workflow.
+  await github.request('PUT', path, {message: 'Add explicit deploy-key acceptance test\n\n[skip ci]', content: base64(utf8(workflow)), ...(existing ? {sha: existing.sha} : {})});
 }
 // GitHub indexes a newly committed workflow asynchronously. Poll only reads;
 // dispatch each write once, after the workflow is visible.

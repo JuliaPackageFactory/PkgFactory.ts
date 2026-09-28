@@ -12,7 +12,7 @@
 | 検証 | 結果 |
 |---|---|
 | Node.js 24 / TypeScript strict | 成功 |
-| リポジトリCI | [Web UX修正版のWindows/macOS/Linux＋Julia 3テンプレートの全6ジョブ成功](https://github.com/JuliaPackageFactory/PkgFactory.ts/actions/runs/36395565308) |
+| リポジトリCI | [固定E2E・パス修正版のWindows/macOS/Linux＋Julia 3テンプレートの全6ジョブ成功](https://github.com/JuliaPackageFactory/PkgFactory.ts/actions/runs/36400259851) |
 | Nodeテスト | 38件成功（固定リポジトリの改名/UUID/履歴/競合、新規作成1件制限を含む） |
 | workerdテスト | 4件成功 |
 | 3テンプレート | 指定コミットの58原本＋回復マーカー、TOML/YAML/CFF/JSONの構文検証成功 |
@@ -43,7 +43,19 @@ CloudflareのCPU/メモリ測定ではありません。ステージングでの
 対象は改名後のTestMinimum.jl・TestSimple.jl・TestAllInOne.jlです。パッケージ名も更新し、既存UUIDと履歴を維持します。
 ローカルGitによる初回生成・削除のみの変更・改名・差分なし・競合停止・不正UUID拒否を検証しました。
 Node/workerdは計42件成功しました。新規作成のrunnerはNode/MCP共通で最大1件、名前はTestYYYYMMDDHHMMSS.jlです。
-今回は新規リポジトリを作成しません。
+今回の検証で新規リポジトリは作成していません。
+
+生成元 `e9483ee12de6c7ab6252dd7973827ba47bda81ae` から既存3件を更新し、再実行で3件とも変更なし・追加コミットなしを確認しました。
+各mainへのpushは1回だけです。記録は `artifacts/template-repositories-first-update.json` と `artifacts/template-repositories.json`。
+
+| 固定リポジトリ | 維持したUUID | 実検証 |
+|---|---|---|
+| TestMinimum.jl | `c1295625-87ea-430b-8a8e-cec21038bef7` | [CI成功](https://github.com/JuliaPackageFactory/TestMinimum.jl/actions/runs/36399833206) |
+| TestSimple.jl | `baa55490-87fb-4830-a51e-9c9b2e958e9e` | [CI成功](https://github.com/JuliaPackageFactory/TestSimple.jl/actions/runs/36399841766)・[公開docs HTTP 200、新名を確認](https://juliapackagefactory.github.io/TestSimple.jl/dev/) |
+| TestAllInOne.jl | `e625b4ae-d6f6-409f-bbf2-54d8e3b9029e` | [3 OSのJulia CI成功](https://github.com/JuliaPackageFactory/TestAllInOne.jl/actions/runs/36399851095)・[公開docs HTTP 200、新名を確認](https://juliapackagefactory.github.io/TestAllInOne.jl/dev/) |
+
+All-in-oneのAqua・JET・Runicも成功しました。Documenterは両方とも既存のGITHUB_TOKEN認証で公開し、鍵・Secret・Pages設定は変更していません。
+新しいGit回帰テストで見つかったWindows短縮パス/macOSのパス別名の誤判定は、実パスの照合で修正しました。
 
 継続CI用の `PKGFACTORY_E2E_TOKEN` は新版に未登録です。旧E2Eも有効なので、同時更新を避けるため
 新版の自動書込みは `PKGFACTORY_TEMPLATE_E2E_ENABLED=true` の設定後に開始します。[設定手順](TESTING.md)

@@ -44,6 +44,7 @@ npm run e2e:templates -- --gh --publish --package=TestSimple
 1. JuliaPackageFactoryをResource ownerとするfine-grained PATを用意し、対象を上記3リポジトリに限定します。
    Repository permissionsは **Contents: Read and write**、**Workflows: Read and write**、**Metadata: Read-only**。
    作成や鍵設定はこのCIでは行わないため、Administration/Secrets権限は不要です。
+   旧E2E用のトークンが手元にある場合は、対象3件の権限を確認して再利用できます。
 2. [PkgFactory.tsのActions secrets](https://github.com/JuliaPackageFactory/PkgFactory.ts/settings/secrets/actions) に
    `PKGFACTORY_E2E_TOKEN` を登録します。旧リポジトリのSecretは自動的には引き継がれません。
    トークンをチャットへ送ったり、ローカルghの広い権限の資格情報をそのままCIへコピーする必要はありません。
@@ -60,8 +61,10 @@ pushされたリポジトリ自身のCIが、各OS/Julia版・品質検査・Doc
 そのCIを同じ更新について二重にdispatchしません。GITHUB_TOKENによる別リポジトリ更新には制限があるため、上記の専用PATを使います。
 [GitHubのトークンとWorkflow起動の仕様](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow)
 
-Documenterの実公開にはTestSimple.jl・TestAllInOne.jl側の設定が必要です。
-Pagesは `gh-pages` の `/` を公開します。Deploy key（write許可）と、対応するBase64形式の秘密鍵をActions Secret `DOCUMENTER_KEY` に設定すると、DocumenterのpushからPagesビルドを起動できます。
+TestSimple.jl・TestAllInOne.jlのDocumenter公開は既存設定で成功しました。
+現在はリポジトリ自身の `GITHUB_TOKEN`（contents: write）で認証し、Pagesは `gh-pages` の `/` を公開しています。
+TagBotが作るタグからCIを起動するSSH検証を追加する場合は、Deploy key（write許可）と、対応するBase64形式の秘密鍵をActions Secret `DOCUMENTER_KEY` に設定します。
+[Documenterの認証方式とTagBot](https://documenter.juliadocs.org/stable/man/hosting/)
 PkgFactory.ts側の公開用PATは生成リポジトリのSecretへコピーしません。
 固定リポジトリのE2E自体は既存の鍵・Secret・Pages設定を変更しません。
 
@@ -69,6 +72,7 @@ PkgFactory.ts側の公開用PATは生成リポジトリのSecretへコピーし�
 
 Node版と公開MCP版が同じ命名と1件制限を使います。名前は `TestYYYYMMDDHHMMSS.jl`、時刻はUTCです。
 既定テンプレートはsimple。3テンプレートを一度に新規作成するループはありません。
+下記の新規作成コマンドは選択肢です。一連の受入ではNodeまたは公開MCPの一方を選び、まとめて実行しません。
 失敗・応答不明の作成も1件に数え、別リポジトリを作ってやり直しません。報告ファイルと保存プランを使って再開します。
 
 ```sh
@@ -83,6 +87,6 @@ npm run e2e:staging -- --resume-plan=PLAN_ID --confirm-resume
 npm run e2e:staging -- --template=simple --confirm-create-test-repository --confirm-disconnect-and-resume
 ```
 
-Nodeのプランは `.tmp/e2e-state` に保持します。両runnerは書込み前にplanIdを含む一意の報告ファイル名を表示・保存します。
+Nodeのプランは `.tmp/e2e-state` に保持します。両runnerは書込み前にplanIdを含む一意の報告ファイルへ保存し、その場所を実行結果に表示します。
 Deploy key PoCが必要なときも、その実行で作成した同じ1件を `scripts/install-key-poc.ts OWNER/TestYYYYMMDDHHMMSS.jl --confirm` に渡します。
 過去の受入記録のPkgFactoryPoc/Edgeリポジトリは履歴資料であり、今後の新規作成先には使いません。
