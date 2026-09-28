@@ -42,7 +42,7 @@ try {
     const result: any = {repository, template: target.template, uuid: expected.uuid, packagePath: directory};
     report.results.push(result);
     if (publish) {
-      Object.assign(result, await publishSnapshot(directory, expected.files, `Update ${target.name} from PkgFactory\n\nhttps://github.com/${sourceRepository}/commit/${source}`,
+      Object.assign(result, await publishSnapshot(directory, expected.files, `Update ${target.name} from PkgFactory.ts ${source}\n\nhttps://github.com/${sourceRepository}/commit/${source}`,
         () => {authenticatedGit(directory, 'push', 'origin', 'HEAD:refs/heads/main');}));
     } else {
       // Preview the complete intended tree without changing the checkout.
