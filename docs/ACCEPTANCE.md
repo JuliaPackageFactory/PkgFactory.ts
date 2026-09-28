@@ -7,19 +7,19 @@
 ステージングのClient secret登録を確認し、受付を有効化しました。
 公開MCPのOAuth認可・3テンプレートの実作成・Documenter公開を確認しました。
 公開Edgeでの接続切断・ロック保持・状態照合・明示的再開も完了しました。
-残りはWebログインの利用者側確認と、本番公開準備です。
+公開Webからの利用者による実作成も成功しました。残りは本番公開準備です。
 
 | 検証 | 結果 |
 |---|---|
 | Node.js 24 / TypeScript strict | 成功 |
-| リポジトリCI | [Windows/macOS/Linux＋Julia 3テンプレートの全6ジョブ成功](https://github.com/JuliaPackageFactory/PkgFactory.ts/actions/runs/36391031646) |
-| Nodeテスト | 33件成功 |
+| リポジトリCI | [Web UX修正版のWindows/macOS/Linux＋Julia 3テンプレートの全6ジョブ成功](https://github.com/JuliaPackageFactory/PkgFactory.ts/actions/runs/36395565308) |
+| Nodeテスト | 34件成功 |
 | workerdテスト | 4件成功 |
 | 3テンプレート | 指定コミットの58原本＋回復マーカー、TOML/YAML/CFF/JSONの構文検証成功 |
 | Node/workerdのプラン一致 | 固定UUID・日付・日本語著者を含めて一致 |
 | Ed25519 / RSA-4096 | Nodeとworkerdで生成成功。OpenSSHが秘密鍵を読み、公開鍵が一致 |
 | GitHub Secret暗号化 | Node/workerdでsealed box生成、独立libsodiumで復号成功 |
-| 作成・明示的再開 | 3テンプレートの模擬GitHub完走。8工程で応答喪失→ロック保持→照合→再開成功 |
+| 作成・明示的再開 | 3テンプレートの模擬GitHub完走。初期化を含む9工程で応答喪失→ロック保持→照合→再開成功 |
 | 切断 | Node AbortSignalとworkerd実HTTP接続の切断後、後続コミットなし |
 | 排他・所有者 | 他人のプラン、別プランの同一repo、改変Project.toml、置換・削除されたrepoの再開を拒否 |
 | ローカルWeb | 認証前はフォーム非表示。認証後の作成先選択・著者補完・既存名拒否をブラウザーで確認。Host/Origin/CSRFテスト成功 |
@@ -28,7 +28,7 @@
 | ネイティブworkerd通信 | 実fetchを通るWeb/MCP認可・3テンプレート作成・Deploy key/Secret/Pages設定成功（送信先のみ模擬GitHub）。転送拒否と、認可コード/保存状態の期限切れも確認 |
 | npm tarball | Windows/macOS/LinuxのCIで別ディレクトリへインストール後、CLI/オフライン生成/Web/stdioが起動 |
 | Wrangler dry-run | 成功。Worker約1.2MiB、gzip約250KiB。Julia/Containersなし |
-| Cloudflareステージング配備 | 専用KV・SQLite DO・SESSION_KEY・GitHub Client secret設定済み。受付有効、報告された起動時間35ms。Web UX修正版 version `35c74ba9-857a-4476-96d8-0ac852a2b6f4` |
+| Cloudflareステージング配備 | 専用KV・SQLite DO・SESSION_KEY・GitHub Client secret設定済み。受付有効、報告された起動時間41ms。初期コミット・CI重複修正版 version `f0a4480b-fc9b-4986-a688-f34e278ca911` |
 | 公開Edgeの疎通 | [health](https://pkgfactory-staging.ohnolab.workers.dev/health)は200/ok、Webは200。未認証API/MCPは401。MCPの認証案内・resource metadata・authorization metadataは正常、S256のみを案内 |
 | 公開MCPの実認可・作成 | GitHub OAuth→MCPトークン交換→5ツールの呼び出し成功。3テンプレートの実作成・状態照合がすべてcomplete |
 | 公開Edgeの実測 | 8同時プレビュー710ms。作成minimum 8.875秒、simple 12.551秒、all-in-one 11.965秒（クライアント実測） |
@@ -46,13 +46,20 @@ CloudflareのCPU/メモリ測定ではありません。ステージングでの
 公開認証は合意済みの認可コード＋S256 PKCE、再開は保存済みplanIdを使います。
 追加テストは、組織一覧のページ送り・active/admin判定、表示名のフォールバック、
 権限不足/照会失敗の拒否、接続中断、プレビュー時の再照会、作成時の権限剥奪を対象としています。
-Webの実GitHub認証後の表示確認は、この修正版について行う必要があります。
+修正版の公開Webから利用者が [ohno/MyPkg78.jl](https://github.com/ohno/MyPkg78.jl) を作成し、成功を確認しました。
 ローカルの実GitHub資格情報で、表示名取得・本人とJuliaPackageFactoryの選択肢・既存名の拒否・未使用名の照会を読み取りだけで確認しました。
 ブラウザーでは模擬GitHubを使い、著者名の編集を維持したプレビュー・確認チェック・作成完了まで検証しました。
 ステージングは修正版を配備済みで、未認証時に認証カードだけが表示されること、プロフィールAPIが401になること、
 認可URLが `read:org` とS256 PKCEを要求することを確認しています。
 
 ### 実GitHubでの作成結果
+
+初期コミットとCI重複の修正を [PkgFactoryPoc20260928082007.jl](https://github.com/JuliaPackageFactory/PkgFactoryPoc20260928082007.jl) で追加検証しました。
+最初のコミット名は `Using PkgFactory: https://github.com/JuliaPackageFactory/PkgFactory.ts`。
+テンプレート追加時はCIをスキップし、設定完了時の [push CI 1件](https://github.com/JuliaPackageFactory/PkgFactoryPoc20260928082007.jl/actions/runs/36396779873) だけが起動して全ジョブ成功しました。
+[Documenter公開ページ](https://juliapackagefactory.github.io/PkgFactoryPoc20260928082007.jl/dev/) も正常です。
+planIdは `7049af34-7966-47ab-a186-1c51c4f93033`、記録は `artifacts/commit-ci-e2e.json` です。
+利用者のMyPkg78.jlの既存コミット履歴は書き換えていません。
 
 GitHub OAuth認可と公開MCPへの接続後、8件の同時プレビューを保存し、先頭3件を作成しました。
 statusでマーカー・鍵・Secret・Pages設定を照合し、すべてcompleteを確認しています。
@@ -133,8 +140,7 @@ DocumenterのGitHubActions認証実装はこの条件でSSHを選びます。
 
 ## リリース前に残る確認
 
-1. 公開Webのログイン確認。MCPのGitHub OAuth・5ツール・3テンプレートの実作成は完了。通常のブラウザーでWebへログインした結果を確認中。
-2. 本番成果と [切替前レビュー](RELEASE_REVIEW.md) を確認し、npmの公開権限と本番専用secrets/KVを準備する。このPCのnpmログインは未設定（ENEEDAUTH）。公開レジストリからのパッケージ参照はE404で、公開済みとは確認できていない。
-3. 承認後に本番・npm公開と旧リポジトリのアーカイブへ進む。負荷の範囲は上記の通りで、8件同時作成の容量測定は未実施。
+1. 本番成果と [切替前レビュー](RELEASE_REVIEW.md) を確認し、npmの公開権限と本番専用secrets/KVを準備する。このPCのnpmログインは未設定（ENEEDAUTH）。公開レジストリからのパッケージ参照はE404で、公開済みとは確認できていない。
+2. 承認後に本番・npm公開と旧リポジトリのアーカイブへ進む。負荷の範囲は上記の通りで、8件同時作成の容量測定は未実施。
 
 旧リポジトリ `PkgFactory.jl` の内容、設定、アーカイブ状態は変更していません。

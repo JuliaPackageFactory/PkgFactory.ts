@@ -9,6 +9,7 @@ export class FactoryError extends Error {
 }
 export interface Credentials {token: string; subject: string}
 export interface EngineOptions {fetcher?: typeof fetch; algorithm?: KeyAlgorithm; now?: () => number; keyGenerator?: typeof generateDeployKey; local?: boolean; beforeRequest?: () => Promise<void>}
+const generatedCommit = 'Using PkgFactory: https://github.com/JuliaPackageFactory/PkgFactory.ts';
 export class Factory {
   private now: () => number;
   constructor(private store: StateStore, private options: EngineOptions = {}) {this.now = options.now ?? Date.now;}
@@ -82,7 +83,15 @@ export class Factory {
     const root = `/repos/${op.plan.repository}`;
     const repository = await github.request('GET', root, undefined, true);
     if (!repository) return {repository: null, marker: null, head: null, keys: [], secret: null, pages: null};
-    const head = await github.request('GET', `${root}/git/ref/heads/${encodeURIComponent(repository.default_branch)}`, undefined, true);
+    let head;
+    try {head = await github.request('GET', `${root}/git/ref/heads/${encodeURIComponent(repository.default_branch)}`, undefined, true);}
+    catch (error) {
+      // GitHub returns 409, rather than 404, for refs in a new empty repository.
+      if (!(error instanceof GitHubError) || error.status !== 409) throw error;
+      const branches = await github.request<any[]>('GET', `${root}/branches?per_page=1`);
+      if (branches.length) throw error;
+      head = null;
+    }
     let marker = null;
     if (head) {
       const raw = await github.request('GET', `${root}/contents/${markerPath}?ref=${head.object.sha}`, undefined, true);
@@ -158,12 +167,22 @@ export class Factory {
       } else {
         await this.requireOwner(github, viewer.login, op.plan.spec.owner);
         const endpoint = viewer.login.toLowerCase() === op.plan.spec.owner.toLowerCase() ? '/user/repos' : `/orgs/${op.plan.spec.owner}/repos`;
-        const repo = await write('repository', 'POST', endpoint, {name: `${op.plan.spec.name}.jl`, description: this.bootstrapDescription(op), private: op.plan.spec.visibility === 'private', auto_init: true});
+        const repo = await write('repository', 'POST', endpoint, {name: `${op.plan.spec.name}.jl`, description: this.bootstrapDescription(op), private: op.plan.spec.visibility === 'private', auto_init: false});
         op.repositoryId = repo.id; await checkpoint();
         remote = await this.inspect(op, github);
       }
       if (!remote.repository) throw new FactoryError('repository', 'Created repository is not visible yet. Inspect and resume.');
       op.repositoryId = remote.repository.id;
+      if (!remote.head) {
+        if (op.base || op.commit || remote.marker) throw new FactoryError('changed', 'Saved branch is no longer visible. Inspect it before resuming.');
+        // The Contents API can initialize an empty Git repository with our own
+        // commit message. No workflows exist yet, so this does not start CI.
+        const branches = await github.request<any[]>('GET', `${root}/branches?per_page=1`);
+        if (branches.length) throw new FactoryError('changed', 'Repository branches changed during initialization. Inspect them before resuming.');
+        const initial = await write('initialize', 'PUT', `${root}/contents/README.md`, {message: generatedCommit, branch: 'main', content: base64(utf8(op.plan.files['README.md']))});
+        op.base = initial.commit.sha; await checkpoint();
+        remote = await this.inspect(op, github);
+      }
       if (!remote.marker) {
         const head = remote.head;
         if (!head) throw new FactoryError('initializing', 'Initial branch is not ready. Inspect and resume.');
@@ -175,7 +194,9 @@ export class Factory {
           op.tree = tree.sha; await checkpoint();
         }
         if (!op.commit) {
-          const commit = await write('commit', 'POST', `${root}/git/commits`, {message: 'Create Julia package with PkgFactory', tree: op.tree, parents: [op.base]});
+          // Run push CI only after the completion commit, when keys and secrets
+          // are configured. Do not change the generated workflow triggers.
+          const commit = await write('commit', 'POST', `${root}/git/commits`, {message: `${generatedCommit}\n\nPrepare package files before configuring automation.\n\n[skip ci]`, tree: op.tree, parents: [op.base]});
           op.commit = commit.sha; await checkpoint();
         }
         await write('files', 'PATCH', `${root}/git/refs/heads/${encodeURIComponent(remote.repository.default_branch)}`, {sha: op.commit, force: false}); await checkpoint();
@@ -213,7 +234,7 @@ export class Factory {
       const value = JSON.parse(decode(unbase64(marker.content.replace(/\s/g, ''))));
       if (value.planId !== id || value.digest !== op.plan.digest) throw new FactoryError('marker', 'Recovery marker changed');
       if (value.state !== 'complete') {
-        await write('complete', 'PUT', `${root}/contents/${markerPath}`, {message: 'Complete PkgFactory setup', branch: 'main', sha: marker.sha, content: base64(utf8(JSON.stringify({...value, state: 'complete'}, null, 2) + '\n'))});
+        await write('complete', 'PUT', `${root}/contents/${markerPath}`, {message: `Complete PkgFactory setup\n\nGenerated using https://github.com/JuliaPackageFactory/PkgFactory.ts`, branch: 'main', sha: marker.sha, content: base64(utf8(JSON.stringify({...value, state: 'complete'}, null, 2) + '\n'))});
       }
       op.state = 'complete'; delete op.leaseUntil; op.expiresAt = this.now() + 15 * 60000; delete op.error; await checkpoint();
       return this.result(op);

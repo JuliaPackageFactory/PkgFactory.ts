@@ -20,15 +20,17 @@ export class FakeGitHub {
     if (path === '/user') return respond({id: 42, login: 'tester', name: 'Test Author'});
     if (path === '/user/memberships/orgs') return respond([]);
     if (path === '/user/repos' || /\/orgs\/.*\/repos/.test(path)) {
-      this.repository = {id: 10, default_branch: 'main', description: body.description}; this.refs.main = 'initial'; return respond(this.repository, 201);
+      this.repository = {id: 10, default_branch: 'main', description: body.description};
+      if (body.auto_init) this.refs.main = 'initial'; return respond(this.repository, 201);
     }
     const suffix = path.replace(/^\/repos\/[^/]+\/[^/]+/, '');
     if (!this.repository) return respond({}, 404);
+    if (suffix === '/branches') return respond(Object.keys(this.refs).map(name => ({name})));
     if (!suffix) {if (method === 'PATCH') Object.assign(this.repository, body); return respond(this.repository);}
-    if (suffix.startsWith('/git/ref/heads/')) {const branch = decodeURIComponent(suffix.slice(15)); return this.refs[branch] ? respond({object: {sha: this.refs[branch]}}) : respond({}, 404);}
+    if (suffix.startsWith('/git/ref/heads/')) {const branch = decodeURIComponent(suffix.slice(15)); return this.refs[branch] ? respond({object: {sha: this.refs[branch]}}) : respond({}, Object.keys(this.refs).length ? 404 : 409);}
     if (suffix.startsWith('/contents/')) {
       const file = suffix.slice(10);
-      if (method === 'PUT') {this.files[file] = decode(unbase64(body.content)); this.refs.main = 'completed'; return respond({content: {sha: 'file'}, commit: {sha: 'completed'}});}
+      if (method === 'PUT') {this.files[file] = decode(unbase64(body.content)); this.refs.main = file === 'README.md' ? 'initial' : 'completed'; return respond({content: {sha: 'file'}, commit: {sha: this.refs.main}});}
       return this.files[file] ? respond({content: base64(utf8(this.files[file])), sha: 'file-sha'}) : respond({}, 404);
     }
     if (suffix === '/git/trees') {const sha = `tree${this.calls.length}`; this.trees[sha] = Object.fromEntries(body.tree.map((f: any) => [f.path, f.content])); return respond({sha}, 201);}
