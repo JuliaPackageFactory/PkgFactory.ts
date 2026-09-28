@@ -35,7 +35,8 @@ test('Worker routes, Durable Object persistence, OAuth PKCE and CSRF rejection',
     bindings: {ORIGIN: 'https://pkgfactory.test', GITHUB_OAUTH_CLIENT_ID: 'test-client', SESSION_KEY: btoa('a'.repeat(32)), GITHUB_OAUTH_CLIENT_SECRET: 'test-secret'},
   }));
   try {
-    assert.equal((await mf.dispatchFetch('https://pkgfactory.test/health')).status, 200);
+    const health = await mf.dispatchFetch('https://pkgfactory.test/health');
+    assert.equal(health.status, 200); assert.equal(health.headers.get('referrer-policy'), 'no-referrer');
     assert.equal((await mf.dispatchFetch('https://evil.test/health')).status, 403);
     assert.equal((await mf.dispatchFetch('https://pkgfactory.test/api/preview', {method: 'POST', body: '{}', headers: {Origin: 'https://evil.test'}})).status, 403);
     assert.equal((await mf.dispatchFetch('https://pkgfactory.test/mcp', {method: 'POST'})).status, 401);
@@ -58,8 +59,10 @@ test('Worker routes, Durable Object persistence, OAuth PKCE and CSRF rejection',
     for (const decision of ['approve', 'deny']) {
       const consent = await mf.dispatchFetch(authorize);
       assert.equal(consent.status, 200);
+      assert.equal(consent.headers.get('referrer-policy'), 'same-origin');
       const handle = (await consent.text()).match(/name="handle" value="([^"]+)"/)![1];
       const consentCookie = consent.headers.get('set-cookie')!.split(';')[0];
+      assert.equal((await mf.dispatchFetch('https://pkgfactory.test/authorize', {method: 'POST', headers: {Origin: 'null', Cookie: consentCookie, 'Content-Type': 'application/x-www-form-urlencoded'}, body: new URLSearchParams({handle, decision}).toString()})).status, 403);
       const submit = () => mf.dispatchFetch('https://pkgfactory.test/authorize', {method: 'POST', redirect: 'manual', headers: {Origin: 'https://pkgfactory.test', Cookie: consentCookie, 'Content-Type': 'application/x-www-form-urlencoded'}, body: new URLSearchParams({handle, decision}).toString()});
       const next = await submit(); assert.equal(next.status, 200);
       assert.match(next.headers.get('content-security-policy')!, /form-action 'self'/);

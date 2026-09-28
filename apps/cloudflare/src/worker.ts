@@ -58,7 +58,11 @@ export default {
       }
       const response = await oauthProvider(env).fetch(request, env, ctx);
       const secured = new Response(response.body, response);
-      secured.headers.set('Cache-Control', 'no-store, no-transform'); secured.headers.set('Referrer-Policy', 'no-referrer'); secured.headers.set('X-Content-Type-Options', 'nosniff');
+      secured.headers.set('Cache-Control', 'no-store, no-transform');
+      // no-referrer makes a native form POST send Origin: null. Keep the real
+      // Origin for the same-origin consent form, without sending referrers away.
+      secured.headers.set('Referrer-Policy', url.pathname === '/authorize' && request.method === 'GET' ? 'same-origin' : 'no-referrer');
+      secured.headers.set('X-Content-Type-Options', 'nosniff');
       secured.headers.set('Content-Security-Policy', "default-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
       return secured;
     } catch (error) {return errorResponse(error);}

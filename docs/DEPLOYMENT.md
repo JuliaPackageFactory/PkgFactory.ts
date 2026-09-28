@@ -168,6 +168,11 @@ MCPの同意フォームは、外部へのHTTPリダイレクトをCSPが遮断�
 同意後に遷移用HTMLを返します。`form-action 'self'` は維持します。
 [MDNのform-action仕様説明](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy/form-action)
 
+同意画面の `Referrer-Policy` は `same-origin` とします。`no-referrer` ではHTMLフォームのPOSTに
+`Origin: null` が付いて正当な認可も拒否されるためです。他の応答は `no-referrer` を維持し、
+`Origin: null` や異なるOrigin自体は引き続き拒否します。
+[MDNのOriginへの影響](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Referrer-Policy#effect_on_the_origin_header)
+
 別アカウントや新環境を準備する場合のみ、以下の初期設定を実施します。
 Workers PaidとDurable Objectsを使えるアカウント、Workers/KV/DOを配備できる認証が必要です。
 `ORIGIN`、`GITHUB_OAUTH_CLIENT_ID`、KV IDをその環境の実値へ変更します。
