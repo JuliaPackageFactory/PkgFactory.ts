@@ -5,12 +5,14 @@
 ステージングのGitHub OAuth Client IDは反映・配備済みです。
 本番用の新しいClient IDも設定ファイルへ反映済みです（本番は未配備）。
 ステージングのClient secret登録を確認し、受付を有効化しました。
-残りはブラウザー認可後の実測、本番公開準備です。
+公開MCPのOAuth認可・3テンプレートの実作成・Documenter公開を確認しました。
+公開Edgeでの接続切断・ロック保持・状態照合・明示的再開も完了しました。
+残りはWebログインの利用者側確認と、本番公開準備です。
 
 | 検証 | 結果 |
 |---|---|
 | Node.js 24 / TypeScript strict | 成功 |
-| リポジトリCI | [Windows/macOS/Linux＋Julia 3テンプレートの全6ジョブ成功](https://github.com/JuliaPackageFactory/PkgFactory.ts/actions/runs/36355182632) |
+| リポジトリCI | [Windows/macOS/Linux＋Julia 3テンプレートの全6ジョブ成功](https://github.com/JuliaPackageFactory/PkgFactory.ts/actions/runs/36391031646) |
 | Nodeテスト | 29件成功 |
 | workerdテスト | 4件成功 |
 | 3テンプレート | 指定コミットの58原本＋回復マーカー、TOML/YAML/CFF/JSONの構文検証成功 |
@@ -28,9 +30,55 @@
 | Wrangler dry-run | 成功。Worker約1.2MiB、gzip約250KiB。Julia/Containersなし |
 | Cloudflareステージング配備 | 専用KV・SQLite DO・SESSION_KEY・GitHub Client secret設定済み。受付有効、報告された起動時間39ms。version `9f3f57ed-1644-408d-803f-37dda60fdaeb` |
 | 公開Edgeの疎通 | [health](https://pkgfactory-staging.ohnolab.workers.dev/health)は200/ok、Webは200。未認証API/MCPは401。MCPの認証案内・resource metadata・authorization metadataは正常、S256のみを案内 |
+| 公開MCPの実認可・作成 | GitHub OAuth→MCPトークン交換→5ツールの呼び出し成功。3テンプレートの実作成・状態照合がすべてcomplete |
+| 公開Edgeの実測 | 8同時プレビュー710ms。作成minimum 8.875秒、simple 12.551秒、all-in-one 11.965秒（クライアント実測） |
+| 公開Edgeの切断・再開 | 実HTTP接続を切断後、GitHub状態の進行停止とロック保持を確認。期限後に状態を照合し、明示的resumeでcomplete |
 
 workerdの鍵生成は一例でEd25519約1ms、RSA約0.4–2.1秒でした。これはローカルの経過時間で、
-Cloudflare本番CPU/メモリ測定ではありません。高負荷・8同時実行の容量測定はステージングで行います。
+CloudflareのCPU/メモリ測定ではありません。ステージングでの実測は次節を参照してください。
+
+## Cloudflare公開MCPでの受入
+
+GitHub OAuth認可と公開MCPへの接続後、8件の同時プレビューを保存し、先頭3件を作成しました。
+statusでマーカー・鍵・Secret・Pages設定を照合し、すべてcompleteを確認しています。
+
+| テンプレート | planId / 結果 |
+|---|---|
+| minimum | `7f1ccb73-ede4-497b-ad60-2a9244a2c211` / [リポジトリ](https://github.com/JuliaPackageFactory/PkgFactoryEdge202609280723450.jl) / [CI成功](https://github.com/JuliaPackageFactory/PkgFactoryEdge202609280723450.jl/actions/runs/36391433516) |
+| simple | `17541d8b-3086-4e3f-aa83-ad58cf577e3a` / [リポジトリ](https://github.com/JuliaPackageFactory/PkgFactoryEdge202609280723451.jl) / [CI成功](https://github.com/JuliaPackageFactory/PkgFactoryEdge202609280723451.jl/actions/runs/36391452126) / [公開docs HTTP 200](https://juliapackagefactory.github.io/PkgFactoryEdge202609280723451.jl/dev/) |
+| all-in-one | `9fd63016-4579-4f2f-84a9-34ee7d6f4ae1` / [リポジトリ](https://github.com/JuliaPackageFactory/PkgFactoryEdge202609280723452.jl) / [最終CI成功](https://github.com/JuliaPackageFactory/PkgFactoryEdge202609280723452.jl/actions/runs/36391473751) / [公開docs HTTP 200](https://juliapackagefactory.github.io/PkgFactoryEdge202609280723452.jl/dev/) |
+
+simple/all-in-oneのDeploy keyは、GitHub APIで `ssh-ed25519`・`read_only=false` を確認しました。
+両方の最終Documenterジョブで `DOCUMENTER_KEY` が非空であり、公開ジョブが成功したことも確認しています。
+認可資格情報は検証プロセスのメモリだけに保持し、終了時に破棄しています。
+結果は `artifacts/staging-mcp-e2e.json` に記録し、トークンや認可コードは含めていません。
+
+Cloudflare GraphQL `workersInvocationsAdaptive`（2026-09-28 07:23:00–07:39:07 UTC）の取得結果:
+
+| 指標 | 値 |
+|---|---|
+| 成功 requests / subrequests / runtime errors | 54 / 243 / 0 |
+| 意図したclientDisconnected | 1件（runtime errors 0） |
+| 成功リクエストのCPU P50 / P99 | 11.394ms / 161.286ms |
+| 成功リクエストのV8 isolateメモリ P50 / P99 | 11,404,814 / 17,486,224 bytes（約10.9 / 16.7MiB） |
+
+CPUの単位がmicroseconds、メモリがbytesであることをGraphQL schemaの説明で確認しました。
+原データは `artifacts/staging-metrics.json` に保存しています。これはこの小規模受入の測定値で、
+8件同時のリポジトリ作成や長時間負荷の上限を保証する値ではありません。
+[Cloudflareの計測仕様](https://developers.cloudflare.com/workers/observability/metrics-and-analytics/)
+
+### 公開Edgeの切断と明示的再開
+
+[検証リポジトリ](https://github.com/JuliaPackageFactory/PkgFactoryEdge202609280735569.jl)
+のplanIdは `84377178-84bb-46f7-9af7-866049122ac7` です。
+
+1. 07:36:01 UTC、リポジトリが作成された直後にHTTPクライアントの接続を切断しました。
+2. 切断後2秒・5秒の照合で、head `b67315301f8bef2e223ded05596899c1f23e42c0` が同一、回復マーカーなし、Deploy keyなし、Secretなしを確認しました。操作はrunning、リース期限は07:38:27.960 UTCのままでした。
+3. 期限後にも同じGitHub状態であり、勝手に再開していないことを確認しました。
+4. 検証スクリプトの明示的resumeを1回実行し、complete・一致するマーカー・Ed25519鍵・Documenter Secret・Pages設定を確認しました。
+
+Cloudflareのメトリクスにも `clientDisconnected` が1件記録されています。
+結果は `artifacts/staging-disconnect-e2e.json` に保存しています。
 
 ## 実GitHubで作成した検証リポジトリ
 
@@ -69,8 +117,8 @@ DocumenterのGitHubActions認証実装はこの条件でSSHを選びます。
 
 ## リリース前に残る確認
 
-1. Web/MCPからの認可→作成→再開を確認する。secret登録と受付有効化は完了。同意POSTのInvalid OriginはReferrer-Policy修正済み。続く `oauth_exchange_network` はworkerdが `redirect: 'error'` を通信前に拒否することで再現し、APIクライアントのfetch呼出しも不正なthisで失敗することを確認した。両方を修正しネイティブ通信での回帰テスト・配備を完了。期限切れが別のエラーとなることも検証した。実GitHub OAuthの正常完了はまだ未確認。内蔵ブラウザーではパスキーを使えず、通常のブラウザーによる認可を依頼中。
-2. 公開Edge経由の切断伝播・8同時実行・CPU/メモリを計測する。
-3. 本番成果と切替手順をレビューし、承認後に本番・npm公開と旧リポジトリのアーカイブへ進む。
+1. 公開Webのログイン確認。MCPのGitHub OAuth・5ツール・3テンプレートの実作成は完了。通常のブラウザーでWebへログインした結果を確認中。
+2. 本番成果と [切替前レビュー](RELEASE_REVIEW.md) を確認し、npmの公開権限と本番専用secrets/KVを準備する。このPCのnpmログインは未設定（ENEEDAUTH）。公開レジストリからのパッケージ参照はE404で、公開済みとは確認できていない。
+3. 承認後に本番・npm公開と旧リポジトリのアーカイブへ進む。負荷の範囲は上記の通りで、8件同時作成の容量測定は未実施。
 
 旧リポジトリ `PkgFactory.jl` の内容、設定、アーカイブ状態は変更していません。

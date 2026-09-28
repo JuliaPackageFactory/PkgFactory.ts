@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
+import { setTimeout as delay } from 'node:timers/promises';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { auth, type OAuthClientProvider } from '@modelcontextprotocol/sdk/client/auth.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
@@ -12,8 +13,10 @@ import { escapeHtml } from '../packages/pkgfactory/src/web/http.js';
 const origin = 'https://pkgfactory-staging.ohnolab.workers.dev';
 const serverUrl = new URL('/mcp', origin);
 const live = process.argv.includes('--confirm-create-test-repositories');
+const disconnect = process.argv.includes('--confirm-disconnect-and-resume');
 const resumeId = process.argv.find(v => v.startsWith('--resume-plan='))?.split('=')[1];
-if (resumeId && !live) throw new Error('Resuming requires --confirm-create-test-repositories');
+if ((resumeId || disconnect) && !live) throw new Error('Resuming requires --confirm-create-test-repositories');
+if (resumeId && disconnect) throw new Error('Choose either a saved resume plan or the disconnect acceptance case');
 const state = randomUUID();
 let information: OAuthClientInformationMixed | undefined;
 let tokens: OAuthTokens | undefined;
@@ -64,8 +67,9 @@ const provider: OAuthClientProvider = {
   saveCodeVerifier: value => {verifier = value;},
   codeVerifier: () => verifier,
 };
-const report: any = {origin, startedAt: new Date().toISOString(), live, results: []};
-const save = async () => {await mkdir('artifacts', {recursive: true}); await writeFile('artifacts/staging-mcp-e2e.json', JSON.stringify(report, null, 2));};
+const report: any = {origin, startedAt: new Date().toISOString(), live, disconnect, results: []};
+const reportPath = disconnect ? 'artifacts/staging-disconnect-e2e.json' : resumeId ? 'artifacts/staging-resume-e2e.json' : 'artifacts/staging-mcp-e2e.json';
+const save = async () => {await mkdir('artifacts', {recursive: true}); await writeFile(reportPath, JSON.stringify(report, null, 2));};
 const client = new Client({name: 'PkgFactory staging acceptance', version: '0.1.0'});
 const transport = new StreamableHTTPClientTransport(serverUrl, {authProvider: provider, reconnectionOptions: {maxRetries: 0, initialReconnectionDelay: 1000, maxReconnectionDelay: 1000, reconnectionDelayGrowFactor: 1}});
 const tool = async (name: string, args: Record<string, unknown>) => {
@@ -93,6 +97,48 @@ try {
     await record({check: 'before-explicit-resume', status});
     assert(!status.leaseUntil || status.leaseUntil <= Date.now(), 'Lease remains active. Wait, inspect again, and explicitly restart with --resume-plan.');
     await record({check: 'explicit-resume', planId: resumeId, result: await tool('resume_package', {planId: resumeId, confirm: true})});
+  } else if (disconnect) {
+    const plan = await tool('preview_package', {owner: 'JuliaPackageFactory', name: `PkgFactoryEdge${run}9`, template: 'all-in-one', authors: ['PkgFactory staging acceptance'], description: 'PkgFactory.ts disconnect and explicit resume acceptance'});
+    await record({check: 'disconnect-plan', planId: plan.id, repository: plan.repository});
+    const controller = new AbortController();
+    let finished = false;
+    // Use one raw HTTP call so an actual closed connection is exercised. No retry.
+    const request = fetch(serverUrl, {method: 'POST', signal: controller.signal, redirect: 'manual', headers: {Authorization: `Bearer ${tokens!.access_token}`, 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream', 'MCP-Protocol-Version': transport.protocolVersion!}, body: JSON.stringify({jsonrpc: '2.0', id: randomUUID(), method: 'tools/call', params: {name: 'create_package', arguments: {planId: plan.id, confirm: true}}})})
+      .then(async response => {await response.text(); return {completed: true};}, () => ({completed: false}))
+      .catch(() => ({completed: false})).finally(() => {finished = true;});
+    try {
+      let observed: any;
+      const deadline = Date.now() + 25000;
+      while (!finished && Date.now() < deadline) {
+        observed = await tool('repository_status', {planId: plan.id});
+        if (observed.exists) break;
+        await delay(200);
+      }
+      assert(observed?.exists && observed.state !== 'complete' && !finished, 'Creation finished or failed before a mid-operation disconnect could be observed');
+      controller.abort();
+      assert.equal((await request).completed, false);
+      await record({check: 'http-disconnected', planId: plan.id, at: new Date().toISOString(), observed});
+      await delay(2000);
+      const first = await tool('repository_status', {planId: plan.id});
+      await delay(3000);
+      const stopped = await tool('repository_status', {planId: plan.id});
+      const remoteState = (s: any) => ({exists: s.exists, head: s.head, markerMatches: s.markerMatches, remoteState: s.remoteState, deployKeys: s.deployKeys, documenterSecret: s.documenterSecret, pagesUrl: s.pagesUrl});
+      assert.notEqual(stopped.state, 'complete');
+      assert.deepEqual(remoteState(stopped), remoteState(first), 'GitHub writes continued after the disconnect settled');
+      await record({check: 'writes-stopped', first, stopped});
+      if (stopped.leaseUntil > Date.now()) {
+        await record({check: 'waiting-for-recorded-lease', until: new Date(stopped.leaseUntil).toISOString()});
+        await delay(stopped.leaseUntil - Date.now() + 500);
+      }
+      const beforeResume = await tool('repository_status', {planId: plan.id});
+      assert.notEqual(beforeResume.state, 'complete');
+      assert.deepEqual(remoteState(beforeResume), remoteState(stopped));
+      await record({check: 'review-before-explicit-resume', status: beforeResume});
+      // The operator explicitly opts into this one resume with the separate flag.
+      const result = await tool('resume_package', {planId: plan.id, confirm: true});
+      assert.equal(result.state, 'complete');
+      await record({check: 'explicit-resume-complete', result, status: await tool('repository_status', {planId: plan.id})});
+    } finally {controller.abort(); await request;}
   } else {
     const started = performance.now();
     // Eight simultaneous previews exercise shared state without creating eight repositories.

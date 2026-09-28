@@ -160,9 +160,12 @@ npx tsx scripts/staging-mcp-e2e.ts
 npx tsx scripts/staging-mcp-e2e.ts --confirm-create-test-repositories
 # 途中停止した場合: 状態を再取得し、リース満了後に明示的に再開
 npx tsx scripts/staging-mcp-e2e.ts --confirm-create-test-repositories --resume-plan=PLAN_ID
+# 実HTTP切断後の停止確認→リース満了→照合→明示的再開（検証repoを1件作成）
+npx tsx scripts/staging-mcp-e2e.ts --confirm-create-test-repositories --confirm-disconnect-and-resume
 ```
 
-認可入口は30分有効です。結果は `artifacts/staging-mcp-e2e.json` に記録します。
+認可入口は30分有効です。結果は通常 `artifacts/staging-mcp-e2e.json`、
+切断テストは `artifacts/staging-disconnect-e2e.json`、既存プランの再開は `artifacts/staging-resume-e2e.json` に記録します。
 書き込みを自動再送しません。実行が停止したら結果に記録されたplanIdを確認してください。
 MCPの同意フォームは、外部へのHTTPリダイレクトをCSPが遮断するブラウザーに対応するため、
 同意後に遷移用HTMLを返します。`form-action 'self'` は維持します。
@@ -221,7 +224,8 @@ npm run deploy:staging
 ステージングで `/health`、Web OAuth、MCP OAuth、3テンプレートの作成を確認します。
 WebとMCPで同じsubject・repositoryへの作成を競合させ、片方がロックで停止することを確認します。
 作成中にHTTP接続を切り、GitHubの操作が止まること、リース後の明示的再開で回復することを確認します。
-本番Edgeでの切断伝播、実CPU・メモリ、8件同時作成の計測はこの段階の受入条件です。
+公開Edgeでの切断伝播と実CPU・メモリを確認します。今回の負荷測定は8同時プレビューと
+3テンプレートの逐次作成です。8件同時作成の最大容量は未実測なので、受入結果と区別して記録します。
 
 ## 4. npm公開準備
 
