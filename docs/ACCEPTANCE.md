@@ -12,7 +12,7 @@
 | 検証 | 結果 |
 |---|---|
 | Node.js 24 / TypeScript strict | 成功 |
-| リポジトリCI | [固定E2E・パス修正版のWindows/macOS/Linux＋Julia 3テンプレートの全6ジョブ成功](https://github.com/JuliaPackageFactory/PkgFactory.ts/actions/runs/36400259851) |
+| リポジトリCI | [レビュー修正版のWindows/macOS/Linux＋Julia 3テンプレートの全6ジョブ成功](https://github.com/JuliaPackageFactory/PkgFactory.ts/actions/runs/36448728883) |
 | Nodeテスト | 40件成功（固定リポジトリの改名/UUID/履歴/競合、新規作成1件制限、同意表示、descriptionの無害化を含む） |
 | workerdテスト | 7件成功（容量分離、旧保存形式の移行、ログイン連打と同時callbackを含む） |
 | 3テンプレート | 指定コミットの58原本＋回復マーカー、TOML/YAML/CFF/JSONの構文検証成功 |
@@ -28,7 +28,7 @@
 | ネイティブworkerd通信 | 実fetchを通るWeb/MCP認可・3テンプレート作成・Deploy key/Secret/Pages設定成功（送信先のみ模擬GitHub）。転送拒否と、認可コード/保存状態の期限切れも確認 |
 | npm tarball | Windows/macOS/LinuxのCIで別ディレクトリへインストール後、CLI/オフライン生成/Web/stdioが起動 |
 | Wrangler dry-run | 成功。Worker約1.2MiB、gzip約250KiB。Julia/Containersなし |
-| Cloudflareステージング配備 | 専用KV・SQLite DO・SESSION_KEY・GitHub Client secret設定済み。受付有効、報告された起動時間38ms。接続表示・コミット本文修正版 version `a9c99150-ba1c-4128-a898-39729c9fb58e` |
+| Cloudflareステージング配備 | 専用KV・SQLite DO・SESSION_KEY・GitHub Client secret設定済み。受付有効、報告された起動時間57ms。レビュー修正版 version `fb751e5c-daad-40e3-9e82-514fbc96209c` |
 | 公開Edgeの疎通 | [health](https://pkgfactory-staging.ohnolab.workers.dev/health)は200/ok、Webは200。未認証API/MCPは401。MCPの認証案内・resource metadata・authorization metadataは正常、S256のみを案内 |
 | 公開MCPの実認可・作成 | GitHub OAuth→MCPトークン交換→5ツールの呼び出し成功。3テンプレートの実作成・状態照合がすべてcomplete |
 | 公開Edgeの実測 | 8同時プレビュー710ms。作成minimum 8.875秒、simple 12.551秒、all-in-one 11.965秒（クライアント実測） |
@@ -64,6 +64,17 @@ All-in-oneのAqua・JET・Runicも成功しました。Documenterは両方とも
 
 [レビューの4指摘](https://github.com/JuliaPackageFactory/PkgFactory.ts/pull/1#issuecomment-5873460848)への修正・検証内容は [SECURITY_REVIEW.md](SECURITY_REVIEW.md) に記載しています。
 ローカルではNode 40件・workerd 7件が成功しました。追加のworkerd検証は272件のプラン、130件の旧形式ジャーナル、ログインの連続要求を使い、実GitHubへの書込みなしで確認しています。
+生成元 `f9c6369bd3c846041c1f79371dc4629d7e6f2d76` のCIは全6ジョブ成功しました。simple/all-in-oneの実Documenterビルドでも、説明文の`@eval`が実行されず文字として表示されることを確認しています。
+同じ生成元から既存3リポジトリを更新し、UUIDを維持しました。
+
+| 固定リポジトリ | 更新コミット | 検証 |
+|---|---|---|
+| TestMinimum.jl | `97243bff4881044b1db3bcf645218d88c5122bdb` | [CI](https://github.com/JuliaPackageFactory/TestMinimum.jl/actions/runs/36448842533) |
+| TestSimple.jl | `5be55e7ab7c5b995332338a79ce7a87d72a160be` | [CI/Documenter](https://github.com/JuliaPackageFactory/TestSimple.jl/actions/runs/36448852126) |
+| TestAllInOne.jl | `08df2173d76c6c1b66e411bbd9c82528375eb663` | [CI/Documenter](https://github.com/JuliaPackageFactory/TestAllInOne.jl/actions/runs/36448863550)・Aqua/JET/Runic成功 |
+
+新規リポジトリは作成していません。修正版のnpm tarballもローカルへインストールしてCLI/Web/stdioを検証しました。
+ステージング配備後はhealth/Webの200、未認証API/MCPの401、ログイン開始の302・S256・Secure/HttpOnly Cookieを確認しました。
 
 ## Cloudflare公開MCPでの受入
 

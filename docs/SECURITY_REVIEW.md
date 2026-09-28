@@ -15,4 +15,7 @@ paused/runningの記録は期限削除しません。GitHub状態の照合と明
 ローカルのオフラインCLI/stdioプレビューは認証不要のままです。公開MCPにはオフライン用の資格情報フォールバックを置きません。
 ストレージの変更に新しいCloudflareバインディングやSecretは不要です。
 
+検証結果: [修正版CIの全6ジョブ成功](https://github.com/JuliaPackageFactory/PkgFactory.ts/actions/runs/36448728883)。Node 40件・workerd 7件、3 OSの配布物インストール、3テンプレートのJuliaテスト、simple/all-in-oneの実Documenterによるdescription無害化検証を含みます。
+ステージングはversion `fb751e5c-daad-40e3-9e82-514fbc96209c` へ配備しました。配備後の疎通とS256ログイン開始も成功しています。
+
 この対策はレビューで指摘された小さな共通枠の枯渇を解消します。複数IP・複数GitHubアカウントによる大規模な負荷を無制限に処理できるという意味ではありません。同時実行は8件、利用者ごとの保存は16件を維持しています。

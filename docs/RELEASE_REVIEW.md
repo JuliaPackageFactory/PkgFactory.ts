@@ -16,6 +16,7 @@
 - 公開GitHub OAuthは認可コード＋S256 PKCE。ローカルはPAT・Device Flow・任意のgh tokenに対応します。
 - Ed25519の生成、GitHub登録、Documenter公開、TagBotのSSH/tag pushを検証しました。
 - 固定3リポジトリTestMinimum.jl・TestSimple.jl・TestAllInOne.jlを更新するE2Eを移植しました。新規作成受入はTestYYYYMMDDHHMMSS.jlの1件に制限します。
+- Opusの4指摘に対応し、OAuth/保存容量の分離、MCP同意表示、descriptionの無害化を検証しました。[対応表](SECURITY_REVIEW.md)
 - Juliaコンテナは使いません。旧コード・旧Workerは参照と稼働を維持しています。
 
 詳細な証拠と未完了項目は [ACCEPTANCE.md](ACCEPTANCE.md) にまとめています。
@@ -37,7 +38,7 @@
 2. **本番GitHub OAuth App**: Client IDは `Ov23liW9Mpoaeo70n071` を設定済みです。対応するClient secretを用意します。検証用のsecretとは別です。secretはチャットやGitへ貼りません。
 3. **Cloudflare本番**: 公開承認後、本番専用KVとWorker `pkgfactory` を書込み停止状態で用意します。`SESSION_KEY` を生成し、本番の `GITHUB_OAUTH_CLIENT_SECRET` をWorker Secretへ登録します。
 4. **継続的な公開**: GitHub Actionsの `production` / `npm` environmentに承認者を設定します。Cloudflare用のAPI token/account IDを登録し、npmの初回公開後はTrusted Publishingを `release.yml` / environment `npm` に結び付けます。
-5. **継続E2E**: 固定3リポジトリに限定した `PKGFACTORY_E2E_TOKEN` を新版のActions Secretへ登録します。旧Template repositories E2Eを停止してから、新版mainで `PKGFACTORY_TEMPLATE_E2E_ENABLED=true` を設定します。[手順とテストの役割](TESTING.md) を参照してください。
+5. **継続E2E**: `PKGFACTORY_E2E_TOKEN` の新版Actions Secretへの登録は確認済みです。旧Template repositories E2Eを停止してから、新版mainで `PKGFACTORY_TEMPLATE_E2E_ENABLED=true` を設定します。登録トークンの実権限は初回E2Eで確認します。[手順とテストの役割](TESTING.md) を参照してください。
 
 GitHub OAuthの画面ごとの設定値とsecret登録手順は [DEPLOYMENT.md](DEPLOYMENT.md) を参照してください。
 初回npm公開に進む前に `npm whoami` とorganizationの権限を改めて確認します。
