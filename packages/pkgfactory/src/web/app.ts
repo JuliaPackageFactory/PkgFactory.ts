@@ -72,9 +72,7 @@ async function loadProfile() {
       if ([...owner.options].some(o => o.value === previousOwner)) owner.value = previousOwner;
       if (!authors.value) authors.value = profile.user.name;
       defaultAuthor = profile.user.name;
-      element('account-label').textContent = `Connected as @${profile.user.login}`;
-      element('account').classList.add('is-connected');
-      element('connect-description').textContent = `Connected as @${profile.user.login}. Choose a repository owner below.`;
+      element('connect-status').textContent = `Connected as @${profile.user.login}.`;
       element('connect-state').textContent = 'Completed';
       element('connect-panel').classList.add('is-complete'); element('connect-panel').classList.remove('is-active');
       element('connect-actions').hidden = true;
@@ -84,7 +82,7 @@ async function loadProfile() {
       profileReady = false; form.hidden = true; element('recovery').hidden = true;
       element('connect-actions').hidden = false;
       element('connect-error').textContent = (error as Error).message; element('connect-error').hidden = false;
-      element('connect-description').textContent = 'GitHub account lookup did not complete. Retry or connect again.';
+      element('connect-status').textContent = 'GitHub account lookup did not complete. Retry or connect again.';
       output.textContent = '';
     }
   });

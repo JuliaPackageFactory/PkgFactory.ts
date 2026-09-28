@@ -9,14 +9,13 @@ export function page(csrf: string, publicWeb: boolean, authenticated: boolean) {
   </head><body data-authenticated="${authenticated}">
   <header class="app-header"><div class="header-inner">
     <a class="brand" href="/" aria-label="PkgFactory home"><img class="brand-logo" src="/assets/logo.svg" width="52" height="48" alt=""><span>PkgFactory</span></a>
-    <div class="header-actions"><div id="account" class="account" aria-live="polite"><span class="status-dot"></span><span id="account-label">GitHub not connected</span></div>
-    ${publicWeb && authenticated ? '<button id="logout" class="button button-secondary button-small" type="button">Sign out</button>' : ''}
+    <div class="header-actions">
     <a class="github-link" href="https://github.com/JuliaPackageFactory/PkgFactory.ts" target="_blank" rel="noreferrer">GitHub</a></div>
   </div></header>
   <main class="main-content"><section class="intro" aria-labelledby="page-title"><p class="eyebrow">JULIA PACKAGE STARTER</p><h1 id="page-title">Create a package repository.</h1>
     <p>Connect GitHub, choose a template, and publish a repository with CI, documentation, and release automation already configured.</p></section>
   <div class="workflow" aria-label="Package creation workflow">
-    <section id="connect-panel" class="workflow-card is-active" data-step="1"><div class="card-heading"><span class="step-badge">1</span><div><div class="title-row"><h2>Connect GitHub</h2><span id="connect-state" class="step-state">Current step</span></div><p id="connect-description" role="status">${authenticated ? 'Loading your GitHub profile and repository owners…' : 'Connect first to choose a repository owner and fill in your author name.'}</p></div></div>
+    <section id="connect-panel" class="workflow-card is-active" data-step="1"><div class="card-heading"><span class="step-badge">1</span><div><div class="title-row"><h2>Connect GitHub</h2><span id="connect-state" class="step-state">Current step</span></div><p id="connect-description"><span id="connect-status" role="status">${authenticated ? 'Loading your GitHub profile and repository owners…' : 'Connect first to choose a repository owner and fill in your author name.'}</span>${publicWeb && authenticated ? ' <button id="logout" class="inline-action" type="button">Click here to sign out.</button>' : ''}</p></div></div>
       <div id="connect-actions" class="card-body">
       ${publicWeb ? '<a id="connect-button" class="button button-primary" href="/auth/login">Connect with GitHub</a><p class="permission-copy">Uses your profile, organization membership, repository, and workflow permissions. Grant organization access only where you want to create packages.</p>' : '<p>Start the local Web with <code>pkgfactory web --gh</code>, <code>--device</code>, or a configured <code>GITHUB_TOKEN</code>.</p>'}
       <button id="retry-profile" type="button" class="button button-secondary" ${authenticated ? '' : 'hidden'}>Retry account lookup</button>

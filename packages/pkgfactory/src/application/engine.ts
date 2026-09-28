@@ -9,7 +9,7 @@ export class FactoryError extends Error {
 }
 export interface Credentials {token: string; subject: string}
 export interface EngineOptions {fetcher?: typeof fetch; algorithm?: KeyAlgorithm; now?: () => number; keyGenerator?: typeof generateDeployKey; local?: boolean; beforeRequest?: () => Promise<void>}
-const generatedCommit = 'Using PkgFactory: https://github.com/JuliaPackageFactory/PkgFactory.ts';
+const generatedCommit = 'Using PkgFactory\n\nhttps://github.com/JuliaPackageFactory/PkgFactory.ts';
 export class Factory {
   private now: () => number;
   constructor(private store: StateStore, private options: EngineOptions = {}) {this.now = options.now ?? Date.now;}

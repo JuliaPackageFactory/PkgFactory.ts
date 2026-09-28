@@ -33,6 +33,8 @@
 #hint, #result { font-size: 13px; }
 #result { display: block; white-space: pre-wrap; overflow-wrap: anywhere; }
 #preview .button { margin-top: 16px; }
+.inline-action { display: inline; padding: 0; border: 0; background: none; color: var(--primary); font: inherit; text-decoration: underline; text-underline-offset: 2px; }
+.inline-action:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
 button:disabled { opacity: .5; cursor: not-allowed; }
 @media (max-width: 680px) { .file-preview { grid-template-columns: 1fr; } }
 
@@ -92,7 +94,7 @@ button, select { cursor: pointer; }
   object-fit: contain;
 }
 
-.header-actions, .account, .github-link { display: flex; align-items: center; }
+.header-actions, .github-link { display: flex; align-items: center; }
 .header-actions { gap: 14px; }
 .account { gap: 8px; color: var(--muted); font-size: 12px; font-weight: 650; }
 .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #94a3b8; box-shadow: 0 0 0 4px rgba(148, 163, 184, .14); }

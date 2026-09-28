@@ -28,7 +28,7 @@
 | ネイティブworkerd通信 | 実fetchを通るWeb/MCP認可・3テンプレート作成・Deploy key/Secret/Pages設定成功（送信先のみ模擬GitHub）。転送拒否と、認可コード/保存状態の期限切れも確認 |
 | npm tarball | Windows/macOS/LinuxのCIで別ディレクトリへインストール後、CLI/オフライン生成/Web/stdioが起動 |
 | Wrangler dry-run | 成功。Worker約1.2MiB、gzip約250KiB。Julia/Containersなし |
-| Cloudflareステージング配備 | 専用KV・SQLite DO・SESSION_KEY・GitHub Client secret設定済み。受付有効、報告された起動時間41ms。初期コミット・CI重複修正版 version `f0a4480b-fc9b-4986-a688-f34e278ca911` |
+| Cloudflareステージング配備 | 専用KV・SQLite DO・SESSION_KEY・GitHub Client secret設定済み。受付有効、報告された起動時間38ms。接続表示・コミット本文修正版 version `a9c99150-ba1c-4128-a898-39729c9fb58e` |
 | 公開Edgeの疎通 | [health](https://pkgfactory-staging.ohnolab.workers.dev/health)は200/ok、Webは200。未認証API/MCPは401。MCPの認証案内・resource metadata・authorization metadataは正常、S256のみを案内 |
 | 公開MCPの実認可・作成 | GitHub OAuth→MCPトークン交換→5ツールの呼び出し成功。3テンプレートの実作成・状態照合がすべてcomplete |
 | 公開Edgeの実測 | 8同時プレビュー710ms。作成minimum 8.875秒、simple 12.551秒、all-in-one 11.965秒（クライアント実測） |
@@ -49,13 +49,16 @@ CloudflareのCPU/メモリ測定ではありません。ステージングでの
 修正版の公開Webから利用者が [ohno/MyPkg78.jl](https://github.com/ohno/MyPkg78.jl) を作成し、成功を確認しました。
 ローカルの実GitHub資格情報で、表示名取得・本人とJuliaPackageFactoryの選択肢・既存名の拒否・未使用名の照会を読み取りだけで確認しました。
 ブラウザーでは模擬GitHubを使い、著者名の編集を維持したプレビュー・確認チェック・作成完了まで検証しました。
+接続表示とサインアウトの案内を第1セクションの同じ行にまとめ、ヘッダーの重複表示を削除しました。
+模擬セッションを使ったブラウザー確認で、表示位置とサインアウト後に認証カードへ戻る動作を確認しました。
 ステージングは修正版を配備済みで、未認証時に認証カードだけが表示されること、プロフィールAPIが401になること、
 認可URLが `read:org` とS256 PKCEを要求することを確認しています。
 
 ### 実GitHubでの作成結果
 
 初期コミットとCI重複の修正を [PkgFactoryPoc20260928082007.jl](https://github.com/JuliaPackageFactory/PkgFactoryPoc20260928082007.jl) で追加検証しました。
-最初のコミット名は `Using PkgFactory: https://github.com/JuliaPackageFactory/PkgFactory.ts`。
+この検証時の最初のコミット名は `Using PkgFactory: https://github.com/JuliaPackageFactory/PkgFactory.ts`。
+その後、件名を `Using PkgFactory`、URLを空行後の3行目とする形式へ変更しました。
 テンプレート追加時はCIをスキップし、設定完了時の [push CI 1件](https://github.com/JuliaPackageFactory/PkgFactoryPoc20260928082007.jl/actions/runs/36396779873) だけが起動して全ジョブ成功しました。
 [Documenter公開ページ](https://juliapackagefactory.github.io/PkgFactoryPoc20260928082007.jl/dev/) も正常です。
 planIdは `7049af34-7966-47ab-a186-1c51c4f93033`、記録は `artifacts/commit-ci-e2e.json` です。

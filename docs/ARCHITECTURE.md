@@ -59,7 +59,7 @@ Secretメタデータ、Pagesを照合してから残存ロックの実行権を
 リポジトリ作成直後の応答喪失に備えて初期descriptionにプランIDを置き、マーカーを書いた後で
 利用者のdescriptionへ変更します。証明できない既存リポジトリは引き継ぎません。
 空のリポジトリをREADMEで初期化し、最初のコミット名を
-`Using PkgFactory: https://github.com/JuliaPackageFactory/PkgFactory.ts` とします。
+`Using PkgFactory` とし、空行を挟んだ3行目に `https://github.com/JuliaPackageFactory/PkgFactory.ts` を記載します。
 テンプレート追加コミットには `[skip ci]` を付け、鍵・Secret・Pages設定を終えた完了コミットでpush CIを1回起動します。
 テンプレートの通常のpush/PRトリガーは変更しません。
 [GitHubのコミットメッセージによるスキップ仕様](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/skip-workflow-runs)

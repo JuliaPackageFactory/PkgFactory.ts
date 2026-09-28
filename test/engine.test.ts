@@ -14,7 +14,7 @@ for (const template of ['minimum', 'simple', 'all-in-one']) test(`create ${templ
   const result = await factory.execute(plan.id, credentials); assert.equal(result.state, 'complete');
   assert.equal(remote.files['Project.toml'], plan.files['Project.toml']);
   const initial = remote.calls.find(c => c.method === 'PUT' && c.path.endsWith('/contents/README.md'))!;
-  assert.equal(initial.body.message, 'Using PkgFactory: https://github.com/JuliaPackageFactory/PkgFactory.ts');
+  assert.equal(initial.body.message, 'Using PkgFactory\n\nhttps://github.com/JuliaPackageFactory/PkgFactory.ts');
   const templateCommit = remote.calls.find(c => c.method === 'POST' && c.path.endsWith('/git/commits'))!;
   assert.match(templateCommit.body.message, /\[skip ci\]/);
   const complete = remote.calls.find(c => c.method === 'PUT' && c.path.endsWith('/contents/.pkgfactory.json'))!;
