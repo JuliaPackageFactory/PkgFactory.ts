@@ -28,6 +28,10 @@ let creating = false, creationFailed = false, appReturnPending = false;
 let selectedFile = '', fileScroll = 0, contentScroll = {top: 0, left: 0};
 const draftKey = 'pkgfactory-reconnect-settings';
 const hasAutomation = () => !!template.value && template.value !== 'minimum';
+function appConfirmed(slug: typeof displayedApps[number]) {
+  return installations[slug].state === 'installed'
+    || (installations[slug].state === 'unknown' && confirmedApps.get(owner.value)?.has(slug) === true);
+}
 
 async function call(path: string, body?: unknown, signal?: AbortSignal) {
   const response = await fetch(path, {method: body === undefined ? 'GET' : 'POST', credentials: 'same-origin',
@@ -54,12 +58,14 @@ function validAuthors() {
 function controls() {
   const metadataReady = validAuthors();
   const settingsReady = profileReady && !authRequired && available && !!template.value && metadataReady;
-  const automationReady = settingsReady && (!hasAutomation() || (!appsLoading && checkedAppsOwner === owner.value));
-  synchronizePreview(settingsReady && (!hasAutomation() || checkedAppsOwner === owner.value) && !composing);
+  const appsConfirmed = !hasAutomation() || (checkedAppsOwner === owner.value && displayedApps.every(appConfirmed));
+  const automationReady = settingsReady && (created || (appsConfirmed && !appsLoading));
+  synchronizePreview(settingsReady && appsConfirmed && !composing);
+  if (!created && settingsReady && !appsConfirmed && !appsLoading) element('review-status').textContent = 'Confirm Codecov in Configure automation to prepare your review.';
   const states = workflowStates([profileReady && !authRequired, available, !!template.value && metadataReady, automationReady, created, false]);
   for (const [index, card] of cards.entries()) {
     const state = states[index];
-    const activity = index === 3 && settingsReady && appsLoading && hasAutomation() ? 'Checking'
+    const activity = index === 3 && !created && settingsReady && appsLoading && hasAutomation() ? 'Checking'
       : index === 4 && creating ? 'Creating' : index === 4 && creationFailed ? 'Needs attention'
       : index === 4 && previewPending ? 'Preparing' : index === 4 && previewFailed ? 'Needs attention' : '';
     card.classList.toggle('is-complete', state === 'complete' && !activity);
@@ -76,7 +82,7 @@ function controls() {
   element('review-content').setAttribute('aria-busy', String(previewPending));
   element<HTMLButtonElement>('retry-preview').hidden = !previewFailed;
   element<HTMLButtonElement>('retry-preview').disabled = working || created;
-  element<HTMLButtonElement>('create').disabled = working || created || creationFailed || authRequired || !previewReady || !element<HTMLInputElement>('confirm').checked;
+  element<HTMLButtonElement>('create').disabled = working || created || creationFailed || !automationReady || !previewReady || !element<HTMLInputElement>('confirm').checked;
   element<HTMLInputElement>('confirm').disabled = working || created || !previewReady;
   element('success-placeholder').hidden = created;
   element('success-panel').hidden = !created;
@@ -152,7 +158,7 @@ function renderApps() {
     const excluded = slug === 'codecov' && template.value === 'minimum';
     const installation = installations[slug];
     const selfConfirmed = installation.state === 'unknown' && !!confirmed?.has(slug);
-    const installed = installation.state === 'installed' || selfConfirmed;
+    const installed = appConfirmed(slug);
     const badge = element(`${slug}-state`);
     badge.className = excluded || (!!template.value && installed && !appsLoading) ? 'configured-pill' : 'app-state';
     badge.textContent = !template.value ? 'Choose a template' : excluded ? 'Not included' : appsLoading ? 'Checking…' : installed ? 'Installed' : installation.state === 'suspended' ? 'Suspended' : installation.state === 'not-installed' ? 'Not installed' : 'Check on GitHub';
@@ -166,7 +172,7 @@ function renderApps() {
       : selfConfirmed ? `Confirmed by you for @${owner.value}. Check access for the new repository after creation.`
       : installation.state === 'installed' ? installation.selection === 'all' ? `Installed for all repositories owned by @${owner.value}.` : `Installed for selected repositories owned by @${owner.value}. Add the new repository after creation.`
       : installation.state === 'suspended' ? `Installation for @${owner.value} is suspended. Review it on GitHub.`
-      : installation.state === 'not-installed' ? `Not installed for @${owner.value}. You can install it after creation.`
+      : installation.state === 'not-installed' ? `Not installed for @${owner.value}. Install it on GitHub, then return here.`
       : `Check installation for @${owner.value} on GitHub, then confirm below.`;
   }
   element('apps-help').hidden = !hasAutomation();
@@ -356,16 +362,14 @@ element('create').onclick = () => void busy(async () => {
     element('success-copy').textContent = `${result.repository} was created and configured.`;
     const repositoryUrl = `https://github.com/${result.repository}`;
     element<HTMLAnchorElement>('actions-link').href = `${repositoryUrl}/actions`;
-    element('build-status').textContent = hasAutomation() ? 'Repository setup is complete. CI and the first documentation deployment run on GitHub; check Actions for their results.'
-      : 'Repository setup is complete. CI runs on GitHub; check Actions for its results.';
     const docsLink = element<HTMLAnchorElement>('documentation-link');
-    docsLink.hidden = !hasAutomation(); docsLink.href = `${repositoryUrl}/settings/pages`;
+    element('documentation-followup').hidden = !hasAutomation(); docsLink.href = `${repositoryUrl}/settings/pages`;
     renderApps();
     controls(); focusStep(6);
     if (hasAutomation()) void call('/api/status', {planId}).then(status => {
       if (!created || status.planId !== planId || !status.pagesUrl) return;
       const url = new URL(status.pagesUrl);
-      if (url.protocol === 'https:') {docsLink.href = url.href; docsLink.textContent = 'Open documentation';}
+      if (url.protocol === 'https:') {docsLink.href = url.href; docsLink.textContent = 'view your documentation';}
     }).catch(() => { /* Keep the Pages settings link if the URL cannot be read. */ });
     void loadApps();
   } catch (error) {
@@ -379,7 +383,7 @@ element('create').onclick = () => void busy(async () => {
 element('create-another').onclick = () => {
   form.reset(); authors.value = defaultAuthor; planId = ''; created = false;
   creationFailed = false; authorsTouched = false; advancedToAutomation = false; selectedFile = ''; fileScroll = 0; contentScroll = {top: 0, left: 0};
-  element('documentation-link').textContent = 'Check documentation deployment';
+  element('documentation-link').textContent = 'check documentation deployment';
   element('creation-error').hidden = true;
   automation(); scheduleAvailability(); void loadApps(); name.focus();
 };
