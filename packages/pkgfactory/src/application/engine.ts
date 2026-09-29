@@ -75,7 +75,7 @@ export class Factory {
   }
   async repositoryAvailability(input: unknown, c: Credentials, signal = new AbortController().signal) {
     const parsed = specSchema.pick({owner: true, name: true}).safeParse(input);
-    if (!parsed.success) throw new FactoryError('name', 'Enter a valid GitHub owner and a Julia package name starting with A–Z (letters and digits only).', 400);
+    if (!parsed.success) throw new FactoryError('name', parsed.error.issues[0].message, 400);
     const {owner, name} = parsed.data;
     const github = this.client(c, signal);
     try {

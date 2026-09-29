@@ -4,6 +4,7 @@ import { Factory } from '../packages/pkgfactory/src/application/engine.js';
 import { MemoryStore } from '../packages/pkgfactory/src/application/state.js';
 import { api } from '../packages/pkgfactory/src/web/routes.js';
 import { page } from '../packages/pkgfactory/src/web/page.js';
+import { packageNameError } from '../packages/pkgfactory/src/core/package-name.js';
 
 const credentials = {subject: '42', token: 'private-token'};
 const membership = (login: string, role = 'admin', state = 'active') => ({role, state, organization: {login}});
@@ -90,6 +91,9 @@ test('availability validates names and owner role before looking up private or p
   assert(!calls.includes('/repos/Member/NewPackage.jl'));
   const count = calls.length;
   await assert.rejects(factory.repositoryAvailability({owner: 'tester', name: '../Bad'}, credentials), {code: 'name'});
+  for (const name of ['JuliaPkg', 'JustInTime', 'UPPER123', 'Cake', 'VMCjl']) {
+    await assert.rejects(factory.repositoryAvailability({owner: 'tester', name}, credentials), {code: 'name', message: packageNameError(name)});
+  }
   assert.equal(calls.length, count);
   await assert.rejects(factory.repositoryAvailability({owner: 'tester', name: 'Valid'}, {...credentials, subject: '99'}), {code: 'identity'});
 });

@@ -32,7 +32,10 @@ test('all workflow steps have text status, and resume controls are absent for ev
     assert.equal((html.match(/class="step-state" role="status"/g) ?? []).length, 6);
     assert.doesNotMatch(html, /Resume interrupted setup|id="recovery"|id="planId"|id="resume"|id="status"/);
     assert.match(html, /id="codecov-row" class="automation-row"/);
-    assert.match(html, /id="juliaregistrator-row" class="automation-row"/);
+    assert.match(html, /id="tagbot-row" class="automation-row"/);
+    assert.match(html, /Repository settings/);
+    assert.doesNotMatch(html, /refresh-apps|Refresh app status/);
+    assert.doesNotMatch(html, /Registrator GitHub App|id="juliaregistrator-/);
     assert.match(html, /<select id="template"[^>]* required[^>]*><option value="" disabled selected>/);
     assert.doesNotMatch(html, /continue-template|Continue to automation|continue-automation|Continue to review|preview-button|Preview package/);
     assert.match(html, /id="create-spinner"[^>]*aria-hidden="true" hidden/);
