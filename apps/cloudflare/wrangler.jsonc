@@ -5,6 +5,7 @@
   "compatibility_date": "2026-09-27",
   "compatibility_flags": ["enable_request_signal", "global_fetch_strictly_public"],
   "workers_dev": true,
+  "ai": {"binding": "AI"},
   "limits": {"cpu_ms": 30000},
   "observability": {"enabled": false},
   "vars": {"ORIGIN": "https://pkgfactory-staging.ohnolab.workers.dev", "GITHUB_OAUTH_CLIENT_ID": "Ov23li7iF0SLvIWtqPyX", "KEY_ALGORITHM": "ed25519", "MAINTENANCE": "false"},
@@ -13,6 +14,7 @@
   "kv_namespaces": [{"binding": "OAUTH_KV", "id": "646e8c10e0ac4f089ae34654751aa2cd"}],
   "env": {"production": {
     "name": "pkgfactory",
+    "ai": {"binding": "AI"},
     "vars": {"ORIGIN": "https://pkgfactory.ohnolab.workers.dev", "GITHUB_OAUTH_CLIENT_ID": "Ov23liW9Mpoaeo70n071", "KEY_ALGORITHM": "ed25519", "MAINTENANCE": "true"},
     "durable_objects": {"bindings": [{"name": "STATE", "class_name": "ApplicationState"}, {"name": "AUTH", "class_name": "AuthState"}]},
     "kv_namespaces": [{"binding": "OAUTH_KV", "id": "CONFIGURE_PRODUCTION_KV_ID"}]

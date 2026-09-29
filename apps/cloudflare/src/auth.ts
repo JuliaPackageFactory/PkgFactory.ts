@@ -5,6 +5,7 @@ import { json } from '../../../packages/pkgfactory/src/web/http.js';
 import { FactoryError } from '../../../packages/pkgfactory/src/application/engine.js';
 import { loginSource } from './ip.js';
 export interface Env {
+  AI?: Ai;
   STATE: DurableObjectNamespace; AUTH: DurableObjectNamespace; OAUTH_KV: KVNamespace; OAUTH_PROVIDER: OAuthHelpers;
   ORIGIN: string; GITHUB_OAUTH_CLIENT_ID: string; GITHUB_OAUTH_CLIENT_SECRET: string; SESSION_KEY: string;
   KEY_ALGORITHM?: 'ed25519' | 'rsa4096'; MAINTENANCE?: string;

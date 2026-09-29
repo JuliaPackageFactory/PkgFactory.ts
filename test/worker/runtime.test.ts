@@ -88,6 +88,12 @@ test('Worker routes, Durable Object persistence, OAuth PKCE and CSRF rejection',
     const sid = 's'.repeat(43), csrf = 'csrf-test'; const key = `session:${await sha256(sid)}`;
     await authStub.fetch('https://auth', {method: 'POST', body: JSON.stringify({action: 'put', key, ttl: 60000, value: await encrypt({SESSION_KEY: btoa('a'.repeat(32))}, {subject: '42', token: 'hidden', csrf}, key)})});
     const headers = {Cookie: `__Host-pkgfactory-session=${sid}`, Origin: 'https://pkgfactory.test', 'Content-Type': 'application/json', 'X-PkgFactory-CSRF': csrf};
+    const suggest = (overrides: Record<string, string> = {}) => mf.dispatchFetch('https://pkgfactory.test/api/template-suggestion', {method: 'POST', headers: {...headers, ...overrides}, body: JSON.stringify({description: 'Scientific computing'})});
+    assert.equal((await suggest({Cookie: ''})).status, 401);
+    assert.equal((await suggest({'X-PkgFactory-CSRF': 'wrong'})).status, 403);
+    assert.equal((await suggest({Origin: 'https://evil.test'})).status, 403);
+    const unavailable = await suggest(); assert.equal(unavailable.status, 503);
+    assert.equal((await unavailable.json() as any).code, 'suggestion_unavailable');
     const preview = await mf.dispatchFetch('https://pkgfactory.test/api/preview', {method: 'POST', headers, body: JSON.stringify({owner: 'tester', name: 'Cloud', authors: ['T']})});
     assert.equal(preview.status, 200); const plan = await preview.json() as any;
     const shared = state.get(state.idFromName('pkgfactory-v1'));

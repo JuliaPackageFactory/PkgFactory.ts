@@ -7,17 +7,18 @@ const {JSDOM} = createRequire(import.meta.url)('jsdom');
 const {outputFiles} = await build({entryPoints: ['packages/pkgfactory/src/web/app.ts'], bundle: true, write: false, platform: 'browser'});
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 const deferred = () => {let resolve!: (value?: any) => void; const promise = new Promise<any>(r => {resolve = r;}); return {promise, resolve};};
-async function fixture(options: {draft?: string; login?: string} = {}) {
-  const dom = new JSDOM(page('csrf', true, true), {url: 'https://pkgfactory.test/', runScripts: 'outside-only'});
+async function fixture(options: {draft?: string; login?: string; suggestions?: boolean} = {}) {
+  const dom = new JSDOM(page('csrf', true, true, options.suggestions), {url: 'https://pkgfactory.test/', runScripts: 'outside-only'});
   const w = dom.window, $ = (id: string) => w.document.getElementById(id);
-  const calls: {url: string; body: any}[] = [], scrolls: string[] = [];
+  const calls: {url: string; body: any; signal?: AbortSignal}[] = [], scrolls: string[] = [];
   const state = {appsGate: undefined as ReturnType<typeof deferred> | undefined, createGate: deferred(),
-    app: {state: 'unknown', selection: undefined as string | undefined}, appsFailure: false, failPreview: false, authExpired: false};
+    app: {state: 'unknown', selection: undefined as string | undefined}, appsFailure: false, failPreview: false, authExpired: false,
+    suggestionGate: undefined as ReturnType<typeof deferred> | undefined, suggestionFailure: false};
   let nextPlan = 0;
   if (options.draft) w.sessionStorage.setItem('pkgfactory-reconnect-settings', options.draft);
   w.fetch = async (url: string, init: any = {}) => {
     const body = init.body ? JSON.parse(init.body) : undefined;
-    calls.push({url, body});
+    calls.push({url, body, signal: init.signal});
     if (state.authExpired) return {ok: false, status: 401, json: async () => ({error: 'Connect GitHub again.', code: 'auth'})};
     let result;
     if (url === '/api/github/profile') result = {user: {login: options.login ?? 'tester', name: 'Test Author'}, owners: [{login: 'tester', name: 'Tester', kind: 'user'}, {login: 'ExampleOrg', name: 'ExampleOrg', kind: 'organization'}]};
@@ -26,6 +27,9 @@ async function fixture(options: {draft?: string; login?: string} = {}) {
     else if (url === '/api/preview') {
       if (state.failPreview) return {ok: false, status: 502, json: async () => ({error: 'Preview temporarily unavailable'})};
       result = {id: `plan-${++nextPlan}`, repository: `${body.owner}/${body.name}.jl`, spec: body, files: {'Project.toml': body.description || 'Initial', 'src/TestPackage.jl': 'module TestPackage\nend'}};
+    } else if (url === '/api/template-suggestion') {
+      if (state.suggestionFailure) throw Error('Workers AI unavailable');
+      result = state.suggestionGate ? await state.suggestionGate.promise : {template: 'all-in-one'};
     } else if (url === '/api/create') result = await state.createGate.promise;
     else if (url === '/api/status') result = {planId: body.planId, pagesUrl: 'https://docs.example.test/'};
     else throw Error(`Unexpected request ${url}`);
@@ -45,6 +49,82 @@ async function fixture(options: {draft?: string; login?: string} = {}) {
   await wait(() => !$('package-form').hidden && !$('package-fields').disabled);
   return {w, $, state, calls, scrolls, input, select, count, ready, badge, wait, close: () => w.close()};
 }
+
+// Exercise the bundled application with a virtual clock for exact debounce boundaries.
+function suggestionClock(t: import('node:test').TestContext, f: Awaited<ReturnType<typeof fixture>>) {
+  t.mock.timers.enable({apis: ['setTimeout']});
+  f.w.setTimeout = globalThis.setTimeout; f.w.clearTimeout = globalThis.clearTimeout;
+  return async (ms: number) => {t.mock.timers.tick(ms); await new Promise(resolve => setImmediate(resolve));};
+}
+
+test('suggestions wait three seconds after the last edit and never change the selected template', async t => {
+  const f = await fixture({suggestions: true});
+  const tick = suggestionClock(t, f);
+  try {
+    f.$('template').value = 'minimum';
+    f.input('description', 'First description');
+    await tick(2999); assert.equal(f.count('/api/template-suggestion'), 0);
+    f.input('description', '  A Julia package for few-body Schrödinger equations.  ');
+    await tick(2999); assert.equal(f.count('/api/template-suggestion'), 0);
+    f.$('template').value = 'simple';
+    await tick(1); assert.equal(f.count('/api/template-suggestion'), 1);
+    assert.deepEqual(f.calls.find(call => call.url === '/api/template-suggestion')!.body, {description: 'A Julia package for few-body Schrödinger equations.'});
+    assert.equal(f.$('template-suggestion').textContent, 'bge-reranker-base recommends All-in-one.');
+    assert.equal(f.$('template-suggestion').hidden, false);
+    assert.equal(f.$('template').value, 'simple');
+    assert.deepEqual(f.scrolls, []);
+    f.input('description', '   '); await tick(3000);
+    assert.equal(f.count('/api/template-suggestion'), 1); assert.equal(f.$('template-suggestion').hidden, true);
+  } finally {f.close();}
+});
+
+test('suggestions discard stale responses and reset cancels pending work', async t => {
+  const f = await fixture({suggestions: true});
+  const tick = suggestionClock(t, f);
+  try {
+    const old = deferred(); f.state.suggestionGate = old;
+    f.input('description', 'Old description'); await tick(3000);
+    const request = f.calls.find(call => call.url === '/api/template-suggestion')!;
+    f.input('description', 'New description'); assert.equal(request.signal!.aborted, true);
+    f.state.suggestionGate = undefined; await tick(3000);
+    old.resolve({template: 'minimum'}); await tick(0);
+    assert.equal(f.$('template-suggestion').textContent, 'bge-reranker-base recommends All-in-one.');
+    assert.equal(f.$('template').value, '');
+    const reset = deferred(); f.state.suggestionGate = reset;
+    f.input('description', 'Before reset'); await tick(3000);
+    f.$('package-form').reset(); reset.resolve({template: 'simple'}); await tick(0);
+    assert.equal(f.$('template-suggestion').hidden, true);
+    f.input('description', 'Pending timer'); f.$('package-form').reset(); await tick(3000);
+    assert.equal(f.count('/api/template-suggestion'), 3);
+  } finally {f.close();}
+});
+
+test('suggestions wait for IME composition and recover after an unavailable response', async t => {
+  const f = await fixture({suggestions: true});
+  const tick = suggestionClock(t, f);
+  try {
+    f.input('description', 'Pending edit');
+    f.$('description').dispatchEvent(new f.w.CompositionEvent('compositionstart', {bubbles: true}));
+    f.input('description', '数値計算'); await tick(6000);
+    assert.equal(f.count('/api/template-suggestion'), 0);
+    f.state.suggestionFailure = true;
+    f.$('description').dispatchEvent(new f.w.CompositionEvent('compositionend', {bubbles: true}));
+    await tick(2999); assert.equal(f.count('/api/template-suggestion'), 0);
+    await tick(1); assert.match(f.$('template-suggestion').textContent, /unavailable/);
+    assert.equal(f.$('template').disabled, false); assert.equal(f.$('package-fields').disabled, false);
+    f.state.suggestionFailure = false; f.input('description', 'Scientific computing'); await tick(3000);
+    assert.match(f.$('template-suggestion').textContent, /recommends All-in-one/);
+  } finally {f.close();}
+});
+
+test('local pages without Workers AI never request a suggestion', async t => {
+  const f = await fixture();
+  const tick = suggestionClock(t, f);
+  try {
+    f.input('description', 'Small utility'); await tick(3000);
+    assert.equal(f.count('/api/template-suggestion'), 0); assert.equal(f.$('template-suggestion').hidden, true);
+  } finally {f.close();}
+});
 
 test('Minimum skips apps, reports field errors, preserves inspected files, and never skips past automation', async () => {
   const f = await fixture(); const {$, input, select, wait, ready, w} = f;

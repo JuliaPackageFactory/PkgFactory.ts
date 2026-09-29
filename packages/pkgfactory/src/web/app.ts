@@ -9,6 +9,7 @@ const output = element<HTMLOutputElement>('result');
 const owner = element<HTMLSelectElement>('owner');
 const name = element<HTMLInputElement>('package-name');
 const authors = element<HTMLTextAreaElement>('authors');
+const description = element<HTMLTextAreaElement>('description');
 const template = element<HTMLSelectElement>('template');
 const csrf = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')!.content;
 const cards = [...document.querySelectorAll<HTMLElement>('.workflow-card[data-step]')];
@@ -20,6 +21,8 @@ let previewTimer: ReturnType<typeof setTimeout> | undefined, previewExpiry: Retu
 let creationTimer: ReturnType<typeof setInterval> | undefined;
 let availabilityRevision = 0, availabilityTimer: ReturnType<typeof setTimeout> | undefined, availabilityAbort: AbortController | undefined;
 let appsRevision = 0, appsAbort: AbortController | undefined, appsLoading = false;
+let suggestionRevision = 0, suggestionTimer: ReturnType<typeof setTimeout> | undefined, suggestionAbort: AbortController | undefined;
+let descriptionComposing = false;
 let installations: AppInstallations = unknownInstallations();
 const confirmedApps = new Map<string, Set<string>>();
 let defaultAuthor = '';
@@ -56,6 +59,7 @@ function validAuthors() {
   return !error;
 }
 function controls() {
+  if (authRequired || working || created) clearSuggestion();
   const metadataReady = validAuthors();
   const settingsReady = profileReady && !authRequired && available && !!template.value && metadataReady;
   const appsConfirmed = !hasAutomation() || (checkedAppsOwner === owner.value && displayedApps.every(appConfirmed));
@@ -151,6 +155,34 @@ function scheduleAvailability() {
   if (error) {availability(name.value ? error : 'Enter a package name to check GitHub.', name.value ? 'unavailable' : 'checking'); return;}
   availability('Checking repository name…');
   availabilityTimer = setTimeout(() => {void checkAvailability(revision);}, 450);
+}
+function clearSuggestion() {
+  clearTimeout(suggestionTimer); suggestionRevision++; suggestionAbort?.abort();
+  suggestionAbort = undefined;
+  element('template-suggestion').textContent = ''; element('template-suggestion').hidden = true;
+}
+function scheduleSuggestion() {
+  clearSuggestion();
+  const query = description.value.trim();
+  if (document.body.dataset.templateSuggestions !== 'true' || !profileReady || authRequired || working || created || descriptionComposing || !query || description.value.length > description.maxLength) return;
+  const revision = suggestionRevision;
+  suggestionTimer = setTimeout(() => {void loadSuggestion(query, revision);}, 3000);
+}
+async function loadSuggestion(query: string, revision: number) {
+  const controller = new AbortController(); suggestionAbort = controller;
+  const timeout = setTimeout(() => controller.abort(), 15000);
+  const notice = element('template-suggestion');
+  try {
+    const result = await call('/api/template-suggestion', {description: query}, controller.signal);
+    if (revision !== suggestionRevision || controller.signal.aborted) return;
+    // Use the existing option label; the model never supplies HTML or changes the selection.
+    const option = [...template.options].find(option => option.value && option.value === result.template);
+    if (!option) return;
+    notice.textContent = `bge-reranker-base recommends ${option.textContent!.split(' · ')[0]}.`;
+    notice.hidden = false;
+  } catch {
+    if (revision === suggestionRevision) {notice.textContent = 'Template suggestion unavailable. You can choose a template below.'; notice.hidden = false;}
+  } finally {clearTimeout(timeout); if (suggestionAbort === controller) suggestionAbort = undefined;}
 }
 function renderApps() {
   const confirmed = confirmedApps.get(owner.value);
@@ -259,6 +291,10 @@ authors.addEventListener('blur', () => {authorsTouched = true; controls();});
 form.addEventListener('compositionstart', () => {composing = true; controls();});
 form.addEventListener('compositionend', () => {composing = false; normalizeAuthors(); controls();});
 form.addEventListener('input', controls);
+description.addEventListener('input', scheduleSuggestion);
+description.addEventListener('compositionstart', () => {descriptionComposing = true; clearSuggestion();});
+description.addEventListener('compositionend', () => {descriptionComposing = false; scheduleSuggestion();});
+form.addEventListener('reset', clearSuggestion);
 form.addEventListener('focusout', () => {setTimeout(() => advanceToAutomation(), 0);});
 owner.addEventListener('change', () => {scheduleAvailability(); void loadApps();});
 name.addEventListener('input', scheduleAvailability);
