@@ -5,10 +5,12 @@ import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import { resolve } from 'node:path';
 import { createRequire } from 'node:module';
 import { planPackage } from '../../packages/pkgfactory/src/core/plan.js';
-import { encrypt, decrypt } from '../../apps/cloudflare/src/auth.js';
+import { encrypt, decrypt, sessionCookieValue } from '../../apps/cloudflare/src/auth.js';
 import { sha256, base64url, unbase64url, decode, utf8 } from '../../packages/pkgfactory/src/core/encoding.js';
 import { FakeGitHub } from '../fake-github.js';
 const options = {modules: true as const, compatibilityDate: '2026-09-27', compatibilityFlags: ['enable_request_signal', 'global_fetch_strictly_public']};
+// Functional tests use generous limits; security.test.ts exercises exhaustion.
+const ratelimits = Object.fromEntries(['SOURCE_RATE_LIMIT', 'REGISTRATION_RATE_LIMIT', 'ACCOUNT_RATE_LIMIT'].map((name, i) => [name, {namespace_id: String(i + 1), simple: {limit: 1000, period: 60 as const}}]));
 test('workerd: deterministic templates, Ed25519/RSA and sealed-box without Node or Julia', async () => {
   const result = await build({entryPoints: ['test/worker/poc-worker.ts'], bundle: true, write: false, format: 'esm', platform: 'browser'});
   const mf = new Miniflare(convertV4MiniflareOptions({...options, script: result.outputFiles[0].text}));
@@ -31,11 +33,16 @@ test('workerd: deterministic templates, Ed25519/RSA and sealed-box without Node 
   } finally {await mf.dispose();}
 });
 test('Worker routes, Durable Object persistence, OAuth PKCE and CSRF rejection', async () => {
-  const remote = new FakeGitHub();
-  const mf = new Miniflare(convertV4MiniflareOptions({...options, scriptPath: resolve('apps/cloudflare/dist/worker.js'),
+  const remote = new FakeGitHub(); const revocations: {authorization: string; body: unknown}[] = [];
+  const mf = new Miniflare(convertV4MiniflareOptions({...options, scriptPath: resolve('apps/cloudflare/dist/worker.js'), ratelimits,
     durableObjects: {STATE: {className: 'ApplicationState', useSQLite: true}, AUTH: {className: 'AuthState', useSQLite: true}}, kvNamespaces: ['OAUTH_KV'],
     bindings: {ORIGIN: 'https://pkgfactory.test', GITHUB_OAUTH_CLIENT_ID: 'test-client', SESSION_KEY: btoa('a'.repeat(32)), GITHUB_OAUTH_CLIENT_SECRET: 'test-secret'},
-    outboundService: async (request: any) => remote.fetch(request.url, {method: request.method}),
+    outboundService: async (request: any) => {
+      if (request.url === 'https://api.github.com/applications/test-client/token' && request.method === 'DELETE') {
+        revocations.push({authorization: request.headers.get('authorization'), body: await request.json()}); return new Response(null, {status: 204});
+      }
+      return remote.fetch(request.url, {method: request.method});
+    },
   }));
   try {
     const health = await mf.dispatchFetch('https://pkgfactory.test/health');
@@ -57,7 +64,12 @@ test('Worker routes, Durable Object persistence, OAuth PKCE and CSRF rejection',
     assert.equal((await mf.dispatchFetch(bad, {headers: {Cookie: cookie}})).status, 400);
     // Consent POST must end in a document before cross-origin navigation, so
     // Chromium's form-action 'self' does not block GitHub or the MCP callback.
-    const registration = await mf.dispatchFetch('https://pkgfactory.test/oauth/register', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({client_name: 'Acceptance', redirect_uris: ['http://127.0.0.1:12345/callback'], token_endpoint_auth_method: 'none', grant_types: ['authorization_code'], response_types: ['code']})});
+    const register = (redirect_uris: string[]) => mf.dispatchFetch('https://pkgfactory.test/oauth/register', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({client_name: 'Acceptance', redirect_uris, token_endpoint_auth_method: 'none', grant_types: ['authorization_code'], response_types: ['code']})});
+    // Remote plain HTTP would expose authorization codes in transit.
+    const insecure = await register(['https://app.example/callback', 'http://remote.example/callback']);
+    assert.equal(insecure.status, 400); assert.equal((await insecure.json() as any).error, 'invalid_client_metadata');
+    assert.equal((await register(['https://app.example/callback', 'cursor://client/callback'])).status, 201);
+    const registration = await register(['http://127.0.0.1:12345/callback']);
     assert.equal(registration.status, 201);
     const registered = await registration.json() as any;
     const authorize = 'https://pkgfactory.test/authorize?' + new URLSearchParams({client_id: registered.client_id, redirect_uri: 'http://127.0.0.1:12345/callback', response_type: 'code', scope: 'pkgfactory', resource: 'https://pkgfactory.test/mcp', state: 'test-state', code_challenge: 'a'.repeat(43), code_challenge_method: 'S256'});
@@ -85,9 +97,21 @@ test('Worker routes, Durable Object persistence, OAuth PKCE and CSRF rejection',
     assert.equal((await cas(0)).status, 200); assert.equal((await cas(0)).status, 409);
     // Seed an encrypted authenticated session to exercise the production route and store.
     const authNs = await mf.getDurableObjectNamespace('AUTH'); const authStub = authNs.get(authNs.idFromName('auth-v1'));
+    const crypt = {SESSION_KEY: btoa('a'.repeat(32))};
     const sid = 's'.repeat(43), csrf = 'csrf-test'; const key = `session:${await sha256(sid)}`;
-    await authStub.fetch('https://auth', {method: 'POST', body: JSON.stringify({action: 'put', key, ttl: 60000, value: await encrypt({SESSION_KEY: btoa('a'.repeat(32))}, {subject: '42', token: 'hidden', csrf}, key)})});
-    const headers = {Cookie: `__Host-pkgfactory-session=${sid}`, Origin: 'https://pkgfactory.test', 'Content-Type': 'application/json', 'X-PkgFactory-CSRF': csrf};
+    await authStub.fetch('https://auth', {method: 'POST', body: JSON.stringify({action: 'put', key, ttl: 60000, value: await encrypt(crypt, {subject: '42', token: 'hidden', csrf}, key)})});
+    const headers = {Cookie: `__Host-pkgfactory-session=${await sessionCookieValue(crypt, sid)}`, Origin: 'https://pkgfactory.test', 'Content-Type': 'application/json', 'X-PkgFactory-CSRF': csrf};
+    // The stored ID alone, or with another ID's signature, is not a session.
+    for (const forged of [sid, `${sid}.${(await sessionCookieValue(crypt, 't'.repeat(43))).split('.')[1]}`]) {
+      assert.equal((await mf.dispatchFetch('https://pkgfactory.test/api/templates', {headers: {Cookie: `__Host-pkgfactory-session=${forged}`}})).status, 401);
+    }
+    // A record that no longer decrypts (for example after SESSION_KEY rotation) signs out.
+    const rotated = 'r'.repeat(43), rotatedKey = `session:${await sha256(rotated)}`;
+    await authStub.fetch('https://auth', {method: 'POST', body: JSON.stringify({action: 'put', key: rotatedKey, ttl: 60000, value: await encrypt({SESSION_KEY: btoa('b'.repeat(32))}, {subject: '42', token: 'hidden', csrf}, rotatedKey)})});
+    const rotatedCookie = {Cookie: `__Host-pkgfactory-session=${await sessionCookieValue(crypt, rotated)}`};
+    const signedOut = await mf.dispatchFetch('https://pkgfactory.test/', {headers: rotatedCookie});
+    assert.equal(signedOut.status, 200); assert.match(await signedOut.text(), /data-authenticated="false"/);
+    assert.equal((await mf.dispatchFetch('https://pkgfactory.test/api/templates', {headers: rotatedCookie})).status, 401);
     const preview = await mf.dispatchFetch('https://pkgfactory.test/api/preview', {method: 'POST', headers, body: JSON.stringify({owner: 'tester', name: 'Cloud', authors: ['T']})});
     assert.equal(preview.status, 200); const plan = await preview.json() as any;
     const shared = state.get(state.idFromName('pkgfactory-v1'));
@@ -99,7 +123,10 @@ test('Worker routes, Durable Object persistence, OAuth PKCE and CSRF rejection',
     const after = await (await shared.fetch('https://state', {method: 'POST', body: JSON.stringify({action: 'snapshot', subject: '42'})})).json() as any;
     assert.equal(after.entries.length, 1); assert.equal(after.entries[0][0], updated.id);
     const noCsrf = await mf.dispatchFetch('https://pkgfactory.test/api/create', {method: 'POST', headers: {...headers, 'X-PkgFactory-CSRF': 'wrong'}, body: JSON.stringify({planId: plan.id, confirm: true})}); assert.equal(noCsrf.status, 403);
+    assert.equal(revocations.length, 0);
     const logout = await mf.dispatchFetch('https://pkgfactory.test/auth/logout', {method: 'POST', headers, body: '{}'}); assert.equal(logout.status, 200);
+    assert.deepEqual(await logout.json(), {ok: true, githubTokenRevoked: true});
+    assert.deepEqual(revocations, [{authorization: `Basic ${btoa('test-client:test-secret')}`, body: {access_token: 'hidden'}}]);
     assert.equal((await mf.dispatchFetch('https://pkgfactory.test/api/templates', {headers})).status, 401);
   } finally {await mf.dispose();}
 });
@@ -128,7 +155,7 @@ test('Worker executes the shared engine with durable metadata and stops after di
 test('Worker native fetch completes Web/MCP OAuth and 3 templates without following redirects', async () => {
   const calls: string[] = [];
   let remote = new FakeGitHub();
-  const mf = new Miniflare(convertV4MiniflareOptions({...options, scriptPath: resolve('apps/cloudflare/dist/worker.js'),
+  const mf = new Miniflare(convertV4MiniflareOptions({...options, scriptPath: resolve('apps/cloudflare/dist/worker.js'), ratelimits,
     durableObjects: {STATE: {className: 'ApplicationState', useSQLite: true}, AUTH: {className: 'AuthState', useSQLite: true}}, kvNamespaces: ['OAUTH_KV'],
     bindings: {ORIGIN: 'https://pkgfactory.test', GITHUB_OAUTH_CLIENT_ID: 'test-client', SESSION_KEY: btoa('a'.repeat(32)), GITHUB_OAUTH_CLIENT_SECRET: 'test-secret'},
     // Intercept only after workerd's native Request/fetch validates its options.
@@ -216,5 +243,14 @@ test('Worker native fetch completes Web/MCP OAuth and 3 templates without follow
     assert.equal(token.status, 200); const credential = await token.json() as any;
     const initialized = await mf.dispatchFetch('https://pkgfactory.test/mcp', {method: 'POST', headers: {Authorization: `Bearer ${credential.access_token}`, 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream'}, body: JSON.stringify({jsonrpc: '2.0', id: 1, method: 'initialize', params: {protocolVersion: '2025-11-25', capabilities: {}, clientInfo: {name: 'test', version: '1'}}})});
     assert.equal(initialized.status, 200); assert.equal((await initialized.json() as any).result.serverInfo.name, 'PkgFactory');
+    // A batched tools/call would bypass the per-message disconnect guard.
+    const mcp = (body: string) => mf.dispatchFetch('https://pkgfactory.test/mcp', {method: 'POST', headers: {Authorization: `Bearer ${credential.access_token}`, 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream', 'MCP-Protocol-Version': '2025-11-25'}, body});
+    const plan = await post('preview', {owner: 'tester', name: 'Batched', authors: ['Tester'], template: 'minimum'});
+    remote = new FakeGitHub();
+    const batch = await mcp(JSON.stringify([{jsonrpc: '2.0', id: 2, method: 'tools/call', params: {name: 'create_package', arguments: {planId: plan.id, confirm: true}}}]));
+    assert.equal(batch.status, 400); assert.equal((await batch.json() as any).error.code, -32600);
+    const malformed = await mcp('{');
+    assert.equal(malformed.status, 400); assert.equal((await malformed.json() as any).error.code, -32700);
+    assert.deepEqual(remote.calls, [], 'Rejected batches must not reach GitHub');
   } finally {await mf.dispose();}
 });
