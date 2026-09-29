@@ -8,7 +8,7 @@ function fixture() {
   const remote = new FakeGitHub(); const store = new MemoryStore(); let now = Date.now();
   return {remote, store, factory: new Factory(store, {fetcher: remote.fetch, now: () => now}), advance: () => {now += 160000;}};
 }
-const input = (template = 'simple') => ({owner: 'tester', name: 'Test', authors: ['Tester'], template});
+const input = (template = 'simple') => ({owner: 'tester', name: 'TestPackage', authors: ['Tester'], template});
 for (const template of ['minimum', 'simple', 'all-in-one']) test(`create ${template}; repeated success performs no writes`, async () => {
   const {factory, remote} = fixture(); const plan = await factory.preview(input(template), '42');
   const result = await factory.execute(plan.id, credentials); assert.equal(result.state, 'complete');
@@ -48,7 +48,7 @@ test('disconnect stops all subsequent GitHub requests and retains lock', async (
   const {factory, remote, store} = fixture(); const plan = await factory.preview(input(), '42'); const abort = new AbortController();
   remote.after = (method, path) => {if (method === 'POST' && path.endsWith('/trees')) abort.abort();};
   await assert.rejects(factory.execute(plan.id, credentials, false, abort.signal));
-  assert.equal(remote.calls.at(-1)?.path, '/repos/tester/Test.jl/git/trees');
+  assert.equal(remote.calls.at(-1)?.path, '/repos/tester/TestPackage.jl/git/trees');
   assert.equal((await store.get(plan.id))?.state, 'paused');
 });
 test('other subjects cannot execute or inspect a plan', async () => {
