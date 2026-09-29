@@ -266,15 +266,15 @@ npm publish --workspace @juliapackagefactory/pkgfactory --access public
 ### ステージング確認後の本番反映
 
 1. mainの **CI → Deploy staging** が成功した後、ステージングのWeb/MCPを確認します。
-2. 確認したCIのURL `https://github.com/JuliaPackageFactory/PkgFactory.ts/actions/runs/<実行ID>` から数字の実行IDを控えます。
-3. [Release (manual)](https://github.com/JuliaPackageFactory/PkgFactory.ts/actions/workflows/release.yml)の **Run workflow** を開き、branchは `main`、targetは `production`、confirmationは `publish`、staging_run_idは確認済みの実行IDを入力して起動します。
-4. Actionsが、その実行のCI・実配備・health確認の成功を照合し、**その実行のコミットSHA** をcheckoutして本番を配備します。確認中にmainへ別の変更が入っても、指定したコミットが使われます。反映したSHAと参照したCIはActionsのSummaryに残ります。
+2. 問題がなければ [Deploy production](https://github.com/JuliaPackageFactory/PkgFactory.ts/actions/workflows/production.yml)の **Run workflow** を開き、branchを `main` のまま起動します。実行ID・target・確認文字列の入力はありません。
+3. Actionsは **起動時点のmain** を本番へ反映します。そのコミットのCI・ステージング実配備・health確認が成功しているかを自動で照合します。起動後にmainが更新されても、実行途中で対象コミットは変わりません。反映したSHAと照合したCIはActionsのSummaryに残ります。
 
-失敗・実行中・PRのCIや、古いmainとして配備が省略されたCIは本番反映に使えません。
-再実行されたCIは最新attemptの成功結果を照合します。本番も手動配備を直列化し、配備後の `/health` を確認します。
+そのmainにステージング配備の成功履歴がなければ、本番への書込み前に停止します。CIの完了とステージングを確認してから、同じボタンで起動してください。
+別コミットの成功履歴、失敗・実行中・PRのCIや、実配備が省略されたCIでは確認を通しません。
+本番も手動配備を直列化し、配備後の `/health` を確認します。
 初回準備中の `MAINTENANCE=true` は正常なmaintenance応答として扱うため、このhealth確認だけで公開完了とは判定しません。
 
-`release.yml` のtarget `staging` は手動再配備、`npm` はnpm公開用で、staging_run_idは不要です。
+別の `Release (manual)` (`release.yml`) は、target `staging` がステージング手動再配備、`npm` がnpm公開用です。
 いずれもmainから確認欄 `publish` を入力して手動起動します。環境に承認者が設定されている場合はその承認も必要です。
 WorkerのOAuth/SESSION secretsはWranglerで別途登録し、GitHub Workflowから表示しません。
 本番のKV、OAuth/SESSION secrets、受付開始の設定は、以下の本番公開手順で準備してから利用します。
