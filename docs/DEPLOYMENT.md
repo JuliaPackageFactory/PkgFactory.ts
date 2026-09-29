@@ -253,20 +253,31 @@ npm publish --workspace @juliapackagefactory/pkgfactory --access public
 配備直前にmainの先頭SHAを照合し、古いCIの遅延完了による巻き戻しを防ぎます。配備は直列化し、実行途中で取り消しません。
 資格情報が未登録の場合は `Deploy staging` が設定不足を明示して失敗します。登録後に失敗ジョブを再実行するか、mainでCIを手動実行できます。
 
-### GitHub Actionsのステージング配備設定
+### GitHub Actionsの配備設定
 
-1. [CloudflareのAccount API tokens](https://dash.cloudflare.com/?to=/:account/api-tokens)で対象アカウントを選び、**Create Token → Edit Cloudflare Workers** を選びます。名前の例は `PkgFactory GitHub Actions staging`。対象アカウントをPkgFactoryの配備先だけに限定します。
-2. [PkgFactory.tsのEnvironments](https://github.com/JuliaPackageFactory/PkgFactory.ts/settings/environments)で **staging** を開き、Environment secret **CLOUDFLARE_API_TOKEN** に作成したトークンを登録します。GitHubのPATやGitHub OAuthのClient secretとは別の値です。
-3. 同じenvironmentのEnvironment variable **CLOUDFLARE_ACCOUNT_ID** に、配備先の32桁Account IDを登録します。stagingのdeployment branchは `main` に限定し、通常のステージング自動配備に承認者は設定しません。
+1. [CloudflareのAccount API tokens](https://dash.cloudflare.com/?to=/:account/api-tokens)で対象アカウントを選び、**Create Token → Permission policies → Custom → Edit Cloudflare Workers** を選びます。名前の例は `PkgFactory GitHub Actions`。対象アカウントをPkgFactoryの配備先だけに限定します。
+2. [PkgFactory.tsのEnvironments](https://github.com/JuliaPackageFactory/PkgFactory.ts/settings/environments)で **staging** と **production** のそれぞれに、Environment secret **CLOUDFLARE_API_TOKEN** を登録します。同じCloudflareアカウントを使う現在の構成では、同じトークンを両環境に登録できます。GitHubのPATやGitHub OAuthのClient secretとは別の値です。
+3. 両environmentのEnvironment variable **CLOUDFLARE_ACCOUNT_ID** に、配備先の32桁Account IDを登録します。両環境のdeployment branchは `main` に限定します。stagingは自動、本番は利用者が確認してからActionsを手動起動します。
 
 ローカルの `wrangler login` の状態はGitHub Actionsに引き継がれません。CIではこの専用APIトークンを使います。
 [Cloudflare公式のGitHub Actions認証手順](https://developers.cloudflare.com/workers/ci-cd/external-cicd/github-actions/)
 既存Workerの `GITHUB_OAUTH_CLIENT_SECRET` と `SESSION_KEY` はWorker側に保持し、GitHubへコピーする必要はありません。
 
-`release.yml` は手動での再配備と承認後の公開に利用します。targetを `staging`・`production`・`npm` から選び、
-確認欄 `publish` を入力し、環境に承認者が設定されている場合はその承認後に実行します。Cloudflare用環境には
-secret `CLOUDFLARE_API_TOKEN`、variable `CLOUDFLARE_ACCOUNT_ID` を設定します。
+### ステージング確認後の本番反映
+
+1. mainの **CI → Deploy staging** が成功した後、ステージングのWeb/MCPを確認します。
+2. 確認したCIのURL `https://github.com/JuliaPackageFactory/PkgFactory.ts/actions/runs/<実行ID>` から数字の実行IDを控えます。
+3. [Release (manual)](https://github.com/JuliaPackageFactory/PkgFactory.ts/actions/workflows/release.yml)の **Run workflow** を開き、branchは `main`、targetは `production`、confirmationは `publish`、staging_run_idは確認済みの実行IDを入力して起動します。
+4. Actionsが、その実行のCI・実配備・health確認の成功を照合し、**その実行のコミットSHA** をcheckoutして本番を配備します。確認中にmainへ別の変更が入っても、指定したコミットが使われます。反映したSHAと参照したCIはActionsのSummaryに残ります。
+
+失敗・実行中・PRのCIや、古いmainとして配備が省略されたCIは本番反映に使えません。
+再実行されたCIは最新attemptの成功結果を照合します。本番も手動配備を直列化し、配備後の `/health` を確認します。
+初回準備中の `MAINTENANCE=true` は正常なmaintenance応答として扱うため、このhealth確認だけで公開完了とは判定しません。
+
+`release.yml` のtarget `staging` は手動再配備、`npm` はnpm公開用で、staging_run_idは不要です。
+いずれもmainから確認欄 `publish` を入力して手動起動します。環境に承認者が設定されている場合はその承認も必要です。
 WorkerのOAuth/SESSION secretsはWranglerで別途登録し、GitHub Workflowから表示しません。
+本番のKV、OAuth/SESSION secrets、受付開始の設定は、以下の本番公開手順で準備してから利用します。
 
 ## 5. 本番公開前に提示するもの
 
