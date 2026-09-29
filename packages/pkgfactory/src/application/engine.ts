@@ -14,21 +14,25 @@ const generatedCommit = 'Using PkgFactory\n\nhttps://github.com/JuliaPackageFact
 export class Factory {
   private now: () => number;
   constructor(private store: StateStore, private options: EngineOptions = {}) {this.now = options.now ?? Date.now;}
-  async preview(input: unknown, subject: string): Promise<PackagePlan> {
+  async preview(input: unknown, subject: string, replacePlanId?: string): Promise<PackagePlan> {
     const plan = await planPackage(input);
     await this.store.transaction(items => {
+      const previous = replacePlanId ? items.get(replacePlanId) : undefined;
+      if (previous && previous.subject !== subject) throw new FactoryError('plan', 'Plan ownership mismatch', 403);
+      const replaceable = previous?.state === 'preview' && !previous.pending && !previous.leaseUntil && !previous.recoveryError;
       for (const [id, op] of items) if (!op.recoveryError && (op.state === 'preview' || op.state === 'complete') && op.expiresAt < this.now()) items.delete(id);
-      if ([...items.values()].filter(o => o.subject === subject).length >= 16) throw new FactoryError('capacity', 'Too many saved plans for this account. Inspect and resume unfinished operations.', 429);
+      if ([...items.values()].filter(o => o.subject === subject && (!replaceable || o.plan.id !== replacePlanId)).length >= 16) throw new FactoryError('capacity', 'Too many saved plans for this account. Inspect and resume unfinished operations.', 429);
+      if (replaceable) items.delete(previous.plan.id);
       items.set(plan.id, {plan, subject, expiresAt: this.now() + 15 * 60000, state: 'preview'});
     });
     return plan;
   }
-  async previewForAccount(input: unknown, c: Credentials, signal = new AbortController().signal) {
+  async previewForAccount(input: unknown, c: Credentials, signal = new AbortController().signal, replacePlanId?: string) {
     const spec = specSchema.parse(input);
     const check = await this.repositoryAvailability({owner: spec.owner, name: spec.name}, c, signal);
     if (!check.available) throw new FactoryError('exists', `${check.repository} already exists. Use the saved plan ID to inspect or resume your interrupted setup.`);
     signal.throwIfAborted();
-    return this.preview(spec, c.subject);
+    return this.preview(spec, c.subject, replacePlanId);
   }
   async importPlan(plan: PackagePlan, subject: string) {
     await validatePlan(plan);

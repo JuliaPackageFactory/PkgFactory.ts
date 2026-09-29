@@ -216,6 +216,23 @@ input:disabled { color: var(--muted); border-color: var(--border); background: v
 .creation-status { display: flex; align-items: center; gap: 10px; margin-top: 16px; color: var(--muted); font-size: 12px; }
 .creation-status p { margin: 0; }
 .spinner { flex: 0 0 auto; width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin .8s linear infinite; }
+.review-status { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; }
+.review-status p { margin: 0; }
+#create[aria-busy="true"] { opacity: 1; cursor: progress; }
+#create .spinner { width: 16px; height: 16px; border-color: #ffffff55; border-top-color: white; }
+.creation-progress { margin-top: 18px; padding: 16px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-muted); }
+.creation-progress p { margin: 0; color: var(--muted); font-size: 12px; }
+.progress-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.progress-heading p { color: var(--text); }
+#creation-elapsed { flex-shrink: 0; color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.progress-track { height: 4px; margin: 12px 0; overflow: hidden; border-radius: 4px; background: var(--border); }
+.progress-track span { display: block; width: 40%; height: 100%; border-radius: inherit; background: var(--primary); animation: progress-slide 1.5s ease-in-out infinite; }
+#creation-error { margin-top: 16px; }
+@keyframes progress-slide { from { transform: translateX(-100%); } to { transform: translateX(350%); } }
+@media (prefers-reduced-motion: reduce) {
+  .spinner, .progress-track span { animation: none; }
+  .progress-track span { width: 100%; opacity: .5; }
+}
 .creation-result { width: 100%; }
 .creation-result h3 { margin: 0; color: var(--text-strong); font-size: 17px; }
 .creation-result p { margin: 9px 0 0; color: var(--muted); font-size: 12px; }
@@ -285,6 +302,7 @@ input:disabled { color: var(--muted); border-color: var(--border); background: v
   .configured-pill, .app-state { margin-top: 1px; margin-left: auto; }
   .create-actions .button { width: 100%; min-width: 0; }
   .success-actions { width: 100%; flex-direction: column; }
+  .progress-heading { flex-direction: column; gap: 4px; }
   .app-footer { flex-direction: column; gap: 4px; }
 }
 
