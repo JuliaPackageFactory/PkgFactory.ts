@@ -61,7 +61,7 @@ test('local journal survives restart and serializes independent instances', asyn
   const dir = await mkdtemp(join(tmpdir(), 'pkgfactory-journal-'));
   try {
     const a = new Factory(new FileStore(dir)); const b = new Factory(new FileStore(dir));
-    const plans = await Promise.all([a.preview({owner: 'tester', name: 'One', authors: ['T']}, 'local'), b.preview({owner: 'tester', name: 'Two', authors: ['T']}, 'local')]);
+    const plans = await Promise.all([a.preview({owner: 'tester', name: 'FirstPackage', authors: ['T']}, 'local'), b.preview({owner: 'tester', name: 'SecondPackage', authors: ['T']}, 'local')]);
     for (const plan of plans) assert.equal((await new FileStore(dir).get(plan.id))?.plan.digest, plan.digest);
   } finally {await rm(dir, {recursive: true, force: true});}
 });

@@ -1,5 +1,6 @@
 import { FactoryError } from '../application/engine.js';
 import { GitHubError } from '../github/client.js';
+import { ZodError } from 'zod';
 export const json = (data: unknown, status = 200) => new Response(JSON.stringify(data), {status, headers: {'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff'}});
 export const escapeHtml = (s: string) => s.replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]!));
 export async function readJson(request: Request) {
@@ -16,7 +17,8 @@ export async function limitedBody(request: Request, limit: number) {
 }
 export function errorResponse(error: unknown) {
   if (error instanceof FactoryError) return json({error: error.message, code: error.code}, error.status);
-  if (error instanceof GitHubError) return json({error: `${error.message} Check status before explicit resume.`}, 502);
-  if (error instanceof SyntaxError || (error as any)?.name === 'ZodError') return json({error: 'Invalid request input'}, 400);
+  if (error instanceof GitHubError) return json({error: `${error.message} Check status before explicit resume.`, ...(error.status === 401 ? {code: 'auth'} : {})}, error.status === 401 ? 401 : 502);
+  if (error instanceof ZodError) return json({error: error.issues.map(issue => `${issue.path.join('.') || 'input'}: ${issue.message}`).join('; ')}, 400);
+  if (error instanceof SyntaxError) return json({error: 'Invalid request input'}, 400);
   return json({error: 'Operation stopped. Inspect status before explicitly resuming.'}, 502);
 }

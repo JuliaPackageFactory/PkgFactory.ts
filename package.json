@@ -29,6 +29,7 @@
     "@types/node": "24.19.0",
     "@iarna/toml": "2.2.5",
     "esbuild": "0.28.2",
+    "jsdom": "28.1.0",
     "libsodium-wrappers": "0.7.16",
     "miniflare": "5.20260926.0-alpha",
     "tsx": "4.23.15",

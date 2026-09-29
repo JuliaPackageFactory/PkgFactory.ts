@@ -143,6 +143,11 @@ button, select { cursor: pointer; }
 #connect-panel.is-complete .card-heading { border-bottom: 0; }
 .workflow-card.is-complete .step-badge { color: white; border-color: var(--success); background: var(--success); }
 .workflow-card.is-complete .step-state { color: var(--success-text); background: var(--success-soft); border-color: var(--success); }
+.workflow-card.is-busy { border-color: var(--primary); }
+.is-busy .step-state { color: var(--primary); background: var(--primary-soft); border-color: var(--primary); }
+.workflow-card.has-error { border-color: var(--danger); }
+.has-error .step-state { color: var(--danger); background: var(--danger-soft); border-color: var(--danger); }
+.has-error .step-badge { color: var(--danger); background: var(--danger-soft); border-color: var(--danger); }
 .card-body { padding: 24px 25px; }
 .step-actions { margin-top: 20px; }
 .permission-copy { color: var(--muted); font-size: 11px; }
@@ -191,6 +196,10 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); box-sh
 .availability-status.is-checking { color: var(--muted); }
 .availability-status.is-available { color: var(--success); font-weight: 650; }
 .availability-status.is-unavailable { color: var(--danger); font-weight: 650; }
+.field .field-error { color: var(--danger); }
+input[aria-invalid="true"], textarea[aria-invalid="true"] { border-color: var(--danger); }
+.input-suffix:has(input[aria-invalid="true"]) { border-color: var(--danger); }
+.field small a, #reconnect-notice a, #creation-recovery a { color: inherit; text-underline-offset: 2px; }
 
 .automation-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 19px; padding: 13px 14px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface-muted); }
 .automation-copy { display: grid; gap: 2px; }
@@ -212,6 +221,7 @@ input:disabled { color: var(--muted); border-color: var(--border); background: v
 .notice { width: 100%; margin: 0 0 16px; padding: 11px 13px; border-radius: 8px; font-size: 11px; }
 .notice-error { color: var(--danger); border: 1px solid #fecaca; background: var(--danger-soft); }
 #connect-error { margin-top: 16px; margin-bottom: 0; }
+#reconnect-notice { position: sticky; top: 78px; z-index: 11; }
 
 .creation-status { display: flex; align-items: center; gap: 10px; margin-top: 16px; color: var(--muted); font-size: 12px; }
 .creation-status p { margin: 0; }
