@@ -12,7 +12,10 @@ const template = element<HTMLSelectElement>('template');
 const csrf = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')!.content;
 const cards = [...document.querySelectorAll<HTMLElement>('.workflow-card[data-step]')];
 let profileReady = false, working = false, available = false, previewReady = false, created = false;
-let automationReviewed = false, planId = '';
+let planId = '', checkedAppsOwner = '', composing = false;
+let previewKey = '', previewRevision = 0, previewInFlight = false, previewPending = false, previewFailed = false, previewPreparedAt = 0;
+let previewTimer: ReturnType<typeof setTimeout> | undefined, previewExpiry: ReturnType<typeof setTimeout> | undefined;
+let creationTimer: ReturnType<typeof setInterval> | undefined;
 let availabilityRevision = 0, availabilityTimer: ReturnType<typeof setTimeout> | undefined, availabilityAbort: AbortController | undefined;
 let appsRevision = 0, appsAbort: AbortController | undefined, appsLoading = false;
 let installations: AppInstallations = unknownInstallations();
@@ -35,7 +38,9 @@ function validAuthors() {
 }
 function controls() {
   const metadataReady = validAuthors();
-  const states = workflowStates([profileReady, available, !!template.value && metadataReady, automationReviewed, created, false]);
+  const automationReady = profileReady && available && !!template.value && metadataReady && checkedAppsOwner === owner.value;
+  synchronizePreview(automationReady && !composing);
+  const states = workflowStates([profileReady, available, !!template.value && metadataReady, automationReady, created, false]);
   for (const [index, card] of cards.entries()) {
     const state = states[index];
     card.classList.toggle('is-complete', state === 'complete');
@@ -46,11 +51,13 @@ function controls() {
     if (label.textContent !== text) label.textContent = text;
   }
   fields.disabled = working || created;
-  element<HTMLButtonElement>('continue-automation').disabled = working || created || states[2] !== 'complete';
-  element<HTMLButtonElement>('preview-button').disabled = working || created || states[4] !== 'ready';
+  element('review-spinner').hidden = !previewPending;
+  element('review-content').setAttribute('aria-busy', String(previewPending));
+  element<HTMLButtonElement>('retry-preview').hidden = !previewFailed;
+  element<HTMLButtonElement>('retry-preview').disabled = working || created;
   element<HTMLButtonElement>('create').disabled = working || created || !previewReady || !element<HTMLInputElement>('confirm').checked;
   element<HTMLButtonElement>('refresh-apps').disabled = working || created || !profileReady || appsLoading;
-  element<HTMLInputElement>('confirm').disabled = working || created;
+  element<HTMLInputElement>('confirm').disabled = working || created || !previewReady;
   element('success-placeholder').hidden = created;
   element('success-panel').hidden = !created;
   for (const id of ['logout', 'retry-profile', 'create-another']) {const button = document.getElementById(id) as HTMLButtonElement | null; if (button) button.disabled = working;}
@@ -61,9 +68,22 @@ async function busy(fn: () => Promise<void>) {
   try {await fn();} catch (error) {output.textContent = (error as Error).message;}
   finally {working = false; controls();}
 }
-function invalidatePreview() {
-  previewReady = false; element('preview').hidden = true;
-  element<HTMLInputElement>('confirm').checked = false; output.textContent = ''; controls();
+function synchronizePreview(ready: boolean) {
+  if (working || created) return;
+  const key = ready ? JSON.stringify({owner: owner.value, name: name.value, authors: parseAuthors(authors.value),
+    description: element<HTMLTextAreaElement>('description').value, template: template.value, visibility: element<HTMLSelectElement>('visibility').value}) : '';
+  if (key === previewKey) return;
+  previewKey = key; previewRevision++; previewReady = false; previewFailed = false; previewPending = !!key;
+  clearTimeout(previewTimer); clearTimeout(previewExpiry);
+  element('preview').hidden = true; element<HTMLInputElement>('confirm').checked = false; output.textContent = '';
+  element('creation-error').hidden = true;
+  element('review-status').textContent = key ? 'Preparing your review…' : 'Complete the package settings to prepare your review automatically.';
+  if (key) queuePreview();
+}
+function queuePreview() {
+  clearTimeout(previewTimer);
+  const revision = previewRevision;
+  previewTimer = setTimeout(() => {void preparePreview(revision);}, 450);
 }
 function availability(message: string, state = 'checking') {
   available = state === 'available';
@@ -113,12 +133,13 @@ async function loadApps() {
   installations = unknownInstallations();
   if (!profileReady) {appsLoading = false; renderApps(); controls(); return;}
   const controller = new AbortController(); appsAbort = controller;
+  const timeout = setTimeout(() => controller.abort(), 8000);
   appsLoading = true; renderApps(); controls();
   try {
     const result = await call('/api/github/apps', {owner: owner.value}, controller.signal);
     if (revision === appsRevision) installations = result;
   } catch { /* Optional lookup: leave status unknown and allow checking on GitHub. */ }
-  finally {if (revision === appsRevision) {appsLoading = false; renderApps(); controls();}}
+  finally {clearTimeout(timeout); if (revision === appsRevision) {checkedAppsOwner = owner.value; appsLoading = false; renderApps(); controls();}}
 }
 async function loadProfile() {
   await busy(async () => {
@@ -172,14 +193,9 @@ function normalizeAuthors() {
   authors.setSelectionRange(selectionStart, selectionEnd, selectionDirection);
 }
 authors.addEventListener('input', event => {if (!(event as InputEvent).isComposing) normalizeAuthors();});
-authors.addEventListener('compositionend', () => {normalizeAuthors(); controls();});
-form.addEventListener('input', event => {
-  if ((event.target as HTMLElement).closest('.app-confirmation')) return;
-  const step = (event.target as HTMLElement).closest<HTMLElement>('[data-step]')?.dataset.step;
-  if (step === '3') automationReviewed = false;
-  if (event.target === owner || (event.target as HTMLElement).id === 'visibility') automationReviewed = false;
-  invalidatePreview();
-});
+form.addEventListener('compositionstart', () => {composing = true; controls();});
+form.addEventListener('compositionend', () => {composing = false; normalizeAuthors(); controls();});
+form.addEventListener('input', controls);
 owner.addEventListener('change', () => {scheduleAvailability(); void loadApps();});
 name.addEventListener('input', scheduleAvailability);
 template.addEventListener('change', () => {
@@ -199,45 +215,80 @@ function focusStep(step: number) {
   heading.focus({preventScroll: true});
   cards[step - 1].scrollIntoView({behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start'});
 }
-element('continue-automation').onclick = () => {
-  if (!profileReady || !available || !template.value || !validAuthors()) return;
-  automationReviewed = true; controls(); focusStep(5);
-};
-form.addEventListener('submit', event => {event.preventDefault(); void busy(async () => {
-  if (!profileReady || !available || !template.value || !automationReviewed || !validAuthors() || created) throw new Error('Complete the package settings and review automation first.');
-  const plan = await call('/api/preview', {owner: owner.value, name: name.value, authors: parseAuthors(authors.value),
-    description: element<HTMLTextAreaElement>('description').value, template: template.value, visibility: element<HTMLSelectElement>('visibility').value});
-  planId = plan.id; previewReady = true;
-  element('target').textContent = `${plan.repository} · ${plan.spec.visibility}`;
-  element<HTMLInputElement>('confirm').checked = false;
-  const container = element('files'); container.replaceChildren(); element('content').hidden = true;
-  for (const path of Object.keys(plan.files)) {
-    const button = document.createElement('button'); button.type = 'button'; button.className = 'file'; button.textContent = path; button.setAttribute('aria-pressed', 'false');
-    button.onclick = () => {
-      for (const file of container.querySelectorAll('button')) file.setAttribute('aria-pressed', String(file === button));
-      element('content').textContent = plan.files[path]; element('content').hidden = false;
-      element('content').setAttribute('aria-label', `${path} content`);
-    };
-    container.appendChild(button);
+form.addEventListener('submit', event => {event.preventDefault();});
+async function preparePreview(revision: number) {
+  if (revision !== previewRevision || !previewKey || previewInFlight || working || created) return;
+  previewInFlight = true;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30000);
+  try {
+    // Serialize requests so a superseded response can be replaced without storing
+    // a new plan for every edit. Never render it or reuse its confirmation.
+    const plan = await call('/api/preview', {...JSON.parse(previewKey), ...(planId ? {replacePlanId: planId} : {})}, controller.signal);
+    planId = plan.id;
+    if (revision !== previewRevision) return;
+    previewReady = true;
+    previewPreparedAt = Date.now();
+    element('target').textContent = `${plan.repository} · ${plan.spec.visibility}`;
+    element<HTMLInputElement>('confirm').checked = false;
+    const container = element('files'); container.replaceChildren(); element('content').hidden = true;
+    for (const path of Object.keys(plan.files)) {
+      const button = document.createElement('button'); button.type = 'button'; button.className = 'file'; button.textContent = path; button.setAttribute('aria-pressed', 'false');
+      button.onclick = () => {
+        for (const file of container.querySelectorAll('button')) file.setAttribute('aria-pressed', String(file === button));
+        element('content').textContent = plan.files[path]; element('content').hidden = false;
+        element('content').setAttribute('aria-label', `${path} content`);
+      };
+      container.appendChild(button);
+    }
+    container.querySelector<HTMLButtonElement>('button')?.click();
+    element('preview').hidden = false; element('hint').textContent = `${Object.keys(plan.files).length} files. Select a file to inspect it.`;
+    element('review-status').textContent = 'Review the files and confirm below. Changes to your settings update this preview automatically.';
+    if (document.activeElement === cards[3].querySelector('h2')) focusStep(5);
+    previewExpiry = setTimeout(() => {previewKey = ''; controls();}, 14 * 60000);
+  } catch (error) {
+    if (revision === previewRevision) {previewFailed = true; element('review-status').textContent = (error as Error).message;}
+  } finally {
+    clearTimeout(timeout);
+    previewInFlight = false;
+    if (revision === previewRevision) previewPending = false;
+    else if (previewKey && !working && !created) queuePreview();
+    controls();
   }
-  container.querySelector<HTMLButtonElement>('button')?.click();
-  element('preview').hidden = false; element('hint').textContent = `${Object.keys(plan.files).length} files. Select a file to inspect it.`;
-  output.textContent = 'Preview ready. Review the files and confirm below. The preview is available for 15 minutes.';
-});});
+}
+element('retry-preview').onclick = () => {previewKey = ''; controls();};
+function creationProgress(active: boolean) {
+  clearInterval(creationTimer);
+  element('creation-progress').hidden = !active; element('create-spinner').hidden = !active;
+  element('create').setAttribute('aria-busy', String(active));
+  element('create-label').textContent = active ? 'Creating repository…' : 'Create repository';
+  if (active) {
+    const started = Date.now();
+    element('creation-elapsed').textContent = '0s elapsed';
+    creationTimer = setInterval(() => {element('creation-elapsed').textContent = `${Math.floor((Date.now() - started) / 1000)}s elapsed`;}, 1000);
+  }
+}
 element('create').onclick = () => void busy(async () => {
   if (!previewReady || !element<HTMLInputElement>('confirm').checked || created) throw new Error('Review a fresh preview and tick the confirmation checkbox.');
-  const result = await call('/api/create', {planId, confirm: true});
-  if (result.state !== 'complete') {output.textContent = result.error || 'Setup did not finish.'; return;}
-  created = true; previewReady = false;
-  output.textContent = '';
-  element<HTMLAnchorElement>('repository-link').href = `https://github.com/${result.repository}`;
-  element('success-copy').textContent = `${result.repository} was created and configured.`;
-  controls(); focusStep(6);
-  void loadApps();
+  if (Date.now() - previewPreparedAt >= 14 * 60000) {previewKey = ''; return;}
+  clearTimeout(previewExpiry); creationProgress(true); output.textContent = '';
+  element('creation-error').hidden = true;
+  try {
+    const result = await call('/api/create', {planId, confirm: true});
+    if (result.state !== 'complete') throw new Error(result.error || 'Setup did not finish.');
+    created = true; previewReady = false;
+    output.textContent = '';
+    element<HTMLAnchorElement>('repository-link').href = `https://github.com/${result.repository}`;
+    element('success-copy').textContent = `${result.repository} was created and configured.`;
+    controls(); focusStep(6);
+    void loadApps();
+  } catch (error) {element('creation-error').textContent = (error as Error).message; element('creation-error').hidden = false;}
+  finally {creationProgress(false);}
 });
 element('create-another').onclick = () => {
-  form.reset(); authors.value = defaultAuthor; planId = ''; created = false; automationReviewed = false;
-  invalidatePreview(); automation(); scheduleAvailability(); void loadApps(); name.focus();
+  form.reset(); authors.value = defaultAuthor; planId = ''; created = false;
+  element('creation-error').hidden = true;
+  automation(); scheduleAvailability(); void loadApps(); name.focus();
 };
 element('retry-profile').onclick = () => {void loadProfile();};
 document.getElementById('logout')?.addEventListener('click', () => void busy(async () => {await call('/auth/logout', {}); location.reload();}));

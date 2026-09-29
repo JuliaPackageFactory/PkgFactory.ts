@@ -34,7 +34,9 @@ test('all workflow steps have text status, and resume controls are absent for ev
     assert.match(html, /id="codecov-row" class="automation-row"/);
     assert.match(html, /id="juliaregistrator-row" class="automation-row"/);
     assert.match(html, /<select id="template"[^>]* required[^>]*><option value="" disabled selected>/);
-    assert.doesNotMatch(html, /continue-template|Continue to automation/);
+    assert.doesNotMatch(html, /continue-template|Continue to automation|continue-automation|Continue to review|preview-button|Preview package/);
+    assert.match(html, /id="create-spinner"[^>]*aria-hidden="true" hidden/);
+    assert.match(html, /role="progressbar" aria-label="Repository creation in progress"/);
     assert.match(html, /data-step="6"[\s\S]*id="success-panel"/);
   }
 });

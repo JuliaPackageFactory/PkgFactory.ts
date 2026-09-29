@@ -41,15 +41,17 @@ export function page(csrf: string, publicWeb: boolean, authenticated: boolean) {
           ${githubAppRow('juliaregistrator', 'Registrator', "For publishing a public package to Julia’s General registry when it is ready. Optional for repository creation.")}
           <p id="apps-help" class="permission-copy">Apps can be configured after creation. If access is limited to selected repositories, add the new repository on GitHub.</p>
           <button id="refresh-apps" class="inline-action" type="button">Refresh app status</button>
-          <div class="step-actions"><button id="continue-automation" class="button button-secondary" type="button" disabled>Continue to review</button></div>
+          <p class="permission-copy">Your review is prepared automatically after these checks. Optional apps can be installed later.</p>
         </div></section>
       </fieldset>
       <section class="workflow-card create-card" data-step="5"><div class="card-heading"><span class="step-badge">5</span><div><div class="title-row"><h2 tabindex="-1">Review and create</h2><span class="step-state" role="status">Upcoming</span></div><p>Preview the generated files before creating your repository.</p></div></div><div class="card-body">
-        <button id="preview-button" class="button button-primary" type="submit" disabled>Preview package</button>
-        <div id="preview" hidden><p id="target"></p><p id="hint"></p><div class="file-preview"><div id="files" role="group" aria-label="Generated files"></div><pre id="content" tabindex="0" aria-label="Selected file content" hidden></pre></div>
+        <div class="review-status"><span id="review-spinner" class="spinner" aria-hidden="true" hidden></span><p id="review-status" role="status">Complete the package settings to prepare your review automatically.</p><button id="retry-preview" class="inline-action" type="button" hidden>Retry</button></div>
+        <div id="review-content" aria-busy="false"><div id="preview" hidden><p id="target"></p><p id="hint"></p><div class="file-preview"><div id="files" role="group" aria-label="Generated files"></div><pre id="content" tabindex="0" aria-label="Selected file content" hidden></pre></div>
           <label class="check-field"><input type="checkbox" id="confirm"><span>I reviewed this preview and want to create this repository.</span></label>
-          <button id="create" class="button button-primary" type="button" disabled>Create repository</button>
-        </div>
+          <button id="create" class="button button-primary" type="button" aria-busy="false" disabled><span id="create-spinner" class="spinner" aria-hidden="true" hidden></span><span id="create-label">Create repository</span></button>
+          <div id="creation-progress" class="creation-progress" hidden><div class="progress-heading"><p role="status">Creating your repository and configuring GitHub automation…</p><span id="creation-elapsed" aria-live="off"></span></div><div class="progress-track" role="progressbar" aria-label="Repository creation in progress"><span></span></div><p>Keep this page open. This can take a little while.</p></div>
+          <div id="creation-error" class="notice notice-error" role="alert" hidden></div>
+        </div></div>
       </div></section>
       <section class="workflow-card" data-step="6"><div class="card-heading"><span class="step-badge">6</span><div><div class="title-row"><h2 tabindex="-1">Use your package</h2><span class="step-state" role="status">Upcoming</span></div><p>Open your repository and take the next steps.</p></div></div><div class="card-body">
         <p id="success-placeholder" class="permission-copy">Your repository link and next steps will appear here after creation.</p>

@@ -8,7 +8,11 @@ export async function api(request: Request, factory: Factory, subject: string, c
   if (path === '/api/github/apps' && request.method === 'POST') return json(await factory.githubApps(await readJson(request), credentials(), request.signal));
   if (path === '/api/github/availability' && request.method === 'POST') return json(await factory.repositoryAvailability(await readJson(request), credentials(), request.signal));
   if (path === '/api/preview' && request.method === 'POST') {
-    return json(await factory.previewForAccount(await readJson(request), credentials(), request.signal));
+    const data = await readJson(request);
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return json({error: 'Invalid request input'}, 400);
+    const {replacePlanId, ...spec} = data;
+    if (replacePlanId !== undefined && (typeof replacePlanId !== 'string' || !/^[a-f0-9-]{36}$/.test(replacePlanId))) return json({error: 'Valid replacePlanId required'}, 400);
+    return json(await factory.previewForAccount(spec, credentials(), request.signal, replacePlanId));
   }
   if (['/api/create', '/api/resume', '/api/status'].includes(path) && request.method === 'POST') {
     const data = await readJson(request);

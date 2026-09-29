@@ -93,6 +93,11 @@ test('Worker routes, Durable Object persistence, OAuth PKCE and CSRF rejection',
     const shared = state.get(state.idFromName('pkgfactory-v1'));
     const saved = await (await shared.fetch('https://state', {method: 'POST', body: JSON.stringify({action: 'get', subject: '42', id: plan.id})})).json() as any;
     assert.equal(saved.subject, '42'); assert.equal(saved.plan.files['Project.toml'], plan.files['Project.toml']);
+    const replacement = await mf.dispatchFetch('https://pkgfactory.test/api/preview', {method: 'POST', headers, body: JSON.stringify({...plan.spec, description: 'Edited', replacePlanId: plan.id})});
+    assert.equal(replacement.status, 200); const updated = await replacement.json() as any;
+    assert.equal(await (await shared.fetch('https://state', {method: 'POST', body: JSON.stringify({action: 'get', subject: '42', id: plan.id})})).json(), null);
+    const after = await (await shared.fetch('https://state', {method: 'POST', body: JSON.stringify({action: 'snapshot', subject: '42'})})).json() as any;
+    assert.equal(after.entries.length, 1); assert.equal(after.entries[0][0], updated.id);
     const noCsrf = await mf.dispatchFetch('https://pkgfactory.test/api/create', {method: 'POST', headers: {...headers, 'X-PkgFactory-CSRF': 'wrong'}, body: JSON.stringify({planId: plan.id, confirm: true})}); assert.equal(noCsrf.status, 403);
     const logout = await mf.dispatchFetch('https://pkgfactory.test/auth/logout', {method: 'POST', headers, body: '{}'}); assert.equal(logout.status, 200);
     assert.equal((await mf.dispatchFetch('https://pkgfactory.test/api/templates', {headers})).status, 401);
