@@ -10,6 +10,7 @@ test('each completed section advances one ready step, and invalidating an earlie
   assert.deepEqual(workflowStates([true, true, true, false, false]), ['complete', 'complete', 'complete', 'ready', 'upcoming']);
   assert.deepEqual(workflowStates([true, true, true, true, false]), ['complete', 'complete', 'complete', 'complete', 'ready']);
   assert.deepEqual(workflowStates([true, true, true, true, true]), Array(5).fill('complete'));
+  assert.deepEqual(workflowStates([true, true, true, true, true, false]), ['complete', 'complete', 'complete', 'complete', 'complete', 'ready']);
   assert.deepEqual(workflowStates([true, false, true, true, false]), ['complete', 'ready', 'upcoming', 'upcoming', 'upcoming']);
   assert.deepEqual(workflowStates([true, true, false, true, false]), ['complete', 'complete', 'ready', 'upcoming', 'upcoming']);
 });
@@ -28,9 +29,12 @@ test('typed and pasted author separators become newlines without changing text l
 test('all workflow steps have text status, and resume controls are absent for every Web entry point', () => {
   for (const publicWeb of [false, true]) for (const authenticated of [false, true]) {
     const html = page('csrf', publicWeb, authenticated);
-    assert.equal((html.match(/class="step-state" role="status"/g) ?? []).length, 5);
+    assert.equal((html.match(/class="step-state" role="status"/g) ?? []).length, 6);
     assert.doesNotMatch(html, /Resume interrupted setup|id="recovery"|id="planId"|id="resume"|id="status"/);
     assert.match(html, /id="codecov-row" class="automation-row"/);
     assert.match(html, /id="juliaregistrator-row" class="automation-row"/);
+    assert.match(html, /<select id="template"[^>]* required[^>]*><option value="" disabled selected>/);
+    assert.doesNotMatch(html, /continue-template|Continue to automation/);
+    assert.match(html, /data-step="6"[\s\S]*id="success-panel"/);
   }
 });

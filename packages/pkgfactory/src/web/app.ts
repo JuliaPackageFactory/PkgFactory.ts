@@ -8,10 +8,11 @@ const output = element<HTMLOutputElement>('result');
 const owner = element<HTMLSelectElement>('owner');
 const name = element<HTMLInputElement>('package-name');
 const authors = element<HTMLTextAreaElement>('authors');
+const template = element<HTMLSelectElement>('template');
 const csrf = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')!.content;
 const cards = [...document.querySelectorAll<HTMLElement>('.workflow-card[data-step]')];
 let profileReady = false, working = false, available = false, previewReady = false, created = false;
-let templateReviewed = false, automationReviewed = false, planId = '';
+let automationReviewed = false, planId = '';
 let availabilityRevision = 0, availabilityTimer: ReturnType<typeof setTimeout> | undefined, availabilityAbort: AbortController | undefined;
 let appsRevision = 0, appsAbort: AbortController | undefined, appsLoading = false;
 let installations: AppInstallations = unknownInstallations();
@@ -34,7 +35,7 @@ function validAuthors() {
 }
 function controls() {
   const metadataReady = validAuthors();
-  const states = workflowStates([profileReady, available, templateReviewed && metadataReady, automationReviewed, created]);
+  const states = workflowStates([profileReady, available, !!template.value && metadataReady, automationReviewed, created, false]);
   for (const [index, card] of cards.entries()) {
     const state = states[index];
     card.classList.toggle('is-complete', state === 'complete');
@@ -45,11 +46,13 @@ function controls() {
     if (label.textContent !== text) label.textContent = text;
   }
   fields.disabled = working || created;
-  element<HTMLButtonElement>('continue-template').disabled = working || created || !profileReady || !available || !metadataReady;
   element<HTMLButtonElement>('continue-automation').disabled = working || created || states[2] !== 'complete';
   element<HTMLButtonElement>('preview-button').disabled = working || created || states[4] !== 'ready';
   element<HTMLButtonElement>('create').disabled = working || created || !previewReady || !element<HTMLInputElement>('confirm').checked;
   element<HTMLButtonElement>('refresh-apps').disabled = working || created || !profileReady || appsLoading;
+  element<HTMLInputElement>('confirm').disabled = working || created;
+  element('success-placeholder').hidden = created;
+  element('success-panel').hidden = !created;
   for (const id of ['logout', 'retry-profile', 'create-another']) {const button = document.getElementById(id) as HTMLButtonElement | null; if (button) button.disabled = working;}
 }
 async function busy(fn: () => Promise<void>) {
@@ -59,7 +62,7 @@ async function busy(fn: () => Promise<void>) {
   finally {working = false; controls();}
 }
 function invalidatePreview() {
-  previewReady = false; element('preview').hidden = true; element('success-panel').hidden = true;
+  previewReady = false; element('preview').hidden = true;
   element<HTMLInputElement>('confirm').checked = false; output.textContent = ''; controls();
 }
 function availability(message: string, state = 'checking') {
@@ -145,13 +148,21 @@ async function loadProfile() {
   });
 }
 function automation() {
-  const minimum = element<HTMLSelectElement>('template').value === 'minimum';
-  element('documenter-row').hidden = minimum; element('codecov-row').hidden = minimum;
-  element('juliaregistrator-row').hidden = element<HTMLSelectElement>('visibility').value === 'private';
-  element('registration-guide').hidden = element<HTMLSelectElement>('visibility').value === 'private';
-  element('automation-description').textContent = minimum ? 'Minimum includes package tests and CI. Select Simple or All-in-one for documentation and releases.' : 'Documenter and TagBot are configured automatically.';
-  const noApps = minimum && element<HTMLSelectElement>('visibility').value === 'private';
-  element('apps-help').hidden = noApps; element('refresh-apps').hidden = noApps;
+  const minimum = template.value === 'minimum';
+  const documentation = !!template.value && !minimum;
+  const privateRepository = element<HTMLSelectElement>('visibility').value === 'private';
+  element('documenter-state').textContent = documentation ? 'Automatic' : minimum ? 'Not included' : 'Choose a template';
+  element('documenter-state').className = documentation ? 'configured-pill' : 'app-state';
+  element('documenter-detail').textContent = documentation ? 'Deploy key and DOCUMENTER_KEY repository secret are configured during creation.'
+    : 'Select Simple or All-in-one to include documentation deployment.';
+  element('codecov-description').textContent = documentation ? 'Coverage reports and pull request checks. Uploads use GitHub OIDC; no upload token is required.'
+    : 'Select Simple or All-in-one to include coverage uploads. The app can be configured at any time.';
+  element('juliaregistrator-description').textContent = privateRepository ? 'General registry registration requires a public repository. You can publish this package after making it public.'
+    : 'For publishing a public package to Julia’s General registry when it is ready. Optional for repository creation.';
+  element('registration-guide').hidden = privateRepository;
+  element('automation-description').textContent = !template.value ? 'Choose a template to see which automation will be configured.'
+    : minimum ? 'Minimum includes package tests and CI. Documentation, coverage, and release workflows are not included.'
+    : 'Documenter and TagBot are configured automatically.';
 }
 function normalizeAuthors() {
   const normalized = normalizeAuthorSeparators(authors.value);
@@ -165,13 +176,16 @@ authors.addEventListener('compositionend', () => {normalizeAuthors(); controls()
 form.addEventListener('input', event => {
   if ((event.target as HTMLElement).closest('.app-confirmation')) return;
   const step = (event.target as HTMLElement).closest<HTMLElement>('[data-step]')?.dataset.step;
-  if (step === '3') {templateReviewed = false; automationReviewed = false;}
+  if (step === '3') automationReviewed = false;
   if (event.target === owner || (event.target as HTMLElement).id === 'visibility') automationReviewed = false;
   invalidatePreview();
 });
 owner.addEventListener('change', () => {scheduleAvailability(); void loadApps();});
 name.addEventListener('input', scheduleAvailability);
-element('template').addEventListener('change', automation);
+template.addEventListener('change', () => {
+  automation(); controls();
+  if (template.value && profileReady && available && validAuthors()) focusStep(4);
+});
 element('visibility').addEventListener('change', automation);
 element('confirm').addEventListener('input', event => {event.stopPropagation(); controls();});
 for (const slug of appSlugs) element(`${slug}-confirmed`).addEventListener('input', () => {
@@ -185,18 +199,14 @@ function focusStep(step: number) {
   heading.focus({preventScroll: true});
   cards[step - 1].scrollIntoView({behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start'});
 }
-element('continue-template').onclick = () => {
-  if (!profileReady || !available || !validAuthors()) return;
-  templateReviewed = true; controls(); focusStep(4);
-};
 element('continue-automation').onclick = () => {
-  if (!profileReady || !available || !templateReviewed) return;
+  if (!profileReady || !available || !template.value || !validAuthors()) return;
   automationReviewed = true; controls(); focusStep(5);
 };
 form.addEventListener('submit', event => {event.preventDefault(); void busy(async () => {
-  if (!profileReady || !available || !templateReviewed || !automationReviewed || !validAuthors() || created) throw new Error('Complete the package settings and review automation first.');
+  if (!profileReady || !available || !template.value || !automationReviewed || !validAuthors() || created) throw new Error('Complete the package settings and review automation first.');
   const plan = await call('/api/preview', {owner: owner.value, name: name.value, authors: parseAuthors(authors.value),
-    description: element<HTMLTextAreaElement>('description').value, template: element<HTMLSelectElement>('template').value, visibility: element<HTMLSelectElement>('visibility').value});
+    description: element<HTMLTextAreaElement>('description').value, template: template.value, visibility: element<HTMLSelectElement>('visibility').value});
   planId = plan.id; previewReady = true;
   element('target').textContent = `${plan.repository} · ${plan.spec.visibility}`;
   element<HTMLInputElement>('confirm').checked = false;
@@ -218,14 +228,15 @@ element('create').onclick = () => void busy(async () => {
   if (!previewReady || !element<HTMLInputElement>('confirm').checked || created) throw new Error('Review a fresh preview and tick the confirmation checkbox.');
   const result = await call('/api/create', {planId, confirm: true});
   if (result.state !== 'complete') {output.textContent = result.error || 'Setup did not finish.'; return;}
-  created = true; previewReady = false; element('preview').hidden = true;
-  output.textContent = `${result.repository} was created and configured.`;
+  created = true; previewReady = false;
+  output.textContent = '';
   element<HTMLAnchorElement>('repository-link').href = `https://github.com/${result.repository}`;
-  element('success-copy').textContent = `${result.repository} was created and configured.`; element('success-panel').hidden = false;
+  element('success-copy').textContent = `${result.repository} was created and configured.`;
+  controls(); focusStep(6);
   void loadApps();
 });
 element('create-another').onclick = () => {
-  form.reset(); authors.value = defaultAuthor; planId = ''; created = false; templateReviewed = false; automationReviewed = false;
+  form.reset(); authors.value = defaultAuthor; planId = ''; created = false; automationReviewed = false;
   invalidatePreview(); automation(); scheduleAvailability(); void loadApps(); name.focus();
 };
 element('retry-profile').onclick = () => {void loadProfile();};
