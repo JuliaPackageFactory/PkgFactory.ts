@@ -138,7 +138,7 @@ test('success preserves review and combines relevant next steps in one plain par
     assert.equal(f.$('documentation-link').href, 'https://docs.example.test/'); assert.equal(f.$('codecov-followup').hidden, false);
     assert.equal(f.$('next-steps').tagName, 'P');
     assert.equal(f.$('next-steps').querySelector('section, h3, button, .button, .success-actions'), null);
-    assert.equal(f.$('next-steps').textContent, 'Follow the builds in GitHub Actions and view your documentation. Ensure Codecov can access this repository. When ready, follow the General registration guidelines to publish your package.');
+    assert.equal(f.$('next-steps').textContent, 'Follow the builds in GitHub Actions and view your documentation. Ensure Codecov can access this repository. If you wish to register your package in Julia’s General registry, a separate registration process is required.');
     assert.equal(f.scrolls.at(-1), '6');
     const completedReview = f.$('review-status').textContent;
     f.state.appsFailure = true; f.$('codecov-followup').querySelector('a').click(); f.w.dispatchEvent(new f.w.Event('focus'));
