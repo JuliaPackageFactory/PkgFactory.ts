@@ -38,7 +38,6 @@ export function page(csrf: string, publicWeb: boolean, authenticated: boolean) {
         <section class="workflow-card" data-step="4"><div class="card-heading"><span class="step-badge">4</span><div><div class="title-row"><h2 tabindex="-1">Configure automation</h2><span class="step-state" role="status">Upcoming</span></div><p id="automation-description">Documenter and TagBot are configured automatically.</p></div></div><div class="card-body">
           <div id="documenter-row" class="automation-row"><div class="automation-copy"><strong>Documenter deployment</strong><small id="documenter-detail">Select Simple or All-in-one to include documentation deployment.</small></div><span id="documenter-state" class="app-state">Choose a template</span></div>
           ${githubAppRow('codecov', 'Codecov', 'Coverage reports and pull request checks. Uploads use GitHub OIDC; no upload token is required.')}
-          ${githubAppRow('juliaregistrator', 'Registrator', "For publishing a public package to Julia’s General registry when it is ready. Optional for repository creation.")}
           <p id="apps-help" class="permission-copy">Apps can be configured after creation. If access is limited to selected repositories, add the new repository on GitHub.</p>
           <button id="refresh-apps" class="inline-action" type="button">Refresh app status</button>
           <p class="permission-copy">Your review is prepared automatically after these checks. Optional apps can be installed later.</p>

@@ -11,6 +11,7 @@ const authors = element<HTMLTextAreaElement>('authors');
 const template = element<HTMLSelectElement>('template');
 const csrf = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')!.content;
 const cards = [...document.querySelectorAll<HTMLElement>('.workflow-card[data-step]')];
+const displayedApps = appSlugs.filter(slug => document.getElementById(`${slug}-row`));
 let profileReady = false, working = false, available = false, previewReady = false, created = false;
 let planId = '', checkedAppsOwner = '', composing = false;
 let previewKey = '', previewRevision = 0, previewInFlight = false, previewPending = false, previewFailed = false, previewPreparedAt = 0;
@@ -108,18 +109,20 @@ function scheduleAvailability() {
 }
 function renderApps() {
   const confirmed = confirmedApps.get(owner.value);
-  for (const slug of appSlugs) {
+  for (const slug of displayedApps) {
+    const excluded = slug === 'codecov' && template.value === 'minimum';
     const installation = installations[slug];
     const selfConfirmed = installation.state === 'unknown' && !!confirmed?.has(slug);
     const installed = installation.state === 'installed' || selfConfirmed;
     const badge = element(`${slug}-state`);
-    badge.className = installed ? 'configured-pill' : 'app-state';
-    badge.textContent = appsLoading ? 'Checking…' : installed ? 'Installed' : installation.state === 'suspended' ? 'Suspended' : installation.state === 'not-installed' ? 'Not installed' : 'Check on GitHub';
+    badge.className = excluded || installed ? 'configured-pill' : 'app-state';
+    badge.textContent = excluded ? 'Not included' : appsLoading ? 'Checking…' : installed ? 'Installed' : installation.state === 'suspended' ? 'Suspended' : installation.state === 'not-installed' ? 'Not installed' : 'Check on GitHub';
     // A manual confirmation is explicitly labelled, scoped to the selected owner,
     // and never treated as evidence that the future repository has app access.
-    element(`${slug}-confirmation`).hidden = appsLoading || installation.state !== 'unknown';
+    element(`${slug}-confirmation`).hidden = excluded || appsLoading || installation.state !== 'unknown';
     element<HTMLInputElement>(`${slug}-confirmed`).checked = selfConfirmed;
-    element(`${slug}-detail`).textContent = appsLoading ? `Checking apps for @${owner.value}…`
+    element(`${slug}-detail`).textContent = excluded ? 'Coverage uploads are not included in the Minimum template.'
+      : appsLoading ? `Checking apps for @${owner.value}…`
       : selfConfirmed ? `Confirmed by you for @${owner.value}. Check access for the new repository after creation.`
       : installation.state === 'installed' ? installation.selection === 'all' ? `Installed for all repositories owned by @${owner.value}.` : `Installed for selected repositories owned by @${owner.value}. Add the new repository after creation.`
       : installation.state === 'suspended' ? `Installation for @${owner.value} is suspended. Review it on GitHub.`
@@ -173,17 +176,16 @@ function automation() {
   const documentation = !!template.value && !minimum;
   const privateRepository = element<HTMLSelectElement>('visibility').value === 'private';
   element('documenter-state').textContent = documentation ? 'Automatic' : minimum ? 'Not included' : 'Choose a template';
-  element('documenter-state').className = documentation ? 'configured-pill' : 'app-state';
+  element('documenter-state').className = template.value ? 'configured-pill' : 'app-state';
   element('documenter-detail').textContent = documentation ? 'Deploy key and DOCUMENTER_KEY repository secret are configured during creation.'
     : 'Select Simple or All-in-one to include documentation deployment.';
   element('codecov-description').textContent = documentation ? 'Coverage reports and pull request checks. Uploads use GitHub OIDC; no upload token is required.'
     : 'Select Simple or All-in-one to include coverage uploads. The app can be configured at any time.';
-  element('juliaregistrator-description').textContent = privateRepository ? 'General registry registration requires a public repository. You can publish this package after making it public.'
-    : 'For publishing a public package to Julia’s General registry when it is ready. Optional for repository creation.';
   element('registration-guide').hidden = privateRepository;
   element('automation-description').textContent = !template.value ? 'Choose a template to see which automation will be configured.'
     : minimum ? 'Minimum includes package tests and CI. Documentation, coverage, and release workflows are not included.'
     : 'Documenter and TagBot are configured automatically.';
+  renderApps();
 }
 function normalizeAuthors() {
   const normalized = normalizeAuthorSeparators(authors.value);
@@ -204,7 +206,7 @@ template.addEventListener('change', () => {
 });
 element('visibility').addEventListener('change', automation);
 element('confirm').addEventListener('input', event => {event.stopPropagation(); controls();});
-for (const slug of appSlugs) element(`${slug}-confirmed`).addEventListener('input', () => {
+for (const slug of displayedApps) element(`${slug}-confirmed`).addEventListener('input', () => {
   const confirmed = confirmedApps.get(owner.value) ?? new Set<string>();
   if (element<HTMLInputElement>(`${slug}-confirmed`).checked) confirmed.add(slug); else confirmed.delete(slug);
   confirmedApps.set(owner.value, confirmed); renderApps();
