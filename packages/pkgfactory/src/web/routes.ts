@@ -5,6 +5,7 @@ export async function api(request: Request, factory: Factory, subject: string, c
   const path = new URL(request.url).pathname;
   if (path === '/api/templates' && request.method === 'GET') return json(listTemplates());
   if (path === '/api/github/profile' && request.method === 'GET') return json(await factory.githubProfile(credentials(), request.signal));
+  if (path === '/api/github/apps' && request.method === 'POST') return json(await factory.githubApps(await readJson(request), credentials(), request.signal));
   if (path === '/api/github/availability' && request.method === 'POST') return json(await factory.repositoryAvailability(await readJson(request), credentials(), request.signal));
   if (path === '/api/preview' && request.method === 'POST') {
     return json(await factory.previewForAccount(await readJson(request), credentials(), request.signal));

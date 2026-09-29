@@ -19,6 +19,8 @@ test('local Web previews, creates, and refuses invalid Origin, CSRF, and Host', 
     const headers = {'Content-Type': 'application/json', Origin: origin, 'X-PkgFactory-CSRF': csrf};
     const profile = await (await fetch(origin + '/api/github/profile')).json() as any;
     assert.equal(profile.user.name, 'Test Author');
+    const apps = await fetch(origin + '/api/github/apps', {method: 'POST', headers, body: JSON.stringify({owner: 'tester'})});
+    assert.deepEqual(await apps.json(), {codecov: {state: 'unknown'}, juliaregistrator: {state: 'unknown'}});
     const availability = await fetch(origin + '/api/github/availability', {method: 'POST', headers, body: JSON.stringify({owner: 'tester', name: 'Local'})});
     assert.equal((await availability.json() as any).available, true);
     const body = JSON.stringify({owner: 'tester', name: 'Local', authors: ['Tester'], template: 'minimum'});

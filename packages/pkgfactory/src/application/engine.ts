@@ -2,6 +2,7 @@ import { planPackage, validatePlan, markerPath, type PackagePlan } from '../core
 import { specSchema } from '../core/spec.js';
 import { base64, decode, sha256, unbase64, utf8 } from '../core/encoding.js';
 import { GitHub, GitHubError } from '../github/client.js';
+import { organizationInstallations, unknownInstallations } from '../github/apps.js';
 import { generateDeployKey, sealSecret, type KeyAlgorithm } from '../github/keys.js';
 import type { Operation, StateStore } from './state.js';
 export class FactoryError extends Error {
@@ -80,6 +81,21 @@ export class Factory {
       const existing = await github.request('GET', `/repos/${repository}`, undefined, true);
       return {repository, available: !existing};
     } catch (error) {throw this.accountError(error);}
+  }
+  async githubApps(input: unknown, c: Credentials, signal = new AbortController().signal) {
+    const {owner} = specSchema.pick({owner: true}).parse(input);
+    const github = this.client(c, signal);
+    const viewer = await this.viewer(github, c);
+    await this.requireOwner(github, viewer.login, owner);
+    if (viewer.login.toLowerCase() === owner.toLowerCase()) return unknownInstallations();
+    try {return await organizationInstallations(github, owner);}
+    catch (error) {
+      signal.throwIfAborted();
+      // Installation reads are optional; never interpret missing scope, rate
+      // limits, or a failed lookup as evidence that an app is not installed.
+      if (error instanceof GitHubError && error.status !== 401) return unknownInstallations();
+      throw this.accountError(error);
+    }
   }
   private accountError(error: unknown) {
     if (!(error instanceof GitHubError)) return error;
