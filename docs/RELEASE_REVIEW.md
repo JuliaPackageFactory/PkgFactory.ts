@@ -1,6 +1,7 @@
 # 本番切替前レビュー
 
-公開するコードは [PkgFactory.ts PR #1](https://github.com/JuliaPackageFactory/PkgFactory.ts/pull/1) です。
+公開するコードは、mainのCIに成功し、ステージングへ配備して確認したコミットです。
+`Release (manual)` で確認済みCIの実行IDを指定すると、そのコミットを本番へ反映します。
 本番・npmの公開と旧リポジトリのアーカイブは、成果と切替手順の確認後に行います。
 現在、公開MCPの認可・3テンプレートの実作成・Documenter公開まで成功しています。
 公開Edgeでの切断・ロック保持・状態照合・明示的再開も成功しました。
@@ -37,7 +38,7 @@
 1. **npm**: このPCは `npm whoami` が `ENEEDAUTH` です。`juliapackagefactory` organizationの公開権限があるアカウントで `npm login --auth-type=web` を行います。アカウント/organizationを未作成なら先に作成します。
 2. **本番GitHub OAuth App**: Client IDは `Ov23liW9Mpoaeo70n071` を設定済みです。対応するClient secretを用意します。検証用のsecretとは別です。secretはチャットやGitへ貼りません。
 3. **Cloudflare本番**: 公開承認後、本番専用KVとWorker `pkgfactory` を書込み停止状態で用意します。`SESSION_KEY` を生成し、本番の `GITHUB_OAUTH_CLIENT_SECRET` をWorker Secretへ登録します。
-4. **継続的な公開**: ステージングはmainの全CI成功後に自動配備します。GitHub Actionsの `staging` environmentへCloudflare用API token/account IDを登録し、deployment branchをmainに限定します。`production` / `npm` environmentには承認者を設定します。npmの初回公開後はTrusted Publishingを `release.yml` / environment `npm` に結び付けます。
+4. **継続的な公開**: ステージングはmainの全CI成功後に自動配備します。確認後、`Release (manual)` をtarget `production`・確認したCIの実行IDで起動すると、そのコミットを本番へ反映します。GitHub Actionsの `staging` / `production` environmentへCloudflare用API token/account IDを登録し、deployment branchをmainに限定します。`npm` environmentには承認者を設定し、初回公開後はTrusted Publishingを `release.yml` / environment `npm` に結び付けます。
 5. **継続E2E**: `PKGFACTORY_E2E_TOKEN` の新版Actions Secretへの登録は確認済みです。旧Template repositories E2Eを停止してから、新版mainで `PKGFACTORY_TEMPLATE_E2E_ENABLED=true` を設定します。登録トークンの実権限は初回E2Eで確認します。[手順とテストの役割](TESTING.md) を参照してください。
 
 GitHub OAuthの画面ごとの設定値とsecret登録手順は [DEPLOYMENT.md](DEPLOYMENT.md) を参照してください。
