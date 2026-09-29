@@ -7,6 +7,57 @@ import { page } from '../packages/pkgfactory/src/web/page.js';
 
 const credentials = {subject: '42', token: 'private-token'};
 const membership = (login: string, role = 'admin', state = 'active') => ({role, state, organization: {login}});
+
+test('app status checks the selected organization and paginates installation results', async () => {
+  const calls: string[] = [];
+  const factory = new Factory(new MemoryStore(), {fetcher: async (input, init) => {
+    assert.equal(init?.method, 'GET');
+    const url = new URL(String(input)); calls.push(url.pathname);
+    if (url.pathname === '/user') return Response.json({id: 42, login: 'tester'});
+    if (url.pathname === '/user/memberships/orgs/Owned') return Response.json(membership('Owned'));
+    assert.equal(url.pathname, '/orgs/Owned/installations');
+    return Response.json({installations: url.searchParams.get('page') === '1'
+      ? Array.from({length: 100}, () => ({app_slug: 'unrelated'}))
+      : [{app_slug: 'codecov', repository_selection: 'selected', suspended_at: null}, {app_slug: 'juliaregistrator', repository_selection: 'all', suspended_at: '2026-09-01'}]});
+  }});
+  assert.deepEqual(await factory.githubApps({owner: 'Owned'}, credentials), {
+    codecov: {state: 'installed', selection: 'selected'}, juliaregistrator: {state: 'suspended', selection: 'all'},
+  });
+  assert.equal(calls.filter(path => path === '/orgs/Owned/installations').length, 2);
+  calls.length = 0;
+  assert.deepEqual(await factory.githubApps({owner: 'TESTER'}, credentials), {codecov: {state: 'unknown'}, juliaregistrator: {state: 'unknown'}});
+  assert.deepEqual(calls, ['/user']);
+});
+
+test('missing app-read permissions or a failed lookup are unknown, never not-installed', async () => {
+  for (const status of [200, 403, 404, 429, 500]) {
+    const factory = new Factory(new MemoryStore(), {fetcher: async input => {
+      const path = new URL(String(input)).pathname;
+      if (path === '/user') return Response.json({id: 42, login: 'tester'});
+      if (path === '/user/memberships/orgs/Owned') return Response.json(membership('Owned'));
+      return Response.json({installations: []}, {status});
+    }});
+    const result = await factory.githubApps({owner: 'Owned'}, credentials);
+    assert.equal(result.codecov.state, status === 200 ? 'not-installed' : 'unknown');
+    assert.equal(result.juliaregistrator.state, status === 200 ? 'not-installed' : 'unknown');
+  }
+});
+
+test('app reads reject another identity or an unauthorized owner and stop on cancellation', async () => {
+  const calls: string[] = [];
+  const factory = new Factory(new MemoryStore(), {fetcher: async input => {
+    const path = new URL(String(input)).pathname; calls.push(path);
+    return Response.json(path === '/user' ? {id: 42, login: 'tester'} : membership('Member', 'member'));
+  }});
+  await assert.rejects(factory.githubApps({owner: 'Member'}, credentials), {code: 'owner'});
+  await assert.rejects(factory.githubApps({owner: 'tester'}, {...credentials, subject: '99'}), {code: 'identity'});
+  assert(!calls.some(path => path.endsWith('/installations')));
+  const controller = new AbortController(); controller.abort();
+  const count = calls.length;
+  await assert.rejects(factory.githubApps({owner: 'Owned'}, credentials, controller.signal));
+  assert.equal(calls.length, count);
+});
+
 test('profile paginates memberships, includes only active owners, and never exposes credentials', async () => {
   let pages = 0;
   const factory = new Factory(new MemoryStore(), {fetcher: async (input) => {
