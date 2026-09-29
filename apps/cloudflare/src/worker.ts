@@ -19,6 +19,7 @@ async function web(request: Request, env: Env): Promise<Response> {
   if (url.pathname === '/app.js' && request.method === 'GET') return new Response(assets.js, {headers: {'Content-Type': 'text/javascript'}});
   if (url.pathname === '/style.css' && request.method === 'GET') return new Response(assets.css, {headers: {'Content-Type': 'text/css'}});
   if (url.pathname === '/assets/logo.svg' && request.method === 'GET') return new Response(assets.logo, {headers: {'Content-Type': 'image/svg+xml'}});
+  if (url.pathname === '/assets/github.svg' && request.method === 'GET') return new Response(assets.github, {headers: {'Content-Type': 'image/svg+xml'}});
   const identity = await session(request, env);
   if (url.pathname === '/' && request.method === 'GET') return new Response(page(identity?.csrf ?? '', true, !!identity), {headers: {'Content-Type': 'text/html; charset=utf-8'}});
   if (url.pathname.startsWith('/api/')) {

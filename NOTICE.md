@@ -8,3 +8,7 @@ workflow is adapted for authorization-code PKCE, preview, and saved-plan resume.
 Rendering intentionally escapes Julia strings and is not a byte-compatible legacy API.
 OAuth integration uses @cloudflare/workers-oauth-provider (MIT).
 MCP uses the official @modelcontextprotocol/sdk (MIT).
+
+The GitHub Invertocat logo in packages/pkgfactory/src/web/github.svg is provided
+by GitHub and is subject to its logo usage guidelines:
+https://brand.github.com/foundations/logo
