@@ -28,10 +28,10 @@ jobs:
       matrix:
         package: [TestMinimum, TestSimple, TestAllInOne]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '24'
           cache: npm
@@ -45,10 +45,10 @@ jobs:
         env:
           PKGFACTORY_E2E_TOKEN: ${{ secrets.PKGFACTORY_E2E_TOKEN }}
         run: npm run e2e:templates -- --package=${{ matrix.package }} --publish
-      - uses: julia-actions/setup-julia@v3
+      - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3.0.2
         with:
           version: '1.12'
-      - uses: julia-actions/cache@v3
+      - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3.1.0
       - name: Test the published Julia package without the publishing token
         env:
           JET_TEST: 'true'
@@ -58,7 +58,7 @@ jobs:
         if: matrix.package != 'TestMinimum'
         working-directory: ${{ steps.snapshot.outputs.package_path }}
         run: julia --project=docs --startup-file=no -e 'using Pkg; Pkg.develop(PackageSpec(path=pwd())); Pkg.instantiate(); include("docs/make.jl")'
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: template-${{ matrix.package }}
