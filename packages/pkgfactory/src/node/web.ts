@@ -26,6 +26,7 @@ export async function localWeb(factory: Factory, token: string | undefined, port
       else if (request.method === 'GET' && path === '/app.js') response = new Response(assets.js, {headers: {'Content-Type': 'text/javascript'}});
       else if (request.method === 'GET' && path === '/style.css') response = new Response(assets.css, {headers: {'Content-Type': 'text/css'}});
       else if (request.method === 'GET' && path === '/assets/logo.svg') response = new Response(assets.logo, {headers: {'Content-Type': 'image/svg+xml'}});
+      else if (request.method === 'GET' && path === '/assets/github.svg') response = new Response(assets.github, {headers: {'Content-Type': 'image/svg+xml'}});
       else if (path.startsWith('/api/')) {
         if (request.method !== 'GET' && (headers.get('origin') !== origin || headers.get('x-pkgfactory-csrf') !== csrf)) throw new FactoryError('csrf', 'Invalid CSRF token or Origin', 403);
         response = await api(request, factory, 'local', () => {if (!token) throw new FactoryError('auth', 'Start pkgfactory web with GITHUB_TOKEN, --device, or --gh', 401); return {token, subject: 'local'};});
