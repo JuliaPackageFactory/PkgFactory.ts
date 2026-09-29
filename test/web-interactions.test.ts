@@ -70,7 +70,10 @@ test('Minimum skips apps, reports field errors, preserves inspected files, and n
     input('authors', 'Alice;Bob'); assert.equal($('authors').value, 'Alice\nBob'); assert.equal($('authors-error').hidden, true); await wait(ready);
     const gate = deferred(); f.state.appsGate = gate; select('template', 'simple');
     assert.equal($('private-docs-help').hidden, false); assert.match($('private-docs-help').querySelector('a').href, /docs.github.com/);
-    assert.equal(f.badge(4), 'Checking'); gate.resolve(); f.state.appsGate = undefined; await wait(ready);
+    assert.equal(f.badge(4), 'Checking'); gate.resolve(); f.state.appsGate = undefined;
+    await wait(() => $('codecov-state').textContent === 'Check on GitHub');
+    assert.equal(f.badge(4), 'Ready'); assert.equal(f.badge(5), 'Upcoming');
+    $('codecov-confirmed').click(); await wait(ready);
     assert.equal(f.badge(4), 'Completed'); assert.equal($('tagbot-state').textContent, 'Automatic'); assert.deepEqual(f.scrolls, ['4']);
     select('visibility', 'public'); assert.equal($('private-docs-help').hidden, true);
     await wait(ready); $('confirm').click(); const previews = f.count('/api/preview');
@@ -80,7 +83,9 @@ test('Minimum skips apps, reports field errors, preserves inspected files, and n
     refreshGate.resolve(); f.state.appsGate = undefined; await wait(() => $('codecov-state').textContent === 'Installed');
     assert.equal(f.count('/api/preview'), previews); assert.equal($('confirm').checked, true);
     f.state.appsFailure = true; $('codecov-link').click(); w.dispatchEvent(new w.Event('focus'));
-    await wait(() => $('codecov-state').textContent === 'Check on GitHub'); assert.equal(f.badge(4), 'Completed');
+    await wait(() => !$('codecov-confirmation').hidden); assert.match($('codecov-detail').textContent, /Confirmed by you/);
+    $('codecov-confirmed').click(); assert.equal($('codecov-state').textContent, 'Check on GitHub');
+    assert.equal(f.badge(4), 'Ready'); assert.equal(f.badge(5), 'Upcoming'); assert.equal($('create').disabled, true);
   } finally {f.close();}
 });
 
@@ -122,19 +127,77 @@ test('failed creation exposes attention and cannot resubmit the same request', a
   } finally {f.close();}
 });
 
-test('success preserves review and links to Actions, documentation, and applicable Codecov access', async () => {
+test('success preserves review and combines relevant next steps in one plain paragraph', async () => {
   const f = await fixture();
   try {
     f.state.app = {state: 'installed', selection: 'selected'};
     f.input('package-name', 'TestPackage'); f.select('template', 'simple'); await f.wait(f.ready);
     f.$('confirm').click(); f.$('create').click(); f.state.createGate.resolve({state: 'complete', repository: 'tester/TestPackage.jl'});
-    await f.wait(() => !f.$('success-panel').hidden && f.$('documentation-link').textContent === 'Open documentation');
+    await f.wait(() => !f.$('success-panel').hidden && f.$('documentation-link').textContent === 'view your documentation');
     assert.equal(f.$('preview').hidden, false); assert.equal(f.$('actions-link').href, 'https://github.com/tester/TestPackage.jl/actions');
     assert.equal(f.$('documentation-link').href, 'https://docs.example.test/'); assert.equal(f.$('codecov-followup').hidden, false);
-    assert.match(f.$('build-status').textContent, /first documentation deployment/); assert.equal(f.scrolls.at(-1), '6');
-    f.state.app = {state: 'installed', selection: 'all'}; f.$('codecov-followup').querySelector('a').click(); f.w.dispatchEvent(new f.w.Event('focus'));
+    assert.equal(f.$('next-steps').tagName, 'P');
+    assert.equal(f.$('next-steps').querySelector('section, h3, button, .button, .success-actions'), null);
+    assert.equal(f.$('next-steps').textContent, 'Follow the builds in GitHub Actions and view your documentation. Ensure Codecov can access this repository. When ready, follow the General registration guidelines to publish your package.');
+    assert.equal(f.scrolls.at(-1), '6');
+    const completedReview = f.$('review-status').textContent;
+    f.state.appsFailure = true; f.$('codecov-followup').querySelector('a').click(); f.w.dispatchEvent(new f.w.Event('focus'));
+    await f.wait(() => f.$('codecov-state').textContent === 'Check on GitHub');
+    assert.equal(f.badge(4), 'Completed'); assert.equal(f.badge(5), 'Completed');
+    assert.equal(f.$('review-status').textContent, completedReview);
+    f.state.appsFailure = false; f.state.app = {state: 'installed', selection: 'all'};
+    f.$('codecov-followup').querySelector('a').click(); f.w.dispatchEvent(new f.w.Event('focus'));
     await f.wait(() => f.$('codecov-followup').hidden);
+    assert.equal(f.badge(4), 'Completed'); assert.equal(f.badge(5), 'Completed');
     f.$('create-another').click(); assert.equal(f.$('template').value, ''); assert.equal(f.$('success-panel').hidden, true);
+  } finally {f.close();}
+});
+
+for (const template of ['simple', 'all-in-one']) test(`${template} waits for Codecov confirmation and invalidates review when it is removed`, async () => {
+  const f = await fixture();
+  try {
+    f.input('package-name', 'TestPackage'); f.select('template', template);
+    await f.wait(() => f.$('package-availability').classList.contains('is-available') && f.$('codecov-state').textContent === 'Check on GitHub');
+    await delay(500);
+    assert.equal(f.badge(4), 'Ready'); assert.equal(f.badge(5), 'Upcoming'); assert.equal(f.count('/api/preview'), 0);
+    assert.equal(f.$('preview').hidden, true); assert.match(f.$('review-status').textContent, /Confirm Codecov/);
+    f.$('codecov-confirmed').click(); await f.wait(f.ready);
+    assert.equal(f.badge(4), 'Completed'); assert.equal(f.badge(5), 'Ready');
+    f.$('confirm').click(); assert.equal(f.$('create').disabled, false);
+    f.$('codecov-confirmed').click();
+    assert.equal(f.badge(4), 'Ready'); assert.equal(f.badge(5), 'Upcoming');
+    assert.equal(f.$('preview').hidden, true); assert.equal(f.$('confirm').checked, false); assert.equal(f.$('create').disabled, true);
+    f.$('codecov-confirmed').click(); await f.wait(f.ready);
+    f.select('owner', 'ExampleOrg');
+    await f.wait(() => f.$('package-availability').classList.contains('is-available') && f.$('codecov-detail').textContent.includes('@ExampleOrg') && !f.$('codecov-confirmation').hidden);
+    assert.equal(f.$('codecov-confirmed').checked, false); assert.equal(f.badge(4), 'Ready'); assert.equal(f.badge(5), 'Upcoming');
+    f.select('template', 'minimum'); await f.wait(f.ready); assert.equal(f.badge(4), 'Completed');
+  } finally {f.close();}
+});
+
+test('known missing or suspended Codecov installations cannot complete automation', async () => {
+  for (const state of ['not-installed', 'suspended']) {
+    const f = await fixture();
+    try {
+      f.state.app = {state, selection: undefined}; f.input('package-name', 'TestPackage'); f.select('template', 'simple');
+      await f.wait(() => f.$('package-availability').classList.contains('is-available') && f.$('codecov-state').textContent === (state === 'suspended' ? 'Suspended' : 'Not installed'));
+      await delay(500);
+      assert.equal(f.badge(4), 'Ready'); assert.equal(f.badge(5), 'Upcoming'); assert.equal(f.count('/api/preview'), 0);
+      f.state.app = {state: 'installed', selection: 'all'}; f.$('codecov-link').click(); f.w.dispatchEvent(new f.w.Event('focus'));
+      await f.wait(f.ready); assert.equal(f.badge(4), 'Completed'); assert.equal(f.$('codecov-confirmation').hidden, true);
+    } finally {f.close();}
+  }
+});
+
+test('a private Minimum package has only the relevant Actions sentence after creation', async () => {
+  const f = await fixture();
+  try {
+    f.input('package-name', 'TestPackage'); f.select('template', 'minimum'); f.select('visibility', 'private'); await f.wait(f.ready);
+    f.$('confirm').click(); f.$('create').click(); f.state.createGate.resolve({state: 'complete', repository: 'tester/TestPackage.jl'});
+    await f.wait(() => !f.$('success-panel').hidden);
+    for (const id of ['documentation-followup', 'codecov-followup', 'registration-guide']) assert.equal(f.$(id).hidden, true);
+    const visible = f.$('next-steps').cloneNode(true); for (const hidden of visible.querySelectorAll('[hidden]')) hidden.remove();
+    assert.equal(visible.textContent, 'Follow the builds in GitHub Actions.');
   } finally {f.close();}
 });
 

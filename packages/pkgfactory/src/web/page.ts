@@ -39,8 +39,8 @@ export function page(csrf: string, publicWeb: boolean, authenticated: boolean) {
           <div id="documenter-row" class="automation-row"><div class="automation-copy"><strong>Documenter deployment</strong><small id="documenter-detail">Select Simple or All-in-one to include documentation deployment.</small></div><span id="documenter-state" class="app-state">Choose a template</span></div>
           <div id="tagbot-row" class="automation-row"><div class="automation-copy"><strong>TagBot releases</strong><small id="tagbot-detail">Select Simple or All-in-one to include release automation.</small></div><span id="tagbot-state" class="app-state">Choose a template</span></div>
           ${githubAppRow('codecov', 'Codecov', 'Coverage reports and pull request checks. Uploads use GitHub OIDC; no upload token is required.')}
-          <p id="apps-help" class="permission-copy">Apps can be configured after creation. If access is limited to selected repositories, add the new repository on GitHub.</p>
-          <p class="permission-copy">Your review is prepared automatically. Optional apps can be installed later.</p>
+          <p id="apps-help" class="permission-copy">Confirm Codecov is installed for this owner to continue. If access is limited to selected repositories, add the new repository after creation.</p>
+          <p class="permission-copy">Your review is prepared automatically when these settings are complete.</p>
         </div></section>
       </fieldset>
       <section class="workflow-card create-card" data-step="5"><div class="card-heading"><span class="step-badge">5</span><div><div class="title-row"><h2 tabindex="-1">Review and create</h2><span class="step-state" role="status">Upcoming</span></div><p>Preview the generated files before creating your repository.</p></div></div><div class="card-body">
@@ -55,9 +55,7 @@ export function page(csrf: string, publicWeb: boolean, authenticated: boolean) {
       <section class="workflow-card" data-step="6"><div class="card-heading"><span class="step-badge">6</span><div><div class="title-row"><h2 tabindex="-1">Use your package</h2><span class="step-state" role="status">Upcoming</span></div><p>Open your repository and take the next steps.</p></div></div><div class="card-body">
         <p id="success-placeholder" class="permission-copy">Your repository link and next steps will appear here after creation.</p>
         <div id="success-panel" class="creation-result" hidden><p id="success-copy" role="status"></p><div class="success-actions"><a id="repository-link" class="button button-success" target="_blank" rel="noreferrer">Go to repository</a><button id="create-another" class="button button-secondary" type="button">Create another package</button></div>
-          <p id="build-status"></p><div class="success-actions"><a id="actions-link" class="inline-action" target="_blank" rel="noreferrer">Check GitHub Actions</a><a id="documentation-link" class="inline-action" target="_blank" rel="noreferrer" hidden>Check documentation deployment</a></div>
-          <p id="codecov-followup" hidden>Check that Codecov can access this new repository. <a href="https://github.com/apps/codecov" target="_blank" rel="noreferrer">Configure Codecov repository access</a>.</p>
-          <section id="registration-guide" class="registration-guide"><h3>Publish to Julia's General registry</h3><p>When your public package is ready, follow the <a href="https://github.com/JuliaRegistries/General#registering-a-package-in-general" target="_blank" rel="noreferrer">General registration guidelines</a> to publish your first version.</p></section>
+          <p id="next-steps">Follow the builds in <a id="actions-link" target="_blank" rel="noreferrer">GitHub Actions</a><span id="documentation-followup" hidden> and <a id="documentation-link" target="_blank" rel="noreferrer">check documentation deployment</a></span>.<span id="codecov-followup" hidden> Ensure <a href="https://github.com/apps/codecov" target="_blank" rel="noreferrer">Codecov can access this repository</a>.</span><span id="registration-guide"> When ready, follow the <a href="https://github.com/JuliaRegistries/General#registering-a-package-in-general" target="_blank" rel="noreferrer">General registration guidelines</a> to publish your package.</span></p>
         </div>
       </div></section>
     </form>
