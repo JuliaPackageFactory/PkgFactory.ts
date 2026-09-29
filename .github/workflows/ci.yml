@@ -53,3 +53,55 @@ jobs:
         working-directory: artifacts/generated/${{ matrix.template }}
       - if: matrix.template != 'minimum'
         run: node scripts/check-description.mjs artifacts/generated/${{ matrix.template }}
+  deploy-staging:
+    name: Deploy staging
+    needs: [node, generated-julia]
+    if: github.repository == 'JuliaPackageFactory/PkgFactory.ts' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: staging
+      url: https://pkgfactory-staging.ohnolab.workers.dev
+    concurrency:
+      group: pkgfactory-deploy-staging
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Check that the tested revision is still main
+        id: revision
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          latest=$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq '.sha')
+          if [ "$latest" = "$GITHUB_SHA" ]; then
+            echo 'current=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'current=false' >> "$GITHUB_OUTPUT"
+            echo '::notice::A newer main commit exists; skip this older deployment.'
+          fi
+      - name: Deploy tested revision
+        if: steps.revision.outputs.current == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_SEND_METRICS: 'false'
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo '::error::Configure CLOUDFLARE_API_TOKEN (secret) and CLOUDFLARE_ACCOUNT_ID (variable) in the staging environment. See docs/DEPLOYMENT.md.'
+            exit 1
+          fi
+          npm run deploy:staging -- --env=""
+      - name: Check staging health
+        if: steps.revision.outputs.current == 'true'
+        run: |
+          curl --fail --silent --show-error --retry 3 --retry-delay 5 \
+            https://pkgfactory-staging.ohnolab.workers.dev/health \
+            | jq --exit-status '.service == "PkgFactory" and .status == "ok"'
