@@ -16,6 +16,9 @@ jobs:
     if: inputs.confirmation == 'publish'
     runs-on: ubuntu-latest
     environment: ${{ inputs.target }}
+    concurrency:
+      group: pkgfactory-deploy-${{ inputs.target }}
+      cancel-in-progress: false
     permissions:
       contents: read
       id-token: write

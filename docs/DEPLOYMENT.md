@@ -248,8 +248,23 @@ npm pack --workspace @juliapackagefactory/pkgfactory
 npm publish --workspace @juliapackagefactory/pkgfactory --access public
 ```
 
-`release.yml` は手動実行専用です。targetを `staging`・`production`・`npm` から選び、
-確認欄 `publish` と環境承認を経て実行します。Cloudflare用環境には
+ステージングは `ci.yml` が自動配備します。mainへのpushでNodeの3 OS・Juliaの3テンプレートの全CIが成功した後、
+同じコミットを `staging` environmentの資格情報で配備し、`/health` の正常応答まで確認します。PRでは配備しません。
+配備直前にmainの先頭SHAを照合し、古いCIの遅延完了による巻き戻しを防ぎます。配備は直列化し、実行途中で取り消しません。
+資格情報が未登録の場合は `Deploy staging` が設定不足を明示して失敗します。登録後に失敗ジョブを再実行するか、mainでCIを手動実行できます。
+
+### GitHub Actionsのステージング配備設定
+
+1. [CloudflareのAccount API tokens](https://dash.cloudflare.com/?to=/:account/api-tokens)で対象アカウントを選び、**Create Token → Edit Cloudflare Workers** を選びます。名前の例は `PkgFactory GitHub Actions staging`。対象アカウントをPkgFactoryの配備先だけに限定します。
+2. [PkgFactory.tsのEnvironments](https://github.com/JuliaPackageFactory/PkgFactory.ts/settings/environments)で **staging** を開き、Environment secret **CLOUDFLARE_API_TOKEN** に作成したトークンを登録します。GitHubのPATやGitHub OAuthのClient secretとは別の値です。
+3. 同じenvironmentのEnvironment variable **CLOUDFLARE_ACCOUNT_ID** に、配備先の32桁Account IDを登録します。stagingのdeployment branchは `main` に限定し、通常のステージング自動配備に承認者は設定しません。
+
+ローカルの `wrangler login` の状態はGitHub Actionsに引き継がれません。CIではこの専用APIトークンを使います。
+[Cloudflare公式のGitHub Actions認証手順](https://developers.cloudflare.com/workers/ci-cd/external-cicd/github-actions/)
+既存Workerの `GITHUB_OAUTH_CLIENT_SECRET` と `SESSION_KEY` はWorker側に保持し、GitHubへコピーする必要はありません。
+
+`release.yml` は手動での再配備と承認後の公開に利用します。targetを `staging`・`production`・`npm` から選び、
+確認欄 `publish` を入力し、環境に承認者が設定されている場合はその承認後に実行します。Cloudflare用環境には
 secret `CLOUDFLARE_API_TOKEN`、variable `CLOUDFLARE_ACCOUNT_ID` を設定します。
 WorkerのOAuth/SESSION secretsはWranglerで別途登録し、GitHub Workflowから表示しません。
 
