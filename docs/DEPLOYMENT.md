@@ -273,15 +273,21 @@ npm publish --workspace @juliapackagefactory/pkgfactory --access public
 配備直前にmainの先頭SHAを照合し、古いCIの遅延完了による巻き戻しを防ぎます。配備は直列化し、実行途中で取り消しません。
 資格情報が未登録の場合は `Deploy staging` が設定不足を明示して失敗します。登録後に失敗ジョブを再実行するか、mainでCIを手動実行できます。
 
-### テンプレート推薦（Workers AI）
+### テンプレート推薦（Jev）
 
 `wrangler.jsonc` はstagingとproductionに `AI` バインディングを設定しています。
 Webの説明欄で入力が3秒止まると、既存の3テンプレートを
-[`@cf/baai/bge-reranker-base`](https://developers.cloudflare.com/workers-ai/models/bge-reranker-base/)で比較します。
-説明文とテンプレートの説明だけをWorkers AIへ渡し、推薦を表示します。選択値は変更しません。
+[`typesafe/jev`](https://developers.cloudflare.com/ai/models/typesafe/jev/)の `choice` 質問で比較します。
+説明文とテンプレートの説明だけをJevへ渡し、推薦を表示します。選択値は変更しません。
+推薦リクエストは1ページ読み込みあたり10回までです。失敗・中断したリクエストも数え、フォームのリセットでは回数を戻しません。
+上限到達後も手動選択でき、ページをリロードすると再び10回利用できます。この上限はブラウザ側で管理し、APIには既存のアカウント単位のレート制限を適用します。
 APIには既存のWebセッション・Origin・CSRF検証が適用されます。推論失敗時も手動選択できます。
-ローカルWebではWorkers AIがないため推薦は無効です。AI用のAPIキーやブラウザ側モデルの追加は不要です。
-Workers AIの利用枠・料金は配備先アカウントに適用されます。
+ローカルWebではAIバインディングがないため推薦は無効です。AI用のAPIキーやブラウザ側モデルの追加は不要です。
+Jevはサードパーティーモデルのため、Workers AIの無料Neurons枠ではなく
+[AI GatewayのUnified Billing](https://developers.cloudflare.com/ai-gateway/features/unified-billing/)を使います。
+配備先Cloudflareアカウントで事前にクレジットを購入・追加してください。
+呼び出しには `gateway: {id: 'default', collectLog: false}` を指定します。
+[`default` Gateway](https://developers.cloudflare.com/ai-gateway/usage/worker-binding-methods/)は初回リクエスト時に自動作成され、推薦リクエストのログ収集は無効にしています。
 
 ### GitHub Actionsの配備設定
 

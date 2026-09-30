@@ -22,6 +22,9 @@ let creationTimer: ReturnType<typeof setInterval> | undefined;
 let availabilityRevision = 0, availabilityTimer: ReturnType<typeof setTimeout> | undefined, availabilityAbort: AbortController | undefined;
 let appsRevision = 0, appsAbort: AbortController | undefined, appsLoading = false;
 let suggestionRevision = 0, suggestionTimer: ReturnType<typeof setTimeout> | undefined, suggestionAbort: AbortController | undefined;
+const suggestionLimit = 10;
+// Page lifetime only: resets and aborted/failed requests do not replenish the budget.
+let suggestionRequests = 0;
 let descriptionComposing = false;
 let installations: AppInstallations = unknownInstallations();
 const confirmedApps = new Map<string, Set<string>>();
@@ -165,10 +168,18 @@ function scheduleSuggestion() {
   clearSuggestion();
   const query = description.value.trim();
   if (document.body.dataset.templateSuggestions !== 'true' || !profileReady || authRequired || working || created || descriptionComposing || !query || description.value.length > description.maxLength) return;
+  if (suggestionRequests >= suggestionLimit) {
+    const notice = element('template-suggestion');
+    notice.textContent = 'Template suggestion limit reached (10 requests). Reload the page for more suggestions, or choose a template below.';
+    notice.hidden = false;
+    return;
+  }
   const revision = suggestionRevision;
   suggestionTimer = setTimeout(() => {void loadSuggestion(query, revision);}, 3000);
 }
 async function loadSuggestion(query: string, revision: number) {
+  if (revision !== suggestionRevision || suggestionRequests >= suggestionLimit) return;
+  suggestionRequests++;
   const controller = new AbortController(); suggestionAbort = controller;
   const timeout = setTimeout(() => controller.abort(), 15000);
   const notice = element('template-suggestion');
@@ -178,7 +189,7 @@ async function loadSuggestion(query: string, revision: number) {
     // Use the existing option label; the model never supplies HTML or changes the selection.
     const option = [...template.options].find(option => option.value && option.value === result.template);
     if (!option) return;
-    notice.textContent = `bge-reranker-base recommends ${option.textContent!.split(' · ')[0]}.`;
+    notice.textContent = `Jev recommends ${option.textContent!.split(' · ')[0]}.`;
     notice.hidden = false;
   } catch {
     if (revision === suggestionRevision) {notice.textContent = 'Template suggestion unavailable. You can choose a template below.'; notice.hidden = false;}
