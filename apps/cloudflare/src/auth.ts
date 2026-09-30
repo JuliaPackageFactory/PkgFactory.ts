@@ -5,6 +5,7 @@ import { json } from '../../../packages/pkgfactory/src/web/http.js';
 import { FactoryError } from '../../../packages/pkgfactory/src/application/engine.js';
 import { securityEvent, sourceKey, tooManyRequests } from './limits.js';
 export interface Env {
+  AI?: Ai;
   STATE: DurableObjectNamespace; AUTH: DurableObjectNamespace; OAUTH_KV: KVNamespace; OAUTH_PROVIDER: OAuthHelpers;
   SOURCE_RATE_LIMIT: RateLimit; REGISTRATION_RATE_LIMIT: RateLimit; ACCOUNT_RATE_LIMIT: RateLimit;
   ORIGIN: string; GITHUB_OAUTH_CLIENT_ID: string; GITHUB_OAUTH_CLIENT_SECRET: string; SESSION_KEY: string;

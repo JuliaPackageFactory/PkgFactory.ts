@@ -2,7 +2,7 @@ import OAuthProvider from '@cloudflare/workers-oauth-provider';
 import { Factory } from '../../../packages/pkgfactory/src/application/engine.js';
 import { api } from '../../../packages/pkgfactory/src/web/routes.js';
 import { page } from '../../../packages/pkgfactory/src/web/page.js';
-import { json, errorResponse, limitedBody } from '../../../packages/pkgfactory/src/web/http.js';
+import { json, errorResponse, limitedBody, readJson } from '../../../packages/pkgfactory/src/web/http.js';
 import assets from '../../../packages/pkgfactory/src/web/assets.json' with {type: 'json'};
 import { mcpHttp } from '../../../packages/pkgfactory/src/mcp/server.js';
 import { webAuth, session, type Env } from './auth.js';
@@ -10,6 +10,7 @@ import { oauthRoutes, refreshGitHub } from './oauth.js';
 import { registrationPolicy } from './consent.js';
 import { DurableStore } from './state.js';
 import { connectedJson } from './connection.js';
+import { suggestTemplate } from './template-suggestion.js';
 import { limited, securityEvent, sourceKey } from './limits.js';
 export { ApplicationState, AuthState } from './state.js';
 const factory = (env: Env, subject: string, beforeRequest?: () => Promise<void>) => new Factory(new DurableStore(env.STATE, subject), {algorithm: env.KEY_ALGORITHM ?? 'ed25519', beforeRequest});
@@ -28,11 +29,12 @@ async function web(request: Request, env: Env): Promise<Response> {
   if (url.pathname === '/assets/logo.svg' && request.method === 'GET') return new Response(assets.logo, {headers: {'Content-Type': 'image/svg+xml'}});
   if (url.pathname === '/assets/github.svg' && request.method === 'GET') return new Response(assets.github, {headers: {'Content-Type': 'image/svg+xml'}});
   const identity = await session(request, env);
-  if (url.pathname === '/' && request.method === 'GET') return new Response(page(identity?.csrf ?? '', true, !!identity), {headers: {'Content-Type': 'text/html; charset=utf-8'}});
+  if (url.pathname === '/' && request.method === 'GET') return new Response(page(identity?.csrf ?? '', true, !!identity, !!env.AI), {headers: {'Content-Type': 'text/html; charset=utf-8'}});
   if (url.pathname.startsWith('/api/')) {
     if (!identity) return json({error: 'Connect GitHub to save and execute a preview'}, 401);
     if (request.method !== 'GET' && (request.headers.get('origin') !== env.ORIGIN || request.headers.get('x-pkgfactory-csrf') !== identity.csrf)) {securityEvent('csrf_rejected', request); return json({error: 'Invalid CSRF token or Origin'}, 403);}
     const limit = await accountLimit(env, identity.subject, request); if (limit) return limit;
+    if (url.pathname === '/api/template-suggestion' && request.method === 'POST') return json(await suggestTemplate(env.AI, await readJson(request)));
     if (url.pathname === '/api/create' || url.pathname === '/api/resume') return connectedJson(request, (signal, check) => api(new Request(request, {signal}), factory(env, identity.subject, check), identity.subject, () => identity));
     return api(request, factory(env, identity.subject), identity.subject, () => identity);
   }

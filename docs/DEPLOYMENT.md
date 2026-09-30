@@ -273,6 +273,16 @@ npm publish --workspace @juliapackagefactory/pkgfactory --access public
 配備直前にmainの先頭SHAを照合し、古いCIの遅延完了による巻き戻しを防ぎます。配備は直列化し、実行途中で取り消しません。
 資格情報が未登録の場合は `Deploy staging` が設定不足を明示して失敗します。登録後に失敗ジョブを再実行するか、mainでCIを手動実行できます。
 
+### テンプレート推薦（Workers AI）
+
+`wrangler.jsonc` はstagingとproductionに `AI` バインディングを設定しています。
+Webの説明欄で入力が3秒止まると、既存の3テンプレートを
+[`@cf/baai/bge-reranker-base`](https://developers.cloudflare.com/workers-ai/models/bge-reranker-base/)で比較します。
+説明文とテンプレートの説明だけをWorkers AIへ渡し、推薦を表示します。選択値は変更しません。
+APIには既存のWebセッション・Origin・CSRF検証が適用されます。推論失敗時も手動選択できます。
+ローカルWebではWorkers AIがないため推薦は無効です。AI用のAPIキーやブラウザ側モデルの追加は不要です。
+Workers AIの利用枠・料金は配備先アカウントに適用されます。
+
 ### GitHub Actionsの配備設定
 
 1. [CloudflareのAccount API tokens](https://dash.cloudflare.com/?to=/:account/api-tokens)で対象アカウントを選び、**Create Token → Permission policies → Custom → Edit Cloudflare Workers** を選びます。名前の例は `PkgFactory GitHub Actions`。対象アカウントをPkgFactoryの配備先だけに限定します。

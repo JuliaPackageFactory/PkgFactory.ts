@@ -191,5 +191,14 @@ test('anonymous OAuth writes are limited per source and API use per GitHub accou
     const first = await signIn('4'), second = await signIn('5');
     for (const expected of [200, 200, 200, 429]) assert.equal((await mf.dispatchFetch('https://pkgfactory.test/api/templates', {headers: first})).status, expected);
     assert.equal((await mf.dispatchFetch('https://pkgfactory.test/api/templates', {headers: second})).status, 200);
+    // Suggestions must pass the shared account limiter before any inference,
+    // including when the AI binding is unavailable.
+    const suggest = (headers: Record<string, string>) => mf.dispatchFetch('https://pkgfactory.test/api/template-suggestion', {method: 'POST',
+      headers: {...headers, Origin: 'https://pkgfactory.test', 'Content-Type': 'application/json', 'X-PkgFactory-CSRF': 'test'},
+      body: JSON.stringify({description: 'Scientific computing'})});
+    assert.equal((await suggest(first)).status, 429);
+    assert.equal((await suggest(second)).status, 503, 'Another account reaches the AI availability check');
+    assert.equal((await mf.dispatchFetch('https://pkgfactory.test/api/templates', {headers: second})).status, 200);
+    assert.equal((await mf.dispatchFetch('https://pkgfactory.test/api/templates', {headers: second})).status, 429, 'Suggestions consume the shared API quota');
   } finally {await mf.dispose();}
 });

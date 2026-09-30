@@ -2,11 +2,11 @@ import { escapeHtml } from './http.js';
 
 // Workflow and styling adapted from PkgFactory.jl at 7c7d4af. Authentication
 // uses the agreed server-side session and PKCE instead of tab-held tokens.
-export function page(csrf: string, publicWeb: boolean, authenticated: boolean) {
+export function page(csrf: string, publicWeb: boolean, authenticated: boolean, templateSuggestions = false) {
   return `<!doctype html><html lang="en"><head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="csrf-token" content="${escapeHtml(csrf)}">
   <title>PkgFactory</title><link rel="icon" type="image/svg+xml" href="/assets/logo.svg"><link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script>
-  </head><body data-authenticated="${authenticated}">
+  </head><body data-authenticated="${authenticated}" data-template-suggestions="${templateSuggestions}">
   <header class="app-header"><div class="header-inner">
     <a class="brand" href="/" aria-label="PkgFactory home"><img class="brand-logo" src="/assets/logo.svg" width="52" height="48" alt=""><span>PkgFactory</span></a>
     <div class="header-actions">
@@ -32,7 +32,7 @@ export function page(csrf: string, publicWeb: boolean, authenticated: boolean) {
         </section>
         <section class="workflow-card" data-step="3"><div class="card-heading"><span class="step-badge">3</span><div><div class="title-row"><h2 tabindex="-1">Generate package template</h2><span class="step-state" role="status">Upcoming</span></div><p>Select the starter files and metadata for the initial package commit.</p></div></div><div class="card-body">
           <label class="field"><span>Authors</span><textarea id="authors" name="authors" required rows="2" maxlength="4000" aria-describedby="authors-help authors-error"></textarea><small id="authors-help">Filled from your GitHub profile. Use one author per line; commas and semicolons become line breaks.</small><small id="authors-error" class="field-error" role="alert" hidden></small></label>
-          <label class="field"><span>Description</span><textarea id="description" name="description" maxlength="2000" rows="2" placeholder="A concise description of what this package does."></textarea></label>
+          <label class="field"><span>Description</span><textarea id="description" name="description" maxlength="2000" rows="2" placeholder="A concise description of what this package does." aria-describedby="template-suggestion"></textarea><small id="template-suggestion" role="status" aria-live="polite" hidden></small></label>
           <label class="field"><span>Template</span><select id="template" name="template" required aria-describedby="template-help"><option value="" disabled selected>Select a template…</option><option value="all-in-one">All-in-one · Quality checks, documentation, and examples</option><option value="simple">Simple · Documentation and releases</option><option value="minimum">Minimum · Package and tests</option></select><small id="template-help">Complete these settings to prepare your review automatically.</small></label>
         </div></section>
         <section class="workflow-card" data-step="4"><div class="card-heading"><span class="step-badge">4</span><div><div class="title-row"><h2 tabindex="-1">Configure automation</h2><span class="step-state" role="status">Upcoming</span></div><p id="automation-description">Documenter and TagBot are configured automatically.</p></div></div><div class="card-body">

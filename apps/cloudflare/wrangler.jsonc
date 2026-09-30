@@ -5,6 +5,7 @@
   "compatibility_date": "2026-09-27",
   "compatibility_flags": ["enable_request_signal", "global_fetch_strictly_public"],
   "workers_dev": true,
+  "ai": {"binding": "AI"},
   "limits": {"cpu_ms": 30000},
   // Record only the application's security events. Per-request invocation logs
   // stay disabled, and query strings (OAuth codes) are removed from any URL.
@@ -22,6 +23,7 @@
   ],
   "env": {"production": {
     "name": "pkgfactory",
+    "ai": {"binding": "AI"},
     "vars": {"ORIGIN": "https://pkgfactory.ohnolab.workers.dev", "GITHUB_OAUTH_CLIENT_ID": "Ov23liW9Mpoaeo70n071", "KEY_ALGORITHM": "ed25519", "MAINTENANCE": "true"},
     "durable_objects": {"bindings": [{"name": "STATE", "class_name": "ApplicationState"}, {"name": "AUTH", "class_name": "AuthState"}]},
     "kv_namespaces": [{"binding": "OAUTH_KV", "id": "CONFIGURE_PRODUCTION_KV_ID"}],
