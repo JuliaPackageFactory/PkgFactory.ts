@@ -31,10 +31,10 @@
     "esbuild": "0.28.2",
     "jsdom": "28.1.0",
     "libsodium-wrappers": "0.7.16",
-    "miniflare": "5.20260926.0-alpha",
+    "miniflare": "5.20260926.1-alpha",
     "tsx": "4.23.15",
     "typescript": "7.0.2",
-    "wrangler": "4.142.0",
+    "wrangler": "4.143.1",
     "yaml": "2.9.1"
   }
 }

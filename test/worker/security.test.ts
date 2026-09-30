@@ -4,11 +4,13 @@ import { build } from 'esbuild';
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import { resolve } from 'node:path';
 import { planPackage } from '../../packages/pkgfactory/src/core/plan.js';
-import { encrypt } from '../../apps/cloudflare/src/auth.js';
+import { encrypt, sessionCookieValue } from '../../apps/cloudflare/src/auth.js';
 import { sha256 } from '../../packages/pkgfactory/src/core/encoding.js';
 import type { Operation } from '../../packages/pkgfactory/src/application/state.js';
 const options = {modules: true as const, compatibilityDate: '2026-09-27', compatibilityFlags: ['enable_request_signal', 'global_fetch_strictly_public'],
   durableObjects: {STATE: {className: 'ApplicationState', useSQLite: true}, AUTH: {className: 'AuthState', useSQLite: true}}};
+const ratelimits = (limits: Record<'SOURCE_RATE_LIMIT' | 'REGISTRATION_RATE_LIMIT' | 'ACCOUNT_RATE_LIMIT', number>) =>
+  Object.fromEntries(Object.entries(limits).map(([name, limit], i) => [name, {namespace_id: String(i + 1), simple: {limit, period: 60 as const}}]));
 const diagnostics = async () => (await build({entryPoints: ['test/worker/security-worker.ts'], bundle: true, write: false, format: 'esm', platform: 'browser', external: ['cloudflare:workers']})).outputFiles[0].text;
 const call = (stub: {fetch: Function}, body: unknown, path = '/') => stub.fetch(`https://state${path}`, {method: 'POST', body: JSON.stringify(body)}) as Promise<Response>;
 async function stateStub(mf: Miniflare, binding = 'STATE', name = 'pkgfactory-v1') {const ns = await mf.getDurableObjectNamespace(binding); return ns.get(ns.idFromName(name));}
@@ -114,6 +116,7 @@ test('a missing legacy plan is isolated while healthy plans work and its reposit
 test('login flood is throttled per source without exhausting sessions; parallel callbacks exchange once', async () => {
   const crypt = {SESSION_KEY: btoa('a'.repeat(32))}; let exchanges = 0;
   const mf = new Miniflare(convertV4MiniflareOptions({...options, scriptPath: resolve('apps/cloudflare/dist/worker.js'), kvNamespaces: ['OAUTH_KV'],
+    ratelimits: ratelimits({SOURCE_RATE_LIMIT: 1000, REGISTRATION_RATE_LIMIT: 1000, ACCOUNT_RATE_LIMIT: 1000}),
     bindings: {...crypt, ORIGIN: 'https://pkgfactory.test', GITHUB_OAUTH_CLIENT_ID: 'test', GITHUB_OAUTH_CLIENT_SECRET: 'secret'},
     outboundService: async (request: any) => {
       if (request.url === 'https://github.com/login/oauth/access_token') {exchanges++; return Response.json({access_token: 'test', scope: 'repo,workflow'});}
@@ -141,7 +144,7 @@ test('login flood is throttled per source without exhausting sessions; parallel 
     assert.equal(prefix.status, 302, 'A different /64 has its own limit');
     const mapped = await mf.dispatchFetch('https://pkgfactory.test/auth/login', {redirect: 'manual', headers: {'CF-Connecting-IP': '::ffff:192.0.2.1'}});
     assert.equal(mapped.status, 429, 'Mapped IPv4 shares the IPv4 limit');
-    const headers = {Cookie: `__Host-pkgfactory-session=${sid}`};
+    const headers = {Cookie: `__Host-pkgfactory-session=${await sessionCookieValue(crypt, sid)}`};
     assert.equal((await mf.dispatchFetch('https://pkgfactory.test/api/templates', {headers})).status, 200);
     const fresh = await mf.dispatchFetch('https://pkgfactory.test/auth/login', {redirect: 'manual', headers: {'CF-Connecting-IP': '192.0.2.2'}});
     assert.equal(fresh.status, 302);
@@ -156,5 +159,37 @@ test('login flood is throttled per source without exhausting sessions; parallel 
     const success = replies.find(r => r.status === 302)!;
     const sessionCookie = success.headers.getSetCookie().find(c => c.startsWith('__Host-pkgfactory-session='))!.split(';')[0];
     assert.equal((await mf.dispatchFetch('https://pkgfactory.test/api/templates', {headers: {Cookie: sessionCookie}})).status, 200);
+  } finally {await mf.dispose();}
+});
+
+test('anonymous OAuth writes are limited per source and API use per GitHub account', async () => {
+  const crypt = {SESSION_KEY: btoa('a'.repeat(32))};
+  const mf = new Miniflare(convertV4MiniflareOptions({...options, scriptPath: resolve('apps/cloudflare/dist/worker.js'), kvNamespaces: ['OAUTH_KV'],
+    ratelimits: ratelimits({SOURCE_RATE_LIMIT: 6, REGISTRATION_RATE_LIMIT: 2, ACCOUNT_RATE_LIMIT: 3}),
+    bindings: {...crypt, ORIGIN: 'https://pkgfactory.test', GITHUB_OAUTH_CLIENT_ID: 'test', GITHUB_OAUTH_CLIENT_SECRET: 'secret'},
+  }));
+  try {
+    const register = (ip: string) => mf.dispatchFetch('https://pkgfactory.test/oauth/register', {method: 'POST', headers: {'CF-Connecting-IP': ip, 'Content-Type': 'application/json'},
+      body: JSON.stringify({client_name: 'Flood', redirect_uris: ['http://127.0.0.1:1/callback'], token_endpoint_auth_method: 'none', grant_types: ['authorization_code'], response_types: ['code']})});
+    for (const expected of [201, 201, 429]) assert.equal((await register('192.0.2.10')).status, expected);
+    const refused = await register('192.0.2.10');
+    assert.equal(refused.headers.get('retry-after'), '60'); assert.equal((await refused.json() as any).error, 'temporarily_unavailable');
+    assert.equal((await register('192.0.2.11')).status, 201, 'Another source keeps its own registration limit');
+    // Every anonymous OAuth route from one source shares one counter.
+    const token = () => mf.dispatchFetch('https://pkgfactory.test/oauth/token', {method: 'POST', headers: {'CF-Connecting-IP': '192.0.2.20', 'Content-Type': 'application/x-www-form-urlencoded'}, body: 'grant_type=authorization_code&code=invalid'});
+    for (let i = 0; i < 6; i++) assert.notEqual((await token()).status, 429);
+    assert.equal((await token()).status, 429);
+    assert.equal((await mf.dispatchFetch('https://pkgfactory.test/auth/login', {redirect: 'manual', headers: {'CF-Connecting-IP': '192.0.2.20'}})).status, 429);
+    assert.equal((await mf.dispatchFetch('https://pkgfactory.test/health', {headers: {'CF-Connecting-IP': '192.0.2.20'}})).status, 200);
+    // Signed-in API calls count per GitHub account, so users behind one address stay independent.
+    const auth = await stateStub(mf, 'AUTH', 'auth-v1');
+    const signIn = async (subject: string) => {
+      const sid = subject.repeat(43).slice(0, 43), key = `session:${await sha256(sid)}`;
+      await call(auth, {action: 'put', key, value: await encrypt(crypt, {subject, token: 'test', csrf: 'test'}, key), ttl: 60000});
+      return {Cookie: `__Host-pkgfactory-session=${await sessionCookieValue(crypt, sid)}`, 'CF-Connecting-IP': '192.0.2.30'};
+    };
+    const first = await signIn('4'), second = await signIn('5');
+    for (const expected of [200, 200, 200, 429]) assert.equal((await mf.dispatchFetch('https://pkgfactory.test/api/templates', {headers: first})).status, expected);
+    assert.equal((await mf.dispatchFetch('https://pkgfactory.test/api/templates', {headers: second})).status, 200);
   } finally {await mf.dispose();}
 });

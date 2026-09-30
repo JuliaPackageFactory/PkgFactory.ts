@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { encrypt, decrypt, exchangeGitHub, type Env } from '../apps/cloudflare/src/auth.js';
+import { encrypt, decrypt, exchangeGitHub, revokeGitHub, type Env } from '../apps/cloudflare/src/auth.js';
 import { errorResponse } from '../packages/pkgfactory/src/web/http.js';
 import { deviceLogin } from '../packages/pkgfactory/src/github/device.js';
-import { consentNotices } from '../apps/cloudflare/src/consent.js';
+import { consentNotices, redirectAllowed, registrationPolicy } from '../apps/cloudflare/src/consent.js';
 import { loginSource } from '../apps/cloudflare/src/ip.js';
 
 test('login source groups IPv6 by /64 and canonicalizes IPv4-mapped aliases', () => {
@@ -19,12 +19,29 @@ test('consent identifies loopback redirects and the actual CIMD domain', () => {
   for (const address of ['http://localhost:3000/callback', 'http://127.0.0.2:3000/callback', 'http://[::1]:3000/callback', 'http://localhost.:3000/callback', 'http://app.localhost.:3000/callback', 'http://0.0.0.0/callback', 'http://[::]/callback', 'http://[::ffff:7f00:1]/callback', 'http://[::ffff:127.0.0.2]/callback']) assert.match(consentNotices('registered-client', address), /your own device/, address);
   assert.doesNotMatch(consentNotices('registered-client', 'https://localhost.example/callback'), /your own device/);
   assert.match(consentNotices('registered-client', 'cursor://client/callback'), /Native application/);
-  assert.match(consentNotices('registered-client', 'http://remote.example/callback'), /not encrypted/);
-  assert.doesNotMatch(consentNotices('registered-client', 'https://remote.example/callback'), /not encrypted/);
   assert.match(consentNotices('HTTPS://client.example/metadata.json', 'https://app.example/callback'), /<strong>client.example<\/strong>/);
   const notices = consentNotices('https://client.example/metadata.json?label=<img>', 'https://app.example/callback');
   assert.match(notices, /Client metadata domain: <strong>client.example<\/strong>/);
   assert.doesNotMatch(notices, /<img>/); assert.match(notices, /&lt;img&gt;/);
+});
+test('plain HTTP return addresses are limited to the user device at registration and consent', () => {
+  for (const allowed of ['https://claude.ai/api/mcp/auth_callback', 'http://127.0.0.1:12345/callback', 'http://localhost:3000/callback', 'http://[::1]:3000/callback', 'cursor://client/callback', 'vscode://client/callback']) assert.equal(redirectAllowed(allowed), true, allowed);
+  for (const rejected of ['http://remote.example/callback', 'http://localhost.example/callback', 'http://192.0.2.1/callback', 'not a url']) assert.equal(redirectAllowed(rejected), false, rejected);
+  const request = new Request('https://pkgfactory.test/oauth/register', {method: 'POST'});
+  assert.equal(registrationPolicy({clientMetadata: {redirect_uris: ['http://127.0.0.1:1/callback', 'https://app.example/callback']}, request}), undefined);
+  assert.match(registrationPolicy({clientMetadata: {redirect_uris: ['https://app.example/callback', 'http://remote.example/callback']}, request})!.description!, /HTTPS, loopback/);
+});
+test('logout revocation authenticates as the OAuth App and keeps the token out of the URL', async () => {
+  const env = {GITHUB_OAUTH_CLIENT_ID: 'client', GITHUB_OAUTH_CLIENT_SECRET: 'hidden-secret'};
+  let seen: {url: string; init?: RequestInit} | undefined;
+  assert.equal(await revokeGitHub(env, 'hidden-token', async (input, init) => {seen = {url: String(input), init}; return new Response(null, {status: 204});}), true);
+  assert.equal(seen!.url, 'https://api.github.com/applications/client/token'); assert.doesNotMatch(seen!.url, /hidden/);
+  assert.equal(seen!.init?.method, 'DELETE'); assert.equal(seen!.init?.redirect, 'manual');
+  assert.equal(new Headers(seen!.init?.headers).get('Authorization'), `Basic ${btoa('client:hidden-secret')}`);
+  assert.deepEqual(JSON.parse(String(seen!.init?.body)), {access_token: 'hidden-token'});
+  // Already expired/revoked tokens, redirects and outages never block logout.
+  for (const status of [404, 422, 302, 500]) assert.equal(await revokeGitHub(env, 'hidden-token', async () => new Response(null, {status})), false);
+  assert.equal(await revokeGitHub(env, 'hidden-token', async () => {throw new TypeError('network');}), false);
 });
 test('session ciphertext is authenticated and bound to its server-side identifier', async () => {
   const env = {SESSION_KEY: btoa('s'.repeat(32))}; const session = {token: 'never-log', subject: '42'};
