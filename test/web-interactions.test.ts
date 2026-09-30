@@ -69,7 +69,7 @@ test('suggestions wait three seconds after the last edit and never change the se
     f.$('template').value = 'simple';
     await tick(1); assert.equal(f.count('/api/template-suggestion'), 1);
     assert.deepEqual(f.calls.find(call => call.url === '/api/template-suggestion')!.body, {description: 'A Julia package for few-body Schrödinger equations.'});
-    assert.equal(f.$('template-suggestion').textContent, 'bge-reranker-base recommends All-in-one.');
+    assert.equal(f.$('template-suggestion').textContent, 'Jev recommends All-in-one.');
     assert.equal(f.$('template-suggestion').hidden, false);
     assert.equal(f.$('template').value, 'simple');
     assert.deepEqual(f.scrolls, []);
@@ -88,7 +88,7 @@ test('suggestions discard stale responses and reset cancels pending work', async
     f.input('description', 'New description'); assert.equal(request.signal!.aborted, true);
     f.state.suggestionGate = undefined; await tick(3000);
     old.resolve({template: 'minimum'}); await tick(0);
-    assert.equal(f.$('template-suggestion').textContent, 'bge-reranker-base recommends All-in-one.');
+    assert.equal(f.$('template-suggestion').textContent, 'Jev recommends All-in-one.');
     assert.equal(f.$('template').value, '');
     const reset = deferred(); f.state.suggestionGate = reset;
     f.input('description', 'Before reset'); await tick(3000);
@@ -123,6 +123,64 @@ test('local pages without Workers AI never request a suggestion', async t => {
   try {
     f.input('description', 'Small utility'); await tick(3000);
     assert.equal(f.count('/api/template-suggestion'), 0); assert.equal(f.$('template-suggestion').hidden, true);
+  } finally {f.close();}
+});
+
+test('suggestions stop after ten requests, survive form resets, and resume on a fresh page', async t => {
+  const f = await fixture({suggestions: true});
+  const tick = suggestionClock(t, f);
+  try {
+    f.input('description', '   '); await tick(3000);
+    f.input('description', 'x'.repeat(2001)); await tick(3000);
+    f.input('description', 'Not submitted'); await tick(2999);
+    assert.equal(f.count('/api/template-suggestion'), 0);
+    for (let i = 1; i <= 10; i++) {
+      f.input('description', `Package ${i}`); await tick(3000);
+      assert.equal(f.count('/api/template-suggestion'), i);
+      assert.equal(f.$('template-suggestion').textContent, 'Jev recommends All-in-one.');
+    }
+    f.input('description', 'Eleventh request'); await tick(3000);
+    assert.equal(f.count('/api/template-suggestion'), 10);
+    assert.match(f.$('template-suggestion').textContent, /limit reached \(10 requests\).*Reload/);
+    assert.equal(f.$('template-suggestion').hidden, false);
+    f.$('package-form').reset();
+    f.input('description', 'After reset'); await tick(3000);
+    assert.equal(f.count('/api/template-suggestion'), 10);
+    assert.match(f.$('template-suggestion').textContent, /limit reached/);
+    assert.equal(f.$('template').disabled, false); assert.equal(f.$('package-fields').disabled, false);
+    f.select('template', 'minimum'); assert.equal(f.$('template').value, 'minimum');
+  } finally {f.close(); t.mock.timers.reset();}
+
+  // A new document runs the same bundle again, as a reload does.
+  const reloaded = await fixture({suggestions: true});
+  const reloadTick = suggestionClock(t, reloaded);
+  try {
+    reloaded.input('description', 'After reload'); await reloadTick(3000);
+    assert.equal(reloaded.count('/api/template-suggestion'), 1);
+    assert.equal(reloaded.$('template-suggestion').textContent, 'Jev recommends All-in-one.');
+  } finally {reloaded.close();}
+});
+
+test('failed and aborted suggestion requests consume the page budget', async t => {
+  const f = await fixture({suggestions: true});
+  const tick = suggestionClock(t, f);
+  try {
+    f.state.suggestionFailure = true;
+    f.input('description', 'Failed request'); await tick(3000);
+    assert.match(f.$('template-suggestion').textContent, /unavailable/);
+    f.state.suggestionFailure = false;
+    for (let i = 2; i < 10; i++) {
+      f.input('description', `Package ${i}`); await tick(3000);
+    }
+    const pending = deferred(); f.state.suggestionGate = pending;
+    f.input('description', 'Pending tenth request'); await tick(3000);
+    const request = f.calls.filter(call => call.url === '/api/template-suggestion').at(-1)!;
+    f.input('description', 'Abort tenth request');
+    assert.equal(request.signal!.aborted, true);
+    pending.resolve({template: 'minimum'}); await tick(3000);
+    assert.equal(f.count('/api/template-suggestion'), 10);
+    assert.match(f.$('template-suggestion').textContent, /limit reached/);
+    assert.equal(f.$('template').value, '');
   } finally {f.close();}
 });
 

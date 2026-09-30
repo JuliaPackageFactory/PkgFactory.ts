@@ -114,8 +114,8 @@ button, select { cursor: pointer; }
 .account { gap: 8px; color: var(--muted); font-size: 12px; font-weight: 650; }
 .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #94a3b8; box-shadow: 0 0 0 4px rgba(148, 163, 184, .14); }
 .account.is-connected .status-dot { background: var(--success); box-shadow: 0 0 0 4px rgba(5, 150, 105, .13); }
-.github-link { justify-content: center; flex-shrink: 0; width: 40px; height: 40px; border-radius: 8px; background: #24292f; text-decoration: none; }
-.github-link:hover { background: #3d444d; }
+.github-link { justify-content: center; flex-shrink: 0; width: 40px; height: 40px; border-radius: 8px; text-decoration: none; }
+.github-link:hover { opacity: 0.8; }
 .github-link:focus-visible, .app-footer a:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
 .github-link img { display: block; width: 24px; height: 24px; object-fit: contain; }
 

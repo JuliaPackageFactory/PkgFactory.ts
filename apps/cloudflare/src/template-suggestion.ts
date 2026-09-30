@@ -1,7 +1,9 @@
+import { z } from 'zod';
 import { FactoryError } from '../../../packages/pkgfactory/src/application/engine.js';
-import { listTemplates, specSchema, type PackageSpec } from '../../../packages/pkgfactory/src/core/spec.js';
+import { listTemplates, specSchema, templates, type PackageSpec } from '../../../packages/pkgfactory/src/core/spec.js';
 
 const inputSchema = specSchema.pick({description: true});
+const resultSchema = z.object({answers: z.object({template: z.object({type: z.literal('choice'), choice: z.enum(templates)})})});
 // Describe when each existing bundle is useful, without inventing domain-specific files.
 const useCases: Record<PackageSpec['template'], string> = {
   minimum: 'For a small utility, learning exercise, experiment, or prototype that only needs the essential package structure and tests, without a documentation website or release automation.',
@@ -14,13 +16,15 @@ export async function suggestTemplate(ai: Pick<Ai, 'run'> | undefined, input: un
   if (!description) return {template: null};
   if (!ai) throw new FactoryError('suggestion_unavailable', 'Template suggestions are temporarily unavailable.', 503);
   const candidates = listTemplates();
-  const inputs = {query: description, top_k: 1,
-    contexts: candidates.map(candidate => ({text: `${candidate.id}: ${candidate.description}. ${useCases[candidate.id]}`}))};
+  const inputs = {state: description, questions: {template: {
+    type: 'choice',
+    instructions: 'Which Julia package template best fits the package described in the state?',
+    criteria: Object.fromEntries(candidates.map(candidate => [candidate.id, `${candidate.description}. ${useCases[candidate.id]}`])),
+  }}};
   try {
-    const result = await ai.run('@cf/baai/bge-reranker-base', inputs);
-    const best = result.response?.[0];
-    if (!best || !Number.isInteger(best.id) || typeof best.score !== 'number' || !Number.isFinite(best.score) || !candidates[best.id!]) throw new Error('Invalid ranking');
-    return {template: candidates[best.id!].id};
+    // Third-party models use AI Gateway's Unified Billing through the existing binding.
+    const result = await ai.run('typesafe/jev', inputs, {gateway: {id: 'default', collectLog: false}});
+    return {template: resultSchema.parse(result).answers.template.choice};
   } catch {
     // Do not expose upstream details or prevent manual template selection.
     throw new FactoryError('suggestion_unavailable', 'Template suggestions are temporarily unavailable.', 502);

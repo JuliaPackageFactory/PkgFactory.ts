@@ -4,17 +4,22 @@ import { suggestTemplate } from '../apps/cloudflare/src/template-suggestion.js';
 import { listTemplates } from '../packages/pkgfactory/src/core/spec.js';
 import { errorResponse } from '../packages/pkgfactory/src/web/http.js';
 
-const ai = (run: (model: string, input: any) => Promise<unknown>) => ({run} as Pick<Ai, 'run'>);
+const ai = (run: (model: string, input: any, options?: AiOptions) => Promise<unknown>) => ({run} as Pick<Ai, 'run'>);
 
-test('Workers AI ranks the existing templates and maps context IDs to template IDs', async () => {
+test('Jev chooses among the existing templates through AI Gateway', async () => {
   const candidates = listTemplates();
-  for (const [id, candidate] of candidates.entries()) {
-    const result = await suggestTemplate(ai(async (model, input) => {
-      assert.equal(model, '@cf/baai/bge-reranker-base');
-      assert.equal(input.query, 'Numerical quantum mechanics'); assert.equal(input.top_k, 1);
-      assert.equal(input.contexts.length, candidates.length);
-      for (const [i, context] of input.contexts.entries()) assert.ok(context.text.startsWith(`${candidates[i].id}: ${candidates[i].description}.`));
-      return {response: [{id, score: 0.85}]};
+  for (const candidate of candidates) {
+    const result = await suggestTemplate(ai(async (model, input, options) => {
+      assert.equal(model, 'typesafe/jev');
+      assert.equal(input.state, 'Numerical quantum mechanics');
+      assert.equal(input.questions.template.type, 'choice');
+      assert.match(input.questions.template.instructions, /Julia package template/);
+      const criteria = input.questions.template.criteria;
+      assert.deepEqual(Object.keys(criteria), candidates.map(candidate => candidate.id));
+      for (const candidate of candidates) assert.ok(criteria[candidate.id].startsWith(`${candidate.description}.`));
+      assert.deepEqual(options, {gateway: {id: 'default', collectLog: false}});
+      return {model: 'jev-1.13.0', answers: {template: {type: 'choice', choice: candidate.id, confidence: 0.85,
+        probabilities: Object.fromEntries(candidates.map(option => [option.id, option.id === candidate.id ? 0.9 : 0.05]))}}};
     }), {description: '  Numerical quantum mechanics  '});
     assert.deepEqual(result, {template: candidate.id});
   }
@@ -30,10 +35,12 @@ test('empty or invalid descriptions never invoke inference', async () => {
   assert.equal(calls, 0);
 });
 
-test('binding failures and malformed rankings produce a safe, optional-feature error', async () => {
+test('binding failures and malformed choices produce a safe, optional-feature error', async () => {
   await assert.rejects(suggestTemplate(undefined, {description: 'Test'}), {code: 'suggestion_unavailable', status: 503});
-  for (const result of [null, {}, {response: []}, {response: [{id: -1, score: 1}]}, {response: [{id: 3, score: 1}]},
-    {response: [{id: 1.5, score: 1}]}, {response: [{id: 0}]}, {response: [{id: 0, score: NaN}]}]) {
+  for (const result of [null, {}, {answers: {}}, {answers: {template: null}},
+    {answers: {template: {type: 'choice', choice: 'unknown'}}}, {answers: {template: {type: 'choice', choice: '<script>alert(1)</script>'}}},
+    {answers: {template: {type: 'choice', choice: 0}}}, {answers: {template: {type: 'choice'}}},
+    {answers: {template: {type: 'score', choice: 'minimum'}}}, {response: [{id: 0, score: 0.9}]}]) {
     await assert.rejects(suggestTemplate(ai(async () => result), {description: 'Test'}), {code: 'suggestion_unavailable', status: 502});
   }
   await assert.rejects(suggestTemplate(ai(async () => {throw Error('hidden upstream details');}), {description: 'Test'}), error => {
