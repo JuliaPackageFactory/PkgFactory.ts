@@ -76,8 +76,11 @@ CLI既定値とWorker `KEY_ALGORITHM` をRSAへ合わせます。成功済みプ
 [GitHubの作成手順](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/creating-an-oauth-app)・
 [callback/PKCE仕様](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps#redirect-urls)
 
-`Expire user access tokens` が表示される場合は、有効のままで構いません。
-現実装はGitHub tokenを自動更新せず、期限切れ時にログアウト・再認可します。Webセッションの上限も8時間です。
+`Expire user access tokens` は有効にしてください。GitHubのアクセストークンが8時間で失効し、漏えい時の被害期間を限定できます。
+2026-08-14以前に作成したOAuth Appでは無効の場合があるため、両アプリの設定画面で有効になっていることを確認します。
+[GitHubの変更履歴](https://github.blog/changelog/2026-08-14-multiple-redirect-uris-and-token-refresh-for-oauth-apps/)
+現実装はrefresh tokenを保存せず、GitHub tokenを自動更新しません。期限切れ時はログアウト・再認可します。Webセッションの上限も8時間です。
+Webのログアウトは、そのセッションのGitHubトークンをGitHub側でも失効させます。
 
 ### 2.2 Client IDとsecretの登録先
 
@@ -154,6 +157,23 @@ npx wrangler secret put GITHUB_OAUTH_CLIENT_SECRET --config apps/cloudflare/wran
 
 登録後に `npm run check` → `npm run deploy:staging` を実行済みです。下記の受入検証を続けます。
 
+### 3.1 レート制限とログ
+
+`wrangler.jsonc` の `ratelimits` で、接続元ごと・動的登録・GitHubアカウントごとの3つの上限を設定します。
+事前に作成するリソースはありません。`namespace_id` はCloudflareアカウント内で一意の整数で、
+検証用は `7301`〜`7303`、本番用は `7311`〜`7313` です。同じアカウントの他のWorkerが同じIDを使っていないことを確認してください。
+上限を超えると `429` と `Retry-After: 60` を返します。講習会などで多くの利用者が同じ接続元から同時にサインインする場合は、
+`SOURCE_RATE_LIMIT` の値を一時的に引き上げて配備します。
+
+Workers Logsを有効にし、invocationログは無効、クエリ文字列は削除する設定です。
+記録されるのは `rate_limited`、`origin_rejected`、`csrf_rejected`、`redirect_rejected`、`registration_rejected`、
+`github_revoke_failed`、`oauth_error` などのイベント名・メソッド・パスと、OAuthライブラリの警告です。
+アプリのイベントはIPアドレス・トークン・アカウントIDを含みません。
+Cloudflare DashboardのWorkers Logsで確認できます。[Workers Logs](https://developers.cloudflare.com/workers/observability/logs/workers-logs/)
+
+署名付きセッションCookieを導入した版を初めて配備すると、それ以前のWebセッションは無効になり、利用者は一度ログインし直します。
+保存済みの操作・プラン、MCPのgrantには影響しません。
+
 MCPの対話検証は次のコマンドで起動します。表示されたlocalhost URLを通常のブラウザーで開き、
 クライアントとGitHubの認可を行います。認証情報はプロセスのメモリだけに保持し、ファイルや標準出力へ出しません。
 
@@ -218,7 +238,7 @@ npx wrangler secret put SESSION_KEY --config apps/cloudflare/wrangler.jsonc
 新環境の `SESSION_KEY` は暗号学的乱数32バイトのBase64文字列です。パスワードマネージャーで生成・保管し、
 secret入力プロンプトへ渡してください。CLIで生成するなら
 `node -e "console.log(require('node:crypto').randomBytes(32).toString('base64'))"` を手元で実行します。
-キー変更は既存Webセッションを復号できなくするため、ログインし直しが必要です。
+キー変更は既存Webセッションを復号できなくするため、利用者は未ログイン表示になり、ログインし直しが必要です。
 
 ```sh
 npx wrangler deploy --config apps/cloudflare/wrangler.jsonc --dry-run

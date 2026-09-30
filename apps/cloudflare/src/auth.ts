@@ -3,15 +3,17 @@ import { base64, base64url, unbase64, unbase64url, randomToken, sha256, utf8, de
 import { GitHub } from '../../../packages/pkgfactory/src/github/client.js';
 import { json } from '../../../packages/pkgfactory/src/web/http.js';
 import { FactoryError } from '../../../packages/pkgfactory/src/application/engine.js';
-import { loginSource } from './ip.js';
+import { securityEvent, sourceKey, tooManyRequests } from './limits.js';
 export interface Env {
   AI?: Ai;
   STATE: DurableObjectNamespace; AUTH: DurableObjectNamespace; OAUTH_KV: KVNamespace; OAUTH_PROVIDER: OAuthHelpers;
+  SOURCE_RATE_LIMIT: RateLimit; REGISTRATION_RATE_LIMIT: RateLimit; ACCOUNT_RATE_LIMIT: RateLimit;
   ORIGIN: string; GITHUB_OAUTH_CLIENT_ID: string; GITHUB_OAUTH_CLIENT_SECRET: string; SESSION_KEY: string;
   KEY_ALGORITHM?: 'ed25519' | 'rsa4096'; MAINTENANCE?: string;
 }
 export interface Session {subject: string; token: string; csrf: string}
 const cookie = (name: string, value: string, maxAge: number) => `${name}=${value}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=${maxAge}`;
+const sessionCookie = '__Host-pkgfactory-session';
 export const cookieValue = (request: Request, name: string) => request.headers.get('cookie')?.split(';').map(x => x.trim()).find(x => x.startsWith(name + '='))?.slice(name.length + 1);
 async function authState(env: Env, action: string, key: string, value?: unknown, ttl?: number) {
   const stub = env.AUTH.get(env.AUTH.idFromName('auth-v1'));
@@ -29,11 +31,36 @@ export async function decrypt(env: Pick<Env, 'SESSION_KEY'>, value: {iv: string;
   const key = await crypto.subtle.importKey('raw', unbase64(env.SESSION_KEY), 'AES-GCM', false, ['decrypt']);
   return JSON.parse(decode(new Uint8Array(await crypto.subtle.decrypt({name: 'AES-GCM', iv: unbase64(value.iv), additionalData: utf8(context)}, key, unbase64(value.data)))));
 }
-export async function session(request: Request, env: Env): Promise<Session | null> {
-  const id = cookieValue(request, '__Host-pkgfactory-session'); if (!id || !/^[A-Za-z0-9_-]{43}$/.test(id)) return null;
-  const key = `session:${await sha256(id)}`; const saved = await authState(env, 'get', key);
+// A separate HMAC key, derived from SESSION_KEY, signs the random session ID.
+async function cookieKey(env: Pick<Env, 'SESSION_KEY'>) {
+  const base = await crypto.subtle.importKey('raw', unbase64(env.SESSION_KEY), 'HKDF', false, ['deriveKey']);
+  return crypto.subtle.deriveKey({name: 'HKDF', hash: 'SHA-256', salt: new Uint8Array(), info: utf8('pkgfactory session cookie v1')}, base, {name: 'HMAC', hash: 'SHA-256'}, false, ['sign', 'verify']);
+}
+export async function sessionCookieValue(env: Pick<Env, 'SESSION_KEY'>, id: string) {
+  return `${id}.${base64url(new Uint8Array(await crypto.subtle.sign('HMAC', await cookieKey(env), utf8(id))))}`;
+}
+async function loadSession(request: Request, env: Env): Promise<{key: string; value: Session} | null> {
+  const signed = cookieValue(request, sessionCookie)?.match(/^([A-Za-z0-9_-]{43})\.([A-Za-z0-9_-]{43})$/); if (!signed) return null;
+  // Forged identifiers stop here, before the shared AuthState Durable Object.
+  if (!await crypto.subtle.verify('HMAC', await cookieKey(env), unbase64url(signed[2]), utf8(signed[1]))) return null;
+  const key = `session:${await sha256(signed[1])}`; const saved = await authState(env, 'get', key);
   if (!saved) return null;
-  return decrypt(env, saved, key);
+  // A rotated SESSION_KEY or damaged record signs the browser out instead of failing every page.
+  try {return {key, value: await decrypt(env, saved, key)};} catch {return null;}
+}
+export async function session(request: Request, env: Env): Promise<Session | null> {
+  return (await loadSession(request, env))?.value ?? null;
+}
+/** Revoke the Web session's GitHub token. Other sign-ins hold their own tokens.
+ * Best effort: logout still deletes the server-side session if GitHub is unavailable. */
+export async function revokeGitHub(env: Pick<Env, 'GITHUB_OAUTH_CLIENT_ID' | 'GITHUB_OAUTH_CLIENT_SECRET'>, token: string, fetcher: typeof fetch = fetch) {
+  try {
+    const response = await fetcher(`https://api.github.com/applications/${encodeURIComponent(env.GITHUB_OAUTH_CLIENT_ID)}/token`, {method: 'DELETE',
+      headers: {Authorization: `Basic ${btoa(`${env.GITHUB_OAUTH_CLIENT_ID}:${env.GITHUB_OAUTH_CLIENT_SECRET}`)}`, Accept: 'application/vnd.github+json', 'Content-Type': 'application/json', 'User-Agent': 'PkgFactory', 'X-GitHub-Api-Version': '2022-11-28'},
+      body: JSON.stringify({access_token: token}), redirect: 'manual', signal: AbortSignal.timeout(10000)});
+    // GitHub answers 404 or 422 for a token that already expired or was revoked.
+    return response.status === 204;
+  } catch {return false;}
 }
 export async function githubAuthorize(env: Env, state: string, verifier: string, callback: string) {
   const challenge = base64url(new Uint8Array(await crypto.subtle.digest('SHA-256', utf8(verifier))));
@@ -71,10 +98,8 @@ export async function exchangeGitHub(request: Request, env: Env, verifier: strin
 export async function webAuth(request: Request, env: Env): Promise<Response | null> {
   const url = new URL(request.url);
   if (url.pathname === '/auth/login' && request.method === 'GET') {
-    // Cloudflare supplies this header at the edge. Store only a keyed hash;
-    // each source gets its own counter, independent of authenticated sessions.
-    const source = await sha256(env.SESSION_KEY + ':' + loginSource(request.headers.get('CF-Connecting-IP')));
-    if (!await authState(env, 'limit', `login-rate:${source}`, {limit: 20}, 60000)) return new Response(JSON.stringify({error: 'Too many sign-in attempts. Try again in one minute.'}), {status: 429, headers: {'Content-Type': 'application/json', 'Retry-After': '60'}});
+    // Each source gets its own exact counter, independent of authenticated sessions.
+    if (!await authState(env, 'limit', `login-rate:${await sourceKey(request, env)}`, {limit: 20}, 60000)) return tooManyRequests(request);
     const state = randomToken(), verifier = randomToken();
     const encrypted = await encrypt(env, {state, verifier, expiresAt: Date.now() + 600000}, `web-login:${env.ORIGIN}`);
     const browser = base64url(utf8(JSON.stringify(encrypted)));
@@ -95,14 +120,17 @@ export async function webAuth(request: Request, env: Env): Promise<Response | nu
     const id = randomToken(); const sessionKey = `session:${await sha256(id)}`;
     await authState(env, 'put', sessionKey, await encrypt(env, value, sessionKey), 8 * 3600000);
     const headers = new Headers({Location: env.ORIGIN + '/'});
-    headers.append('Set-Cookie', cookie('__Host-pkgfactory-session', id, 8 * 3600)); headers.append('Set-Cookie', cookie('__Host-pkgfactory-login', '', 0));
+    headers.append('Set-Cookie', cookie(sessionCookie, await sessionCookieValue(env, id), 8 * 3600)); headers.append('Set-Cookie', cookie('__Host-pkgfactory-login', '', 0));
     return new Response(null, {status: 302, headers});
   }
   if (url.pathname === '/auth/logout' && request.method === 'POST') {
-    const value = await session(request, env);
-    if (!value || request.headers.get('origin') !== env.ORIGIN || request.headers.get('x-pkgfactory-csrf') !== value.csrf) return json({error: 'Invalid CSRF token'}, 403);
-    await authState(env, 'delete', `session:${await sha256(cookieValue(request, '__Host-pkgfactory-session')!)}`);
-    const response = json({ok: true}); response.headers.set('Set-Cookie', cookie('__Host-pkgfactory-session', '', 0)); return response;
+    const current = await loadSession(request, env);
+    if (!current) return json({error: 'Invalid CSRF token'}, 403);
+    if (request.headers.get('origin') !== env.ORIGIN || request.headers.get('x-pkgfactory-csrf') !== current.value.csrf) {securityEvent('csrf_rejected', request); return json({error: 'Invalid CSRF token'}, 403);}
+    const revoked = await revokeGitHub(env, current.value.token);
+    if (!revoked) securityEvent('github_revoke_failed', request);
+    await authState(env, 'delete', current.key);
+    const response = json({ok: true, githubTokenRevoked: revoked}); response.headers.set('Set-Cookie', cookie(sessionCookie, '', 0)); return response;
   }
   return null;
 }
