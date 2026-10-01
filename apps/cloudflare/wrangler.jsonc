@@ -7,7 +7,7 @@
   "workers_dev": true,
   "ai": {"binding": "AI"},
   "limits": {"cpu_ms": 30000},
-  // Record only the application's security events. Per-request invocation logs
+  // Record the application's security and AI failure events. Per-request invocation logs
   // stay disabled, and query strings (OAuth codes) are removed from any URL.
   "observability": {"enabled": true, "redact_query_string": true, "logs": {"invocation_logs": false}},
   "vars": {"ORIGIN": "https://pkgfactory-staging.ohnolab.workers.dev", "GITHUB_OAUTH_CLIENT_ID": "Ov23li7iF0SLvIWtqPyX", "KEY_ALGORITHM": "ed25519", "MAINTENANCE": "false"},

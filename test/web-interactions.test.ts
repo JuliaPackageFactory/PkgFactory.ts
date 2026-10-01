@@ -13,7 +13,7 @@ async function fixture(options: {draft?: string; login?: string; suggestions?: b
   const calls: {url: string; body: any; signal?: AbortSignal}[] = [], scrolls: string[] = [];
   const state = {appsGate: undefined as ReturnType<typeof deferred> | undefined, createGate: deferred(),
     app: {state: 'unknown', selection: undefined as string | undefined}, appsFailure: false, failPreview: false, authExpired: false,
-    suggestionGate: undefined as ReturnType<typeof deferred> | undefined, suggestionFailure: false};
+    suggestionGate: undefined as ReturnType<typeof deferred> | undefined, suggestionFailure: false, suggestionApiError: ''};
   let nextPlan = 0;
   if (options.draft) w.sessionStorage.setItem('pkgfactory-reconnect-settings', options.draft);
   w.fetch = async (url: string, init: any = {}) => {
@@ -29,6 +29,7 @@ async function fixture(options: {draft?: string; login?: string; suggestions?: b
       result = {id: `plan-${++nextPlan}`, repository: `${body.owner}/${body.name}.jl`, spec: body, files: {'Project.toml': body.description || 'Initial', 'src/TestPackage.jl': 'module TestPackage\nend'}};
     } else if (url === '/api/template-suggestion') {
       if (state.suggestionFailure) throw Error('Workers AI unavailable');
+      if (state.suggestionApiError) return {ok: false, status: 502, json: async () => ({error: state.suggestionApiError, code: 'suggestion_upstream'})};
       result = state.suggestionGate ? await state.suggestionGate.promise : {template: 'all-in-one'};
     } else if (url === '/api/create') result = await state.createGate.promise;
     else if (url === '/api/status') result = {planId: body.planId, pagesUrl: 'https://docs.example.test/'};
@@ -63,6 +64,9 @@ test('suggestions wait three seconds after the last edit and never change the se
   try {
     f.$('template').value = 'minimum';
     f.input('description', 'First description');
+    assert.equal(f.$('template-suggestion').hidden, false);
+    assert.equal(f.$('suggestion-message').textContent, 'テンプレートをサジェストします…');
+    assert.equal(f.$('suggestion-spinner').hidden, false);
     await tick(2999); assert.equal(f.count('/api/template-suggestion'), 0);
     f.input('description', '  A Julia package for few-body Schrödinger equations.  ');
     await tick(2999); assert.equal(f.count('/api/template-suggestion'), 0);
@@ -71,10 +75,12 @@ test('suggestions wait three seconds after the last edit and never change the se
     assert.deepEqual(f.calls.find(call => call.url === '/api/template-suggestion')!.body, {description: 'A Julia package for few-body Schrödinger equations.'});
     assert.equal(f.$('template-suggestion').textContent, 'Jev recommends All-in-one.');
     assert.equal(f.$('template-suggestion').hidden, false);
+    assert.equal(f.$('suggestion-spinner').hidden, true);
     assert.equal(f.$('template').value, 'simple');
     assert.deepEqual(f.scrolls, []);
     f.input('description', '   '); await tick(3000);
     assert.equal(f.count('/api/template-suggestion'), 1); assert.equal(f.$('template-suggestion').hidden, true);
+    assert.equal(f.$('suggestion-spinner').hidden, true);
   } finally {f.close();}
 });
 
@@ -84,16 +90,19 @@ test('suggestions discard stale responses and reset cancels pending work', async
   try {
     const old = deferred(); f.state.suggestionGate = old;
     f.input('description', 'Old description'); await tick(3000);
+    assert.equal(f.$('suggestion-spinner').hidden, false);
     const request = f.calls.find(call => call.url === '/api/template-suggestion')!;
     f.input('description', 'New description'); assert.equal(request.signal!.aborted, true);
     f.state.suggestionGate = undefined; await tick(3000);
     old.resolve({template: 'minimum'}); await tick(0);
     assert.equal(f.$('template-suggestion').textContent, 'Jev recommends All-in-one.');
+    assert.equal(f.$('suggestion-spinner').hidden, true);
     assert.equal(f.$('template').value, '');
     const reset = deferred(); f.state.suggestionGate = reset;
     f.input('description', 'Before reset'); await tick(3000);
     f.$('package-form').reset(); reset.resolve({template: 'simple'}); await tick(0);
     assert.equal(f.$('template-suggestion').hidden, true);
+    assert.equal(f.$('suggestion-spinner').hidden, true);
     f.input('description', 'Pending timer'); f.$('package-form').reset(); await tick(3000);
     assert.equal(f.count('/api/template-suggestion'), 3);
   } finally {f.close();}
@@ -107,10 +116,12 @@ test('suggestions wait for IME composition and recover after an unavailable resp
     f.$('description').dispatchEvent(new f.w.CompositionEvent('compositionstart', {bubbles: true}));
     f.input('description', '数値計算'); await tick(6000);
     assert.equal(f.count('/api/template-suggestion'), 0);
+    assert.equal(f.$('suggestion-spinner').hidden, false);
     f.state.suggestionFailure = true;
     f.$('description').dispatchEvent(new f.w.CompositionEvent('compositionend', {bubbles: true}));
     await tick(2999); assert.equal(f.count('/api/template-suggestion'), 0);
     await tick(1); assert.match(f.$('template-suggestion').textContent, /unavailable/);
+    assert.equal(f.$('suggestion-spinner').hidden, true);
     assert.equal(f.$('template').disabled, false); assert.equal(f.$('package-fields').disabled, false);
     f.state.suggestionFailure = false; f.input('description', 'Scientific computing'); await tick(3000);
     assert.match(f.$('template-suggestion').textContent, /recommends All-in-one/);
@@ -123,6 +134,55 @@ test('local pages without Workers AI never request a suggestion', async t => {
   try {
     f.input('description', 'Small utility'); await tick(3000);
     assert.equal(f.count('/api/template-suggestion'), 0); assert.equal(f.$('template-suggestion').hidden, true);
+    assert.equal(f.$('suggestion-spinner').hidden, true);
+  } finally {f.close();}
+});
+
+test('suggestion failures retain the API diagnostic and stop the spinner', async t => {
+  const f = await fixture({suggestions: true});
+  const tick = suggestionClock(t, f);
+  try {
+    f.state.suggestionApiError = 'Jev request failed (HTTP 403). You can choose a template below.';
+    f.input('description', 'Scientific computing');
+    assert.equal(f.$('suggestion-spinner').hidden, false);
+    await tick(3000);
+    assert.equal(f.$('template-suggestion').textContent, f.state.suggestionApiError);
+    assert.equal(f.$('suggestion-spinner').hidden, true);
+    assert.equal(f.$('template').disabled, false);
+    assert.equal(f.$('package-fields').disabled, false);
+  } finally {f.close();}
+});
+
+test('suggestion timeout stops loading and a late response cannot replace the message', async t => {
+  const f = await fixture({suggestions: true});
+  const tick = suggestionClock(t, f);
+  try {
+    const pending = deferred(); f.state.suggestionGate = pending;
+    f.input('description', 'Slow request'); await tick(3000);
+    assert.equal(f.$('suggestion-spinner').hidden, false);
+    await tick(15000);
+    assert.equal(f.$('suggestion-spinner').hidden, true);
+    assert.match(f.$('suggestion-message').textContent, /timed out/);
+    pending.resolve({template: 'minimum'}); await tick(0);
+    assert.match(f.$('suggestion-message').textContent, /timed out/);
+    f.state.suggestionGate = undefined;
+    f.input('description', 'Try another description'); await tick(3000);
+    assert.equal(f.$('template-suggestion').textContent, 'Jev recommends All-in-one.');
+    assert.equal(f.$('suggestion-spinner').hidden, true);
+  } finally {f.close();}
+});
+
+test('an unrecognized suggestion stops loading without changing the template', async t => {
+  const f = await fixture({suggestions: true});
+  const tick = suggestionClock(t, f);
+  try {
+    const pending = deferred(); f.state.suggestionGate = pending;
+    f.input('description', 'Unexpected response'); await tick(3000);
+    pending.resolve({template: '<script>invalid</script>'}); await tick(0);
+    assert.equal(f.$('suggestion-spinner').hidden, true);
+    assert.match(f.$('suggestion-message').textContent, /not recognized/);
+    assert.doesNotMatch(f.$('suggestion-message').textContent, /script/);
+    assert.equal(f.$('template').value, '');
   } finally {f.close();}
 });
 
@@ -143,6 +203,7 @@ test('suggestions stop after ten requests, survive form resets, and resume on a 
     assert.equal(f.count('/api/template-suggestion'), 10);
     assert.match(f.$('template-suggestion').textContent, /limit reached \(10 requests\).*Reload/);
     assert.equal(f.$('template-suggestion').hidden, false);
+    assert.equal(f.$('suggestion-spinner').hidden, true);
     f.$('package-form').reset();
     f.input('description', 'After reset'); await tick(3000);
     assert.equal(f.count('/api/template-suggestion'), 10);

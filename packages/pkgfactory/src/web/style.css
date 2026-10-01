@@ -227,6 +227,8 @@ input:disabled { color: var(--muted); border-color: var(--border); background: v
 .creation-status { display: flex; align-items: center; gap: 10px; margin-top: 16px; color: var(--muted); font-size: 12px; }
 .creation-status p { margin: 0; }
 .spinner { flex: 0 0 auto; width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin .8s linear infinite; }
+#template-suggestion { display: flex; align-items: center; gap: 8px; }
+#suggestion-spinner { width: 14px; height: 14px; }
 .review-status { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; }
 .review-status p { margin: 0; }
 #create[aria-busy="true"] { opacity: 1; cursor: progress; }
