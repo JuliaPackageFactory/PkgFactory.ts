@@ -177,7 +177,7 @@ function scheduleSuggestion() {
     showSuggestion(`Template suggestion limit reached (${suggestionLimit} requests). Reload the page for more suggestions, or choose a template below.`);
     return;
   }
-  showSuggestion('テンプレートをサジェストします…', true);
+  showSuggestion('Suggesting a template…', true);
   if (descriptionComposing) return;
   const revision = suggestionRevision;
   suggestionTimer = setTimeout(() => {void loadSuggestion(query, revision);}, 3000);

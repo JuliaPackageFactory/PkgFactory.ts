@@ -278,7 +278,7 @@ npm publish --workspace @juliapackagefactory/pkgfactory --access public
 `wrangler.jsonc` はstagingとproductionに `AI` バインディングを設定しています。
 Webの説明欄で入力が3秒止まると、既存の3テンプレートを
 [`typesafe/jev`](https://developers.cloudflare.com/ai/models/typesafe/jev/)の `choice` 質問で比較します。
-入力開始時にスピナーと「テンプレートをサジェストします…」を表示し、待機・通信中も表示を続けます。
+入力開始時にスピナーと「Suggesting a template…」を表示し、待機・通信中も表示を続けます。
 IME変換中は送信せず、確定後に3秒待ちます。成功・失敗・タイムアウト時にはスピナーを停止します。
 説明文とテンプレートの説明だけをJevへ渡し、推薦を表示します。選択値は変更しません。
 推薦リクエストは1ページ読み込みあたり10回までです。失敗・中断したリクエストも数え、フォームのリセットでは回数を戻しません。
@@ -293,8 +293,15 @@ Jevはサードパーティーモデルのため、Workers AIの無料Neurons枠
 
 AIバインディングからは `returnRawResponse: true` で応答を受け、`Response.json()` で読み取ります。
 これにより、Content-Typeに `charset` が付いたJSONも処理できます。
-GatewayのRequests増加だけでは推論成功を判断できません。失敗時には画面に上流HTTPステータス、通信失敗、JSON解析失敗、選択値の不整合を区別して表示します。
-Workers Logsには `template_suggestion_failed` イベントの `reason` と、取得できた場合の `upstreamStatus` を記録します。説明文・応答本文・認証情報は記録しません。
+Jevの直接応答（`answers.template.choice`）に加え、Cloudflareの完了応答（`state: "Completed"` と `result`）、
+およびその外側にAPIの `result` がある形式も処理します。`result` の展開は最大2段までです。
+`success` が存在して `true` でない応答、空でない `errors`、`Completed` 以外の `state` は、HTTP 200でも推薦として扱いません。
+最終的な回答は `type: "choice"` と既存の3テンプレートIDに限定して検証します。
+GatewayのRequests増加だけでは推論成功を判断できません。失敗時には画面に上流HTTPステータス、通信失敗、JSON解析失敗、Gatewayの拒否、未完了の結果、選択値の不整合を区別して表示します。
+Workers Logsには `template_suggestion_failed` イベントの `reason` と、取得できた場合の `upstreamStatus` を記録します。
+選択値の検証失敗時には `resultDepth`（展開した段数）と `validation`（固定の検証パスとエラーコード）も記録します。
+再発時はこのイベントで `answers.template` の欠落と `answers.template.choice` の不整合を切り分けてください。
+説明文・応答本文・認証情報は記録しません。
 
 ### GitHub Actionsの配備設定
 

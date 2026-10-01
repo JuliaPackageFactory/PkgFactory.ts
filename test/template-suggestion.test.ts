@@ -5,6 +5,12 @@ import { listTemplates } from '../packages/pkgfactory/src/core/spec.js';
 import { errorResponse } from '../packages/pkgfactory/src/web/http.js';
 
 const ai = (run: (model: string, input: any, options?: AiOptions) => Promise<unknown>) => ({run} as Pick<Ai, 'run'>);
+const responseFormats = [
+  (answer: unknown) => answer,
+  (answer: unknown) => ({state: 'Completed', result: answer, gatewayMetadata: {keySource: 'Unified'}}),
+  (answer: unknown) => ({success: true, errors: [], messages: [], result: answer}),
+  (answer: unknown) => ({success: true, errors: [], messages: [], result: {state: 'Completed', result: answer}}),
+];
 
 test('Jev chooses among the existing templates through AI Gateway', async () => {
   const candidates = listTemplates();
@@ -36,6 +42,40 @@ test('Jev JSON with a charset is parsed instead of treating the binding stream a
   assert.deepEqual(await suggestTemplate(binding, {description: 'Scientific computing'}), {template: 'all-in-one'});
 });
 
+test('Cloudflare completed and API envelopes preserve each Jev template choice', async () => {
+  for (const wrap of responseFormats) for (const {id} of listTemplates()) {
+    let calls = 0;
+    const binding = ai(async () => {
+      calls++;
+      return new Response(JSON.stringify(wrap({model: 'jev-1.13.0', answers: {template: {type: 'choice', choice: id}}})),
+        {headers: {'Content-Type': 'application/json; charset=utf-8'}});
+    });
+    assert.deepEqual(await suggestTemplate(binding, {description: 'A reusable Julia library'}), {template: id});
+    assert.equal(calls, 1);
+  }
+});
+
+test('unsuccessful or incomplete envelopes cannot supply a suggestion, even with a valid answer', async t => {
+  const logs = t.mock.method(console, 'warn', () => {});
+  const answer = {answers: {template: {type: 'choice', choice: 'simple'}}};
+  const failures = [
+    {body: {success: false, result: answer}, code: 'suggestion_upstream'},
+    {body: {success: 'true', result: answer}, code: 'suggestion_upstream'},
+    {body: {success: true, errors: [{message: 'private'}], result: answer}, code: 'suggestion_upstream'},
+    {body: {errors: 'private', result: answer}, code: 'suggestion_upstream'},
+    ...['Failed', 'Pending', 'Running', 'private', null].map(state =>
+      ({body: {state, result: answer}, code: 'suggestion_state'})),
+  ];
+  for (const {body, code} of failures) {
+    for (const wrap of responseFormats) {
+      // A stray valid answer alongside an error must not bypass the envelope status.
+      await assert.rejects(suggestTemplate(ai(async () => Response.json(wrap({...answer, ...body}))), {description: 'private'}),
+        {code, status: 502});
+    }
+  }
+  assert.doesNotMatch(JSON.stringify(logs.mock.calls), /private/);
+});
+
 test('empty or invalid descriptions never invoke inference', async () => {
   let calls = 0;
   const binding = ai(async () => {calls++; return {};});
@@ -46,18 +86,32 @@ test('empty or invalid descriptions never invoke inference', async () => {
   assert.equal(calls, 0);
 });
 
-test('binding failures and malformed choices produce a safe, optional-feature error', async () => {
+test('binding failures and malformed choices produce a safe, optional-feature error', async t => {
+  t.mock.method(console, 'warn', () => {});
   await assert.rejects(suggestTemplate(undefined, {description: 'Test'}), {code: 'suggestion_unavailable', status: 503});
   for (const result of [null, {}, {answers: {}}, {answers: {template: null}},
     {answers: {template: {type: 'choice', choice: 'unknown'}}}, {answers: {template: {type: 'choice', choice: '<script>alert(1)</script>'}}},
-    {answers: {template: {type: 'choice', choice: 0}}}, {answers: {template: {type: 'choice'}}},
+    {answers: {template: {type: 'choice', choice: 0}}}, {answers: {template: {type: 'choice'}}}, {answers: {template: {choice: 'simple'}}},
     {answers: {template: {type: 'score', choice: 'minimum'}}}, {response: [{id: 0, score: 0.9}]}]) {
-    await assert.rejects(suggestTemplate(ai(async () => Response.json(result)), {description: 'Test'}), {code: 'suggestion_response', status: 502});
+    for (const wrap of responseFormats) {
+      await assert.rejects(suggestTemplate(ai(async () => Response.json(wrap(result))), {description: 'Test'}),
+        {code: 'suggestion_response', status: 502});
+    }
   }
   await assert.rejects(suggestTemplate(ai(async () => {throw Error('hidden upstream details');}), {description: 'Test'}), error => {
     assert.match((error as Error).message, /Could not reach Jev/);
     assert.doesNotMatch((error as Error).message, /hidden/); return errorResponse(error).status === 502;
   });
+});
+
+test('unrecognized nesting is rejected instead of searching for a plausible template', async t => {
+  t.mock.method(console, 'warn', () => {});
+  const answer = {answers: {template: {type: 'choice', choice: 'simple'}}};
+  for (const body of [{data: answer}, {response: JSON.stringify(answer)}, {result: {result: {result: answer}}},
+    {result: {result: {...answer, result: {success: false}}}}]) {
+    await assert.rejects(suggestTemplate(ai(async () => Response.json(body)), {description: 'Test'}),
+      {code: 'suggestion_response', status: 502});
+  }
 });
 
 test('upstream HTTP failures expose the status without leaking response bodies', async t => {
@@ -84,6 +138,13 @@ test('invalid JSON and invalid choices have separate safe diagnostics', async t 
   await assert.rejects(suggestTemplate(ai(async () => Response.json({answers: {template: {type: 'choice', choice: 'private'}}})), {description: 'private'}),
     {code: 'suggestion_response', status: 502});
   assert.deepEqual(JSON.parse(logs.mock.calls.at(-1)!.arguments[0]),
-    {event: 'template_suggestion_failed', reason: 'response', upstreamStatus: 200});
+    {event: 'template_suggestion_failed', reason: 'response', upstreamStatus: 200, resultDepth: 0,
+      validation: [{path: 'answers.template.choice', code: 'invalid_value'}]});
+  await assert.rejects(suggestTemplate(ai(async () => Response.json({success: true, result: {state: 'Completed', result: {
+    answers: {private: {type: 'choice', choice: 'private'}},
+  }}})), {description: 'private'}), {code: 'suggestion_response', status: 502});
+  assert.deepEqual(JSON.parse(logs.mock.calls.at(-1)!.arguments[0]),
+    {event: 'template_suggestion_failed', reason: 'response', upstreamStatus: 200, resultDepth: 2,
+      validation: [{path: 'answers.template', code: 'invalid_type'}]});
   assert.doesNotMatch(JSON.stringify(logs.mock.calls), /private/);
 });
