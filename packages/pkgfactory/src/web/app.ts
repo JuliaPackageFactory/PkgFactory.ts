@@ -21,8 +21,9 @@ let previewTimer: ReturnType<typeof setTimeout> | undefined, previewExpiry: Retu
 let creationTimer: ReturnType<typeof setInterval> | undefined;
 let availabilityRevision = 0, availabilityTimer: ReturnType<typeof setTimeout> | undefined, availabilityAbort: AbortController | undefined;
 let appsRevision = 0, appsAbort: AbortController | undefined, appsLoading = false;
-let suggestionRevision = 0, suggestionTimer: ReturnType<typeof setTimeout> | undefined, suggestionAbort: AbortController | undefined;
+let suggestionRevision = 0, suggestionAbort: AbortController | undefined, suggestionComplete = false;
 const suggestionLimit = 10;
+const suggestionTemplateOrder = ['minimum', 'simple', 'all-in-one'] as const;
 // Page lifetime only: resets and aborted/failed requests do not replenish the budget.
 let suggestionRequests = 0;
 let descriptionComposing = false;
@@ -165,22 +166,29 @@ function showSuggestion(message = '', loading = false) {
   element('template-suggestion').hidden = !message;
 }
 function clearSuggestion() {
-  clearTimeout(suggestionTimer); suggestionRevision++; suggestionAbort?.abort();
+  suggestionRevision++; suggestionAbort?.abort(); suggestionComplete = false;
   suggestionAbort = undefined;
   showSuggestion();
 }
-function scheduleSuggestion() {
-  clearSuggestion();
+function suggestionDescription() {
   const query = description.value.trim();
-  if (document.body.dataset.templateSuggestions !== 'true' || !profileReady || authRequired || working || created || !query || description.value.length > description.maxLength) return;
-  if (suggestionRequests >= suggestionLimit) {
-    showSuggestion(`Template suggestion limit reached (${suggestionLimit} requests). Reload the page for more suggestions, or choose a template below.`);
-    return;
-  }
-  showSuggestion('Suggesting a template…', true);
-  if (descriptionComposing) return;
-  const revision = suggestionRevision;
-  suggestionTimer = setTimeout(() => {void loadSuggestion(query, revision);}, 3000);
+  return document.body.dataset.templateSuggestions !== 'true' || !profileReady || authRequired || working || created || description.value.length > description.maxLength ? '' : query;
+}
+function showPendingSuggestion() {
+  const limited = suggestionRequests >= suggestionLimit;
+  showSuggestion(limited ? `Template suggestion limit reached (${suggestionLimit} requests). Reload the page for more suggestions, or choose a template below.` : 'Suggesting a template…', !limited);
+  return !limited;
+}
+function prepareSuggestion() {
+  clearSuggestion();
+  // Announce the feature while typing; inference starts only on template focus.
+  if (suggestionDescription()) showPendingSuggestion();
+}
+function requestSuggestion() {
+  const query = suggestionDescription();
+  // Refocusing neither duplicates an in-flight request nor repeats a completed one.
+  if (!query || descriptionComposing || suggestionComplete || (suggestionAbort && !suggestionAbort.signal.aborted)) return;
+  if (showPendingSuggestion()) void loadSuggestion(query, suggestionRevision);
 }
 async function loadSuggestion(query: string, revision: number) {
   if (revision !== suggestionRevision || suggestionRequests >= suggestionLimit) return;
@@ -194,9 +202,18 @@ async function loadSuggestion(query: string, revision: number) {
     const result = await call('/api/template-suggestion', {description: query}, controller.signal);
     if (revision !== suggestionRevision || controller.signal.aborted) return;
     // Use the existing option label; the model never supplies HTML or changes the selection.
-    const option = [...template.options].find(option => option.value && option.value === result.template);
+    const options = [...template.options].filter(option => option.value);
+    const option = options.find(option => option.value === result.template);
     if (!option) throw new Error('The suggested template was not recognized. You can choose a template below.');
-    showSuggestion(`Jev recommends ${option.textContent!.split(' · ')[0]}.`);
+    const probabilities = suggestionTemplateOrder.map(id => {
+      const probability = result.probabilities?.[id];
+      if (typeof probability !== 'number' || !Number.isFinite(probability) || probability < 0 || probability > 1) {
+        throw new Error('The template probabilities were not recognized. You can choose a template below.');
+      }
+      return `${id}: ${Math.round(probability * 100)}%`;
+    });
+    suggestionComplete = true;
+    showSuggestion(`Jev recommends ${option.textContent!.split(' · ')[0]}. (${probabilities.join(', ')})`);
   } catch (error) {
     // API messages contain safe diagnostics; do not replace them with a generic failure.
     if (revision === suggestionRevision && !controller.signal.aborted) showSuggestion((error as Error).message || 'Template suggestion unavailable. You can choose a template below.');
@@ -309,9 +326,13 @@ authors.addEventListener('blur', () => {authorsTouched = true; controls();});
 form.addEventListener('compositionstart', () => {composing = true; controls();});
 form.addEventListener('compositionend', () => {composing = false; normalizeAuthors(); controls();});
 form.addEventListener('input', controls);
-description.addEventListener('input', scheduleSuggestion);
-description.addEventListener('compositionstart', () => {descriptionComposing = true; scheduleSuggestion();});
-description.addEventListener('compositionend', () => {descriptionComposing = false; scheduleSuggestion();});
+description.addEventListener('input', prepareSuggestion);
+description.addEventListener('compositionstart', () => {descriptionComposing = true; prepareSuggestion();});
+description.addEventListener('compositionend', () => {
+  descriptionComposing = false; prepareSuggestion();
+  if (template.matches(':focus')) requestSuggestion();
+});
+template.addEventListener('focus', requestSuggestion);
 form.addEventListener('reset', clearSuggestion);
 form.addEventListener('focusout', () => {setTimeout(() => advanceToAutomation(), 0);});
 owner.addEventListener('change', () => {scheduleAvailability(); void loadApps();});

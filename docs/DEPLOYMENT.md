@@ -276,11 +276,16 @@ npm publish --workspace @juliapackagefactory/pkgfactory --access public
 ### テンプレート推薦（Jev）
 
 `wrangler.jsonc` はstagingとproductionに `AI` バインディングを設定しています。
-Webの説明欄で入力が3秒止まると、既存の3テンプレートを
+Webのテンプレート選択プルダウンにフォーカスすると、既存の3テンプレートを
 [`typesafe/jev`](https://developers.cloudflare.com/ai/models/typesafe/jev/)の `choice` 質問で比較します。
-入力開始時にスピナーと「Suggesting a template…」を表示し、待機・通信中も表示を続けます。
-IME変換中は送信せず、確定後に3秒待ちます。成功・失敗・タイムアウト時にはスピナーを停止します。
-説明文とテンプレートの説明だけをJevへ渡し、推薦を表示します。選択値は変更しません。
+説明の入力開始時にスピナーと「Suggesting a template…」を表示します。この時点では通信せず、
+クリックやTab移動でプルダウンにフォーカスした時点で送信します。3秒の待機はありません。
+IME変換中は送信せず、プルダウンにフォーカスしたまま変換が確定した場合は確定後に送信します。
+成功・失敗・タイムアウト時にはスピナーを停止します。説明の編集は古いリクエストと結果を無効にし、次のフォーカス時に再取得します。
+同じ説明で通信中・取得済みの場合は、再フォーカスしても追加リクエストを送りません。失敗時は再フォーカスで再試行できます。
+説明文とテンプレートの説明だけをJevへ渡し、推薦と確率の内訳を表示します。選択値は変更しません。
+表示例: `Jev recommends Minimum. (minimum: 80%, simple: 15%, all-in-one: 5%)`。
+内訳はJevの `probabilities` を `minimum`、`simple`、`all-in-one` の順に整数％へ丸めたものです。表示上の合計は丸めにより100％にならないことがあります。
 推薦リクエストは1ページ読み込みあたり10回までです。失敗・中断したリクエストも数え、フォームのリセットでは回数を戻しません。
 上限到達後も手動選択でき、ページをリロードすると再び10回利用できます。この上限はブラウザ側で管理し、APIには既存のアカウント単位のレート制限を適用します。
 APIには既存のWebセッション・Origin・CSRF検証が適用されます。推論失敗時も手動選択できます。
@@ -297,6 +302,7 @@ Jevの直接応答（`answers.template.choice`）に加え、Cloudflareの完了
 およびその外側にAPIの `result` がある形式も処理します。`result` の展開は最大2段までです。
 `success` が存在して `true` でない応答、空でない `errors`、`Completed` 以外の `state` は、HTTP 200でも推薦として扱いません。
 最終的な回答は `type: "choice"` と既存の3テンプレートIDに限定して検証します。
+`probabilities` は3候補すべての0〜1の数値を必要とし、合計は丸め誤差を許容して1との差が0.02未満であることを確認します。
 GatewayのRequests増加だけでは推論成功を判断できません。失敗時には画面に上流HTTPステータス、通信失敗、JSON解析失敗、Gatewayの拒否、未完了の結果、選択値の不整合を区別して表示します。
 Workers Logsには `template_suggestion_failed` イベントの `reason` と、取得できた場合の `upstreamStatus` を記録します。
 選択値の検証失敗時には `resultDepth`（展開した段数）と `validation`（固定の検証パスとエラーコード）も記録します。
