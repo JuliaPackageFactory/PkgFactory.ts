@@ -65,7 +65,7 @@ test('suggestions wait three seconds after the last edit and never change the se
     f.$('template').value = 'minimum';
     f.input('description', 'First description');
     assert.equal(f.$('template-suggestion').hidden, false);
-    assert.equal(f.$('suggestion-message').textContent, 'テンプレートをサジェストします…');
+    assert.equal(f.$('suggestion-message').textContent, 'Suggesting a template…');
     assert.equal(f.$('suggestion-spinner').hidden, false);
     await tick(2999); assert.equal(f.count('/api/template-suggestion'), 0);
     f.input('description', '  A Julia package for few-body Schrödinger equations.  ');

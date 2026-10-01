@@ -11,10 +11,47 @@ const useCases: Record<PackageSpec['template'], string> = {
   'all-in-one': 'For a scientific or numerical computing library, research software, simulations, or a substantial shared package that benefits from citations, notebook examples, documentation, and additional quality checks.',
 };
 
-function suggestionError(reason: string, message: string, upstreamStatus?: number) {
+type ResponseDiagnostics = {resultDepth: number; validation: {path: string; code: string}[]};
+
+function suggestionError(reason: string, message: string, upstreamStatus?: number, diagnostics?: ResponseDiagnostics) {
   // Keep diagnostics useful without logging descriptions, response bodies, or credentials.
-  console.warn(JSON.stringify({event: 'template_suggestion_failed', reason, upstreamStatus}));
+  console.warn(JSON.stringify({event: 'template_suggestion_failed', reason, upstreamStatus, ...diagnostics}));
   return new FactoryError(`suggestion_${reason}`, `${message} You can choose a template below.`, 502);
+}
+
+function readChoice(response: unknown, upstreamStatus: number) {
+  let payload = response;
+  let resultDepth = 0;
+  // Cloudflare can wrap model output in {state: 'Completed', result}, with an
+  // additional {success, errors, result} API envelope. Inspect only these two
+  // result levels; never search arbitrary nested values for a template name.
+  while (payload !== null && typeof payload === 'object' && !Array.isArray(payload)) {
+    const envelope = payload as Record<string, unknown>;
+    if (('success' in envelope && envelope.success !== true) ||
+      ('errors' in envelope && (!Array.isArray(envelope.errors) || envelope.errors.length > 0))) {
+      throw suggestionError('upstream', 'Jev request was rejected by AI Gateway.', upstreamStatus);
+    }
+    if ('state' in envelope && envelope.state !== 'Completed') {
+      throw suggestionError('state', 'Jev did not return a completed result.', upstreamStatus);
+    }
+    if (!('result' in envelope)) break;
+    if (resultDepth === 2) {
+      throw suggestionError('response', 'Jev returned an unexpected template choice.', upstreamStatus, {
+        resultDepth, validation: [{path: 'result', code: 'unexpected_nesting'}],
+      });
+    }
+    payload = envelope.result;
+    resultDepth++;
+  }
+  const parsed = resultSchema.safeParse(payload);
+  if (!parsed.success) {
+    // The schema has only fixed property names. Do not log Zod messages/inputs,
+    // which can contain the provider's response or the user's description.
+    throw suggestionError('response', 'Jev returned an unexpected template choice.', upstreamStatus, {
+      resultDepth, validation: parsed.error.issues.map(issue => ({path: issue.path.join('.'), code: issue.code})),
+    });
+  }
+  return parsed.data.answers.template.choice;
 }
 
 export async function suggestTemplate(ai: Pick<Ai, 'run'> | undefined, input: unknown) {
@@ -43,7 +80,5 @@ export async function suggestTemplate(ai: Pick<Ai, 'run'> | undefined, input: un
   let result;
   try {result = await response.json();}
   catch {throw suggestionError('json', 'Jev returned an unreadable response.', response.status);}
-  const parsed = resultSchema.safeParse(result);
-  if (!parsed.success) throw suggestionError('response', 'Jev returned an unexpected template choice.', response.status);
-  return {template: parsed.data.answers.template.choice};
+  return {template: readChoice(result, response.status)};
 }
