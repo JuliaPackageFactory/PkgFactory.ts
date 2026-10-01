@@ -10,7 +10,7 @@ export function page(csrf: string, publicWeb: boolean, authenticated: boolean, t
   <header class="app-header"><div class="header-inner">
     <a class="brand" href="/" aria-label="PkgFactory home"><img class="brand-logo" src="/assets/logo.svg" width="52" height="48" alt=""><span>PkgFactory</span></a>
     <div class="header-actions">
-    <a class="github-link" href="https://github.com/JuliaPackageFactory/PkgFactory.ts" target="_blank" rel="noreferrer" aria-label="View PkgFactory on GitHub" title="View PkgFactory on GitHub"><img src="/assets/github.svg" width="24" height="24" alt=""></a></div>
+    <a class="github-link" href="https://github.com/JuliaPackageFactory/PkgFactory.ts" target="_blank" rel="noreferrer" aria-label="View PkgFactory on GitHub" title="View PkgFactory on GitHub"><img src="/assets/github.svg" width="30" height="30" alt=""></a></div>
   </div></header>
   <main class="main-content"><div id="reconnect-notice" class="notice notice-error" role="alert" hidden>GitHub authorization has expired or changed. ${publicWeb ? '<a id="reconnect" href="/auth/login">Reconnect GitHub</a> to continue with your settings.' : 'Restart the local Web with a valid GitHub credential.'}</div><section class="intro" aria-labelledby="page-title"><p class="eyebrow">JULIA PACKAGE FACTORYF</p><h1 id="page-title">Create a package repository.</h1>
     <p>Connect GitHub, choose a template, and publish a repository with CI, documentation, and release automation already configured.</p></section>

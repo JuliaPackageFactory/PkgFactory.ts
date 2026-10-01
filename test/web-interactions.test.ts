@@ -63,7 +63,7 @@ function activateTemplate(f: Awaited<ReturnType<typeof fixture>>) {
   f.$('template').blur(); f.$('template').focus();
 }
 
-test('typing announces suggestions but only template focus starts inference, without a delay', async t => {
+test('typing announces suggestions without sending; keyboard focus starts inference without a delay', async t => {
   const f = await fixture({suggestions: true});
   const tick = suggestionClock(t, f);
   try {
@@ -91,6 +91,54 @@ test('typing announces suggestions but only template focus starts inference, wit
     f.input('description', '   '); activateTemplate(f); await tick(6000);
     assert.equal(f.count('/api/template-suggestion'), 1); assert.equal(f.$('template-suggestion').hidden, true);
     assert.equal(f.$('suggestion-spinner').hidden, true);
+  } finally {f.close();}
+});
+
+test('mouse and touch presses request a suggestion before focus or option hover, without duplicate requests', async t => {
+  const f = await fixture({suggestions: true});
+  const tick = suggestionClock(t, f);
+  try {
+    let requests = 0;
+    for (const pointerType of ['mouse', 'touch']) {
+      f.$('description').focus(); f.input('description', `A ${pointerType} test package`);
+      const pending = deferred(); f.state.suggestionGate = pending;
+      const press = (button = 0, isPrimary = true) => new f.w.PointerEvent('pointerdown', {bubbles: true, cancelable: true, pointerType, button, isPrimary});
+      f.$('template').dispatchEvent(new f.w.PointerEvent('pointerover', {bubbles: true, pointerType}));
+      f.$('template').dispatchEvent(press(2));
+      f.$('template').dispatchEvent(press(0, false));
+      assert.equal(f.count('/api/template-suggestion'), requests, 'Hover and non-primary presses do not start inference');
+      const event = press();
+      assert.equal(f.$('template').dispatchEvent(event), true);
+      assert.equal(event.defaultPrevented, false, 'The native picker can still open');
+      assert.equal(f.count('/api/template-suggestion'), ++requests, 'The request starts on press, before focus or release');
+      assert.equal(f.w.document.activeElement.id, 'description', 'No focus event was needed');
+      assert.equal(f.$('suggestion-message').textContent, 'Suggesting a template…');
+      f.$('template').focus();
+      f.$('template').dispatchEvent(new f.w.PointerEvent('pointerup', {bubbles: true, pointerType}));
+      f.$('template').click();
+      assert.equal(f.count('/api/template-suggestion'), requests);
+      pending.resolve(suggested); await tick(0);
+      assert.equal(f.$('suggestion-message').textContent, suggestionMessage, 'The result appears without option hover');
+      assert.equal(f.$('template').value, '');
+      f.$('template').dispatchEvent(press()); await tick(0);
+      assert.equal(f.count('/api/template-suggestion'), requests, 'Another press reuses the completed result');
+    }
+  } finally {f.close();}
+});
+
+test('pressing an already focused dropdown retries a failed suggestion', async t => {
+  const f = await fixture({suggestions: true});
+  const tick = suggestionClock(t, f);
+  try {
+    f.input('description', 'Retry without leaving the dropdown');
+    f.state.suggestionFailure = true; activateTemplate(f); await tick(0);
+    assert.equal(f.count('/api/template-suggestion'), 1);
+    assert.match(f.$('suggestion-message').textContent, /unavailable/);
+    assert.equal(f.w.document.activeElement.id, 'template');
+    f.state.suggestionFailure = false;
+    f.$('template').dispatchEvent(new f.w.PointerEvent('pointerdown', {bubbles: true, button: 0, isPrimary: true, pointerType: 'mouse'}));
+    assert.equal(f.count('/api/template-suggestion'), 2);
+    await tick(0); assert.equal(f.$('suggestion-message').textContent, suggestionMessage);
   } finally {f.close();}
 });
 
@@ -273,6 +321,7 @@ test('suggestions stop after ten requests, survive form resets, and resume on a 
     assert.equal(f.count('/api/template-suggestion'), 10);
     assert.equal(f.$('template-suggestion').textContent, suggestionMessage, 'The tenth result stays visible on refocus');
     f.input('description', 'Eleventh request'); activateTemplate(f); await tick(0);
+    f.$('template').dispatchEvent(new f.w.PointerEvent('pointerdown', {bubbles: true, button: 0, isPrimary: true, pointerType: 'mouse'}));
     assert.equal(f.count('/api/template-suggestion'), 10);
     assert.match(f.$('template-suggestion').textContent, /limit reached \(10 requests\).*Reload/);
     assert.equal(f.$('template-suggestion').hidden, false);

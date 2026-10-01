@@ -181,12 +181,12 @@ function showPendingSuggestion() {
 }
 function prepareSuggestion() {
   clearSuggestion();
-  // Announce the feature while typing; inference starts only on template focus.
+  // Announce the feature while typing; infer when the template is pressed or focused.
   if (suggestionDescription()) showPendingSuggestion();
 }
 function requestSuggestion() {
   const query = suggestionDescription();
-  // Refocusing neither duplicates an in-flight request nor repeats a completed one.
+  // Press/focus events neither duplicate an in-flight request nor repeat a completed one.
   if (!query || descriptionComposing || suggestionComplete || (suggestionAbort && !suggestionAbort.signal.aborted)) return;
   if (showPendingSuggestion()) void loadSuggestion(query, suggestionRevision);
 }
@@ -332,6 +332,8 @@ description.addEventListener('compositionend', () => {
   descriptionComposing = false; prepareSuggestion();
   if (template.matches(':focus')) requestSuggestion();
 });
+// Start before the native picker opens; do not wait for focus, click release, or option hover.
+template.addEventListener('pointerdown', event => {if (event.isPrimary && event.button === 0) requestSuggestion();});
 template.addEventListener('focus', requestSuggestion);
 form.addEventListener('reset', clearSuggestion);
 form.addEventListener('focusout', () => {setTimeout(() => advanceToAutomation(), 0);});

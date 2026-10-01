@@ -117,7 +117,7 @@ button, select { cursor: pointer; }
 .github-link { justify-content: center; flex-shrink: 0; width: 40px; height: 40px; border-radius: 8px; text-decoration: none; }
 .github-link:hover { opacity: 0.8; }
 .github-link:focus-visible, .app-footer a:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
-.github-link img { display: block; width: 24px; height: 24px; object-fit: contain; }
+.github-link img { display: block; width: 30px; height: 30px; object-fit: contain; }
 
 .main-content { width: min(780px, calc(100% - 40px)); margin: 0 auto; padding: 58px 0 80px; }
 .intro { margin-bottom: 34px; }
