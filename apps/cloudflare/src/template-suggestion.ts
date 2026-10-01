@@ -3,7 +3,13 @@ import { FactoryError } from '../../../packages/pkgfactory/src/application/engin
 import { listTemplates, specSchema, templates, type PackageSpec } from '../../../packages/pkgfactory/src/core/spec.js';
 
 const inputSchema = specSchema.pick({description: true});
-const resultSchema = z.object({answers: z.object({template: z.object({type: z.literal('choice'), choice: z.enum(templates)})})});
+const probability = z.number().min(0).max(1);
+const probabilitiesSchema = z.object({minimum: probability, simple: probability, 'all-in-one': probability})
+  // Allow rounding in the provider's distribution while rejecting unusable totals.
+  .refine(values => Math.abs(Object.values(values).reduce((sum, value) => sum + value, 0) - 1) < 0.02);
+const resultSchema = z.object({answers: z.object({template: z.object({
+  type: z.literal('choice'), choice: z.enum(templates), probabilities: probabilitiesSchema,
+})})});
 // Describe when each existing bundle is useful, without inventing domain-specific files.
 const useCases: Record<PackageSpec['template'], string> = {
   minimum: 'For a small utility, learning exercise, experiment, or prototype that only needs the essential package structure and tests, without a documentation website or release automation.',
@@ -51,7 +57,8 @@ function readChoice(response: unknown, upstreamStatus: number) {
       resultDepth, validation: parsed.error.issues.map(issue => ({path: issue.path.join('.'), code: issue.code})),
     });
   }
-  return parsed.data.answers.template.choice;
+  const {choice, probabilities} = parsed.data.answers.template;
+  return {template: choice, probabilities};
 }
 
 export async function suggestTemplate(ai: Pick<Ai, 'run'> | undefined, input: unknown) {
@@ -80,5 +87,5 @@ export async function suggestTemplate(ai: Pick<Ai, 'run'> | undefined, input: un
   let result;
   try {result = await response.json();}
   catch {throw suggestionError('json', 'Jev returned an unreadable response.', response.status);}
-  return {template: readChoice(result, response.status)};
+  return readChoice(result, response.status);
 }
