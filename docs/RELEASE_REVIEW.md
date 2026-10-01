@@ -16,7 +16,7 @@ mainのCI成功後にステージングへ自動配備します。動作確認�
 - 3テンプレート、プレビュー、作成、状態確認、明示的再開を実装しました。
 - 公開GitHub OAuthは認可コード＋S256 PKCE。ローカルはPAT・Device Flow・任意のgh tokenに対応します。
 - Ed25519の生成、GitHub登録、Documenter公開、TagBotのSSH/tag pushを検証しました。
-- 固定3リポジトリTestMinimum.jl・TestSimple.jl・TestAllInOne.jlを更新するE2Eを移植しました。新規作成受入はTestYYYYMMDDHHMMSS.jlの1件に制限します。
+- 固定3リポジトリExampleMinimum.jl・ExampleSimple.jl・ExampleAllInOne.jlを更新するE2Eを移植しました。新規作成受入はTestYYYYMMDDHHMMSS.jlの1件に制限します。
 - Opusの4指摘に対応し、OAuth/保存容量の分離、MCP同意表示、descriptionの無害化を検証しました。[対応表](SECURITY_REVIEW.md)
 - Juliaコンテナは使いません。旧コード・旧Workerは参照と稼働を維持しています。
 

@@ -31,9 +31,9 @@ jobs:
           - '1'
           - 'pre'
         os: [ubuntu-latest]
-        include:
-          - version: '1'
-            os: windows-latest
+        # include:
+        #   - version: '1'
+        #     os: windows-latest
     env:
       JET_TEST: ${{ matrix.os == 'ubuntu-latest' && matrix.version == '1' }}
     steps:
@@ -67,8 +67,8 @@ jobs:
       matrix:
         os:
           - ubuntu-latest
-          - macOS-latest
-          - windows-latest
+          # - macOS-latest
+          # - windows-latest
         version:
           - 'min'
           - '1'

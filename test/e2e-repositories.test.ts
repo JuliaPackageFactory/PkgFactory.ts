@@ -21,7 +21,7 @@ const uuid = 'c1295625-87ea-430b-8a8e-cec21038bef7';
 test('persistent snapshots initialize, preserve history, remove stale files and skip identical output', async () => {
   const {checkout, remote, root} = await fixture();
   assert.equal(head(checkout), null);
-  const files = {'Project.toml': `name = "TestMinimum"\nuuid = "${uuid}"\n`, 'README.md': 'first\n', 'obsolete.txt': 'obsolete\n'};
+  const files = {'Project.toml': `name = "ExampleMinimum"\nuuid = "${uuid}"\n`, 'README.md': 'first\n', 'obsolete.txt': 'obsolete\n'};
   const alias = join(root, 'checkout-alias');
   await symlink(checkout, alias, process.platform === 'win32' ? 'junction' : 'dir');
   const first = await publishSnapshot(alias, files, 'Initial snapshot');
@@ -67,7 +67,7 @@ test('renamed fixed repositories keep UUIDs and render the same output on subseq
 });
 test('a concurrent remote update is never overwritten or retried', async () => {
   const {checkout, remote, root} = await fixture();
-  const files = {'Project.toml': `name = "TestMinimum"\nuuid = "${uuid}"\n`};
+  const files = {'Project.toml': `name = "ExampleMinimum"\nuuid = "${uuid}"\n`};
   await publishSnapshot(checkout, files, 'Initial');
   const other = join(root, 'other'); git(root, 'clone', remote, other);
   git(other, 'config', 'user.name', 'Other'); git(other, 'config', 'user.email', 'other@example.invalid');
@@ -81,7 +81,7 @@ test('one timestamped creation per run, including uncertain outcomes and paralle
   assert.equal(selectedTemplate([]), 'simple');
   assert.equal(selectedTemplate(['--template=minimum']), 'minimum');
   assert.throws(() => selectedTemplate(['--template=minimum', '--template=all-in-one']));
-  for (const repository of ['ohno/Test20260928091011.jl', 'JuliaPackageFactory/TestSimple.jl', 'JuliaPackageFactory/Test123.jl', 'JuliaPackageFactory/PkgFactoryPoc20260928091011.jl']) assert.throws(() => assertFreshTestRepository(repository));
+  for (const repository of ['ohno/Test20260928091011.jl', 'JuliaPackageFactory/ExampleSimple.jl', 'JuliaPackageFactory/TestSimple.jl', 'JuliaPackageFactory/Test123.jl', 'JuliaPackageFactory/PkgFactoryPoc20260928091011.jl']) assert.throws(() => assertFreshTestRepository(repository));
   let writes = 0;
   const one = new SingleCreation();
   const results = await Promise.allSettled([
