@@ -121,7 +121,7 @@ npm run e2e:templates -- --gh
 npm run e2e -- --gh --template=simple --confirm-create-test-repository
 ```
 
-通常のテンプレートE2Eは既存の `TestMinimum.jl`・`TestSimple.jl`・`TestAllInOne.jl` を継続更新します。
+通常のテンプレートE2Eは既存の `ExampleMinimum.jl`・`ExampleSimple.jl`・`ExampleAllInOne.jl` を継続更新します。
 新規作成E2Eは `JuliaPackageFactory/TestYYYYMMDDHHMMSS.jl`（UTC）の1件だけです。
 テンプレートを選択して実行し、途中停止時は保存済みplanIdを明示的に再開します。自動削除はしません。
 OpenSSHとJuliaは開発時の鍵PoC・生成パッケージ検証にのみ使用します。

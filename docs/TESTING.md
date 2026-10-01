@@ -10,20 +10,22 @@
 | 固定リポジトリのE2E | 有効化後、mainのテンプレート/生成処理変更 / 手動 | 下記の既存3リポジトリに差分だけをcommit/push |
 | 作成・再開の受入 | 明示的な手動実行 | 1回の実行で新規リポジトリは最大1件。再開時は0件 |
 
+GitHub ActionsのテストはLinux（`ubuntu-latest`）で実行します。本体CIとall-in-oneテンプレートのmacOS・Windows設定はコメントで残しています。
+
 ## 固定3リポジトリ
 
 | テンプレート | 現在のリポジトリ | 初回更新で受け入れる旧パッケージ名 |
 |---|---|---|
-| minimum | [TestMinimum.jl](https://github.com/JuliaPackageFactory/TestMinimum.jl) | TemplateMinimum / PkgFactoryMinimum |
-| simple | [TestSimple.jl](https://github.com/JuliaPackageFactory/TestSimple.jl) | TemplateSimple / PkgFactorySimple |
-| all-in-one | [TestAllInOne.jl](https://github.com/JuliaPackageFactory/TestAllInOne.jl) | TemplateAllInOne / TamplateAllInOne / PkgFactoryAllInOne |
+| minimum | [ExampleMinimum.jl](https://github.com/JuliaPackageFactory/ExampleMinimum.jl) | TestMinimum / TemplateMinimum / PkgFactoryMinimum |
+| simple | [ExampleSimple.jl](https://github.com/JuliaPackageFactory/ExampleSimple.jl) | TestSimple / TemplateSimple / PkgFactorySimple |
+| all-in-one | [ExampleAllInOne.jl](https://github.com/JuliaPackageFactory/ExampleAllInOne.jl) | TestAllInOne / TemplateAllInOne / TamplateAllInOne / PkgFactoryAllInOne |
 
 既存リポジトリとmainを必須とし、リポジトリの作成・削除はしません。
 Project.toml・モジュール・テスト・README・docsの名前とURLを生成器で一貫して更新し、UUIDとGit履歴を維持します。
 生成物にない古い追跡ファイルは除去するため、これらの専用リポジトリに手書きのファイルを混在させないでください。
 Factoryの作成ジャーナル用 `.pkgfactory.json` は継続スナップショットには含めません。
 日付はリポジトリの最初のコミットから決め、同じ入力で毎回日付が変わる差分を防ぎます。
-生成内容が同じならコミットしません。更新コミットの件名は `Update TestAllInOne from PkgFactory.ts <生成元の40桁SHA>` の形式で、対象パッケージ名と生成元のコミットIDを記録します。空行を挟んだ3行目にはそのコミットURLを記録します。
+生成内容が同じならコミットしません。更新コミットの件名は `Update ExampleAllInOne from PkgFactory.ts <生成元の40桁SHA>` の形式で、対象パッケージ名と生成元のコミットIDを記録します。空行を挟んだ3行目にはそのコミットURLを記録します。
 dirty checkout・別パッケージ名・不正UUIDを拒否し、競合するpushは強制上書きも自動再送もしません。
 
 ```sh
@@ -32,7 +34,7 @@ npm run e2e:templates -- --gh
 # ソース変更をコミット後、固定3件を更新（新規作成0件）
 npm run e2e:templates -- --gh --publish
 # 1テンプレートのみ確認する場合
-npm run e2e:templates -- --gh --publish --package=TestSimple
+npm run e2e:templates -- --gh --publish --package=ExampleSimple
 ```
 
 結果は `artifacts/template-repositories*.json` にUUID・更新前後SHA・チェックアウト先を保存します。
@@ -57,11 +59,11 @@ npm run e2e:templates -- --gh --publish --package=TestSimple
 
 Workflowは固定3件を順に更新し、ファイル一致・UUID・履歴・remote SHAを検証します。
 その後、公開用PATを渡さずにJulia 1.12のPkg.test（JETを含む）とdocsビルドを行い、結果をartifactとjob summaryへ残します。
-pushされたリポジトリ自身のCIが、各OS/Julia版・品質検査・Documenter公開を担当します。
+pushされたリポジトリ自身のCIが、Linuxでの各Julia版のテスト・品質検査・Documenter公開を担当します。
 そのCIを同じ更新について二重にdispatchしません。GITHUB_TOKENによる別リポジトリ更新には制限があるため、上記の専用PATを使います。
 [GitHubのトークンとWorkflow起動の仕様](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow)
 
-TestSimple.jl・TestAllInOne.jlのDocumenter公開は既存設定で成功しました。
+ExampleSimple.jl・ExampleAllInOne.jlのDocumenter公開は、旧名のTestSimple.jl・TestAllInOne.jlで既存設定による成功を確認しています。
 現在はリポジトリ自身の `GITHUB_TOKEN`（contents: write）で認証し、Pagesは `gh-pages` の `/` を公開しています。
 TagBotが作るタグからCIを起動するSSH検証を追加する場合は、Deploy key（write許可）と、対応するBase64形式の秘密鍵をActions Secret `DOCUMENTER_KEY` に設定します。
 [Documenterの認証方式とTagBot](https://documenter.juliadocs.org/stable/man/hosting/)

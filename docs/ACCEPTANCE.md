@@ -1,5 +1,7 @@
 # 受入結果（2026-09-29 JST）
 
+以下のリポジトリ名・OS構成は検証当時の記録です。固定リポジトリは現在 `ExampleMinimum.jl`・`ExampleSimple.jl`・`ExampleAllInOne.jl` に改名され、継続CIはLinuxのみで実行します。[現在のテスト設定](TESTING.md)
+
 **実装とローカル検証は完了。本番公開可能という判定はまだしていません。**
 ステージングは配備済みです。組織のDeploy key許可後の再開とEd25519の実サービス互換を確認しました。
 ステージングのGitHub OAuth Client IDは反映・配備済みです。
@@ -50,9 +52,9 @@ Node/workerdは計42件成功しました。新規作成のrunnerはNode/MCP共�
 
 | 固定リポジトリ | 維持したUUID | 実検証 |
 |---|---|---|
-| TestMinimum.jl | `c1295625-87ea-430b-8a8e-cec21038bef7` | [CI成功](https://github.com/JuliaPackageFactory/TestMinimum.jl/actions/runs/36399833206) |
-| TestSimple.jl | `baa55490-87fb-4830-a51e-9c9b2e958e9e` | [CI成功](https://github.com/JuliaPackageFactory/TestSimple.jl/actions/runs/36399841766)・[公開docs HTTP 200、新名を確認](https://juliapackagefactory.github.io/TestSimple.jl/dev/) |
-| TestAllInOne.jl | `e625b4ae-d6f6-409f-bbf2-54d8e3b9029e` | [3 OSのJulia CI成功](https://github.com/JuliaPackageFactory/TestAllInOne.jl/actions/runs/36399851095)・[公開docs HTTP 200、新名を確認](https://juliapackagefactory.github.io/TestAllInOne.jl/dev/) |
+| TestMinimum.jl | `c1295625-87ea-430b-8a8e-cec21038bef7` | [CI成功](https://github.com/JuliaPackageFactory/ExampleMinimum.jl/actions/runs/36399833206) |
+| TestSimple.jl | `baa55490-87fb-4830-a51e-9c9b2e958e9e` | [CI成功](https://github.com/JuliaPackageFactory/ExampleSimple.jl/actions/runs/36399841766)・[公開docs HTTP 200、新名を確認](https://juliapackagefactory.github.io/TestSimple.jl/dev/) |
+| TestAllInOne.jl | `e625b4ae-d6f6-409f-bbf2-54d8e3b9029e` | [3 OSのJulia CI成功](https://github.com/JuliaPackageFactory/ExampleAllInOne.jl/actions/runs/36399851095)・[公開docs HTTP 200、新名を確認](https://juliapackagefactory.github.io/TestAllInOne.jl/dev/) |
 
 All-in-oneのAqua・JET・Runicも成功しました。Documenterは両方とも既存のGITHUB_TOKEN認証で公開し、鍵・Secret・Pages設定は変更していません。
 新しいGit回帰テストで見つかったWindows短縮パス/macOSのパス別名の誤判定は、実パスの照合で修正しました。
@@ -69,9 +71,9 @@ All-in-oneのAqua・JET・Runicも成功しました。Documenterは両方とも
 
 | 固定リポジトリ | 更新コミット | 検証 |
 |---|---|---|
-| TestMinimum.jl | `97243bff4881044b1db3bcf645218d88c5122bdb` | [CI](https://github.com/JuliaPackageFactory/TestMinimum.jl/actions/runs/36448842533) |
-| TestSimple.jl | `5be55e7ab7c5b995332338a79ce7a87d72a160be` | [CI/Documenter](https://github.com/JuliaPackageFactory/TestSimple.jl/actions/runs/36448852126) |
-| TestAllInOne.jl | `08df2173d76c6c1b66e411bbd9c82528375eb663` | [CI/Documenter](https://github.com/JuliaPackageFactory/TestAllInOne.jl/actions/runs/36448863550)・Aqua/JET/Runic成功 |
+| TestMinimum.jl | `97243bff4881044b1db3bcf645218d88c5122bdb` | [CI](https://github.com/JuliaPackageFactory/ExampleMinimum.jl/actions/runs/36448842533) |
+| TestSimple.jl | `5be55e7ab7c5b995332338a79ce7a87d72a160be` | [CI/Documenter](https://github.com/JuliaPackageFactory/ExampleSimple.jl/actions/runs/36448852126) |
+| TestAllInOne.jl | `08df2173d76c6c1b66e411bbd9c82528375eb663` | [CI/Documenter](https://github.com/JuliaPackageFactory/ExampleAllInOne.jl/actions/runs/36448863550)・Aqua/JET/Runic成功 |
 
 新規リポジトリは作成していません。修正版のnpm tarballもローカルへインストールしてCLI/Web/stdioを検証しました。
 ステージング配備後はhealth/Webの200、未認証API/MCPの401、ログイン開始の302・S256・Secure/HttpOnly Cookieを確認しました。
