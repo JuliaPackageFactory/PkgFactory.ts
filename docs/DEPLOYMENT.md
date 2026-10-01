@@ -278,6 +278,8 @@ npm publish --workspace @juliapackagefactory/pkgfactory --access public
 `wrangler.jsonc` はstagingとproductionに `AI` バインディングを設定しています。
 Webの説明欄で入力が3秒止まると、既存の3テンプレートを
 [`typesafe/jev`](https://developers.cloudflare.com/ai/models/typesafe/jev/)の `choice` 質問で比較します。
+入力開始時にスピナーと「テンプレートをサジェストします…」を表示し、待機・通信中も表示を続けます。
+IME変換中は送信せず、確定後に3秒待ちます。成功・失敗・タイムアウト時にはスピナーを停止します。
 説明文とテンプレートの説明だけをJevへ渡し、推薦を表示します。選択値は変更しません。
 推薦リクエストは1ページ読み込みあたり10回までです。失敗・中断したリクエストも数え、フォームのリセットでは回数を戻しません。
 上限到達後も手動選択でき、ページをリロードすると再び10回利用できます。この上限はブラウザ側で管理し、APIには既存のアカウント単位のレート制限を適用します。
@@ -288,6 +290,11 @@ Jevはサードパーティーモデルのため、Workers AIの無料Neurons枠
 配備先Cloudflareアカウントで事前にクレジットを購入・追加してください。
 呼び出しには `gateway: {id: 'default', collectLog: false}` を指定します。
 [`default` Gateway](https://developers.cloudflare.com/ai-gateway/usage/worker-binding-methods/)は初回リクエスト時に自動作成され、推薦リクエストのログ収集は無効にしています。
+
+AIバインディングからは `returnRawResponse: true` で応答を受け、`Response.json()` で読み取ります。
+これにより、Content-Typeに `charset` が付いたJSONも処理できます。
+GatewayのRequests増加だけでは推論成功を判断できません。失敗時には画面に上流HTTPステータス、通信失敗、JSON解析失敗、選択値の不整合を区別して表示します。
+Workers Logsには `template_suggestion_failed` イベントの `reason` と、取得できた場合の `upstreamStatus` を記録します。説明文・応答本文・認証情報は記録しません。
 
 ### GitHub Actionsの配備設定
 

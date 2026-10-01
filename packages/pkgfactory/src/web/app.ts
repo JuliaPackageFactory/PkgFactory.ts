@@ -159,21 +159,26 @@ function scheduleAvailability() {
   availability('Checking repository name…');
   availabilityTimer = setTimeout(() => {void checkAvailability(revision);}, 450);
 }
+function showSuggestion(message = '', loading = false) {
+  element('suggestion-message').textContent = message;
+  element('suggestion-spinner').hidden = !loading;
+  element('template-suggestion').hidden = !message;
+}
 function clearSuggestion() {
   clearTimeout(suggestionTimer); suggestionRevision++; suggestionAbort?.abort();
   suggestionAbort = undefined;
-  element('template-suggestion').textContent = ''; element('template-suggestion').hidden = true;
+  showSuggestion();
 }
 function scheduleSuggestion() {
   clearSuggestion();
   const query = description.value.trim();
-  if (document.body.dataset.templateSuggestions !== 'true' || !profileReady || authRequired || working || created || descriptionComposing || !query || description.value.length > description.maxLength) return;
+  if (document.body.dataset.templateSuggestions !== 'true' || !profileReady || authRequired || working || created || !query || description.value.length > description.maxLength) return;
   if (suggestionRequests >= suggestionLimit) {
-    const notice = element('template-suggestion');
-    notice.textContent = 'Template suggestion limit reached (10 requests). Reload the page for more suggestions, or choose a template below.';
-    notice.hidden = false;
+    showSuggestion(`Template suggestion limit reached (${suggestionLimit} requests). Reload the page for more suggestions, or choose a template below.`);
     return;
   }
+  showSuggestion('テンプレートをサジェストします…', true);
+  if (descriptionComposing) return;
   const revision = suggestionRevision;
   suggestionTimer = setTimeout(() => {void loadSuggestion(query, revision);}, 3000);
 }
@@ -181,18 +186,20 @@ async function loadSuggestion(query: string, revision: number) {
   if (revision !== suggestionRevision || suggestionRequests >= suggestionLimit) return;
   suggestionRequests++;
   const controller = new AbortController(); suggestionAbort = controller;
-  const timeout = setTimeout(() => controller.abort(), 15000);
-  const notice = element('template-suggestion');
+  const timeout = setTimeout(() => {
+    controller.abort();
+    if (revision === suggestionRevision) showSuggestion('Template suggestion timed out. You can choose a template below.');
+  }, 15000);
   try {
     const result = await call('/api/template-suggestion', {description: query}, controller.signal);
     if (revision !== suggestionRevision || controller.signal.aborted) return;
     // Use the existing option label; the model never supplies HTML or changes the selection.
     const option = [...template.options].find(option => option.value && option.value === result.template);
-    if (!option) return;
-    notice.textContent = `Jev recommends ${option.textContent!.split(' · ')[0]}.`;
-    notice.hidden = false;
-  } catch {
-    if (revision === suggestionRevision) {notice.textContent = 'Template suggestion unavailable. You can choose a template below.'; notice.hidden = false;}
+    if (!option) throw new Error('The suggested template was not recognized. You can choose a template below.');
+    showSuggestion(`Jev recommends ${option.textContent!.split(' · ')[0]}.`);
+  } catch (error) {
+    // API messages contain safe diagnostics; do not replace them with a generic failure.
+    if (revision === suggestionRevision && !controller.signal.aborted) showSuggestion((error as Error).message || 'Template suggestion unavailable. You can choose a template below.');
   } finally {clearTimeout(timeout); if (suggestionAbort === controller) suggestionAbort = undefined;}
 }
 function renderApps() {
@@ -303,7 +310,7 @@ form.addEventListener('compositionstart', () => {composing = true; controls();})
 form.addEventListener('compositionend', () => {composing = false; normalizeAuthors(); controls();});
 form.addEventListener('input', controls);
 description.addEventListener('input', scheduleSuggestion);
-description.addEventListener('compositionstart', () => {descriptionComposing = true; clearSuggestion();});
+description.addEventListener('compositionstart', () => {descriptionComposing = true; scheduleSuggestion();});
 description.addEventListener('compositionend', () => {descriptionComposing = false; scheduleSuggestion();});
 form.addEventListener('reset', clearSuggestion);
 form.addEventListener('focusout', () => {setTimeout(() => advanceToAutomation(), 0);});
