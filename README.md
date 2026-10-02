@@ -51,7 +51,8 @@ CLIのプレビューはオフラインで動作し、UUIDと全ファイルの�
 ## 認証
 
 - ローカル: `GITHUB_TOKEN` → `GH_TOKEN` の順。明示した場合だけ `--gh` で `gh auth token` を使用。
-- Device Flow: `PKGFACTORY_GITHUB_CLIENT_ID` を設定して `--device`。認証後のトークンはプロセス内だけに保持。
+- Device Flow: Device Flowを有効にしたOAuth AppのClient IDを `PKGFACTORY_GITHUB_CLIENT_ID` に設定して `--device`。認証後のトークンはプロセス内だけに保持。
+  公開Web・MCPの本番用OAuth AppはDevice Flowを無効にしているため使えません。CLI用には別のOAuth Appを用意してください。
 - stdio MCP: PATまたは `--gh`。対話ログインは開始しません。`--read-only` で作成・再開ツールを非公開にできます。
 - 公開Web: GitHub OAuth認可コード＋S256 PKCE。HttpOnly・Secure・SameSite Cookie。
 - 公開MCP: OAuth 2.1、S256 PKCE、GitHubへの上流認可。GitHub PATをMCPのBearerとして受け付けません。

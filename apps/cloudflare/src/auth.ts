@@ -21,6 +21,10 @@ async function authState(env: Env, action: string, key: string, value?: unknown,
   if (!response.ok) throw new Error('Authentication state unavailable');
   return await response.json() as any;
 }
+// WebCrypto also accepts 16- and 24-byte AES keys, so a short secret would run silently as a weaker key.
+export function sessionKeyValid(value: string | undefined) {
+  try {return !!value && unbase64(value).length === 32;} catch {return false;}
+}
 export async function encrypt(env: Pick<Env, 'SESSION_KEY'>, value: unknown, context: string) {
   const key = await crypto.subtle.importKey('raw', unbase64(env.SESSION_KEY), 'AES-GCM', false, ['encrypt']);
   const iv = crypto.getRandomValues(new Uint8Array(12));

@@ -5,7 +5,7 @@ import { page } from '../../../packages/pkgfactory/src/web/page.js';
 import { json, errorResponse, limitedBody, readJson } from '../../../packages/pkgfactory/src/web/http.js';
 import assets from '../../../packages/pkgfactory/src/web/assets.json' with {type: 'json'};
 import { mcpHttp } from '../../../packages/pkgfactory/src/mcp/server.js';
-import { webAuth, session, type Env } from './auth.js';
+import { webAuth, session, sessionKeyValid, type Env } from './auth.js';
 import { oauthRoutes, refreshGitHub } from './oauth.js';
 import { registrationPolicy } from './consent.js';
 import { DurableStore } from './state.js';
@@ -69,7 +69,8 @@ export default {
       if (url.origin !== env.ORIGIN) {securityEvent('host_rejected', request); return json({error: 'Invalid host'}, 403);}
       const origin = request.headers.get('origin');
       if (origin && origin !== env.ORIGIN) {securityEvent('origin_rejected', request); return json({error: 'Invalid Origin'}, 403);}
-      if (url.pathname !== '/health' && (!env.SESSION_KEY || !env.GITHUB_OAUTH_CLIENT_SECRET || !env.GITHUB_OAUTH_CLIENT_ID || env.GITHUB_OAUTH_CLIENT_ID === 'CONFIGURE_ME')) return json({error: 'GitHub OAuth is not configured'}, 503);
+      if (url.pathname !== '/health' && (!env.GITHUB_OAUTH_CLIENT_SECRET || !env.GITHUB_OAUTH_CLIENT_ID || env.GITHUB_OAUTH_CLIENT_ID === 'CONFIGURE_ME')) return json({error: 'GitHub OAuth is not configured'}, 503);
+      if (url.pathname !== '/health' && !sessionKeyValid(env.SESSION_KEY)) return json({error: 'SESSION_KEY must be 32 bytes of Base64'}, 503);
       if (url.pathname !== '/health' && (!env.SOURCE_RATE_LIMIT || !env.REGISTRATION_RATE_LIMIT || !env.ACCOUNT_RATE_LIMIT)) return json({error: 'Rate limiting is not configured'}, 503);
       if (env.MAINTENANCE === 'true' && (url.pathname === '/mcp' || url.pathname === '/api/create' || url.pathname === '/api/resume')) return json({error: 'Maintenance: creation is temporarily paused'}, 503);
       if (anonymousRoutes.has(url.pathname)) {

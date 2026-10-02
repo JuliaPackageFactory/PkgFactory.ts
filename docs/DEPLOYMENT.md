@@ -119,8 +119,12 @@ CLIで登録する場合のコマンドは次節にあります。
 | Authorization callback URL 1 | `https://pkgfactory.ohnolab.workers.dev/auth/callback` |
 | Authorization callback URL 2（Add callback URLで追加） | `https://pkgfactory.ohnolab.workers.dev/callback` |
 | callbackのwildcard matching | 両方とも無効 |
-| Enable Device Flow | 有効 |
+| Enable Device Flow | 無効 |
 | Expire user access tokens | 有効（期限切れ時は再認可） |
+
+本番用アプリのDevice Flowは無効化済みです。Device Flowは公開Client IDだけで開始できるため、
+攻撃者が本番の `PkgFactory` の名前で `repo`・`workflow` 権限のコード入力を利用者に求めるフィッシングに使えます。
+公開Web・MCPは認可コード方式だけを使うため、Device Flowは不要です。CLIの `--device` には別のOAuth Appを使います。
 
 3. **Register application** を押します。表示された本番用Client IDを共有してください。
    こちらで `env.production.vars.GITHUB_OAUTH_CLIENT_ID` に設定します。
@@ -128,7 +132,7 @@ CLIで登録する場合のコマンドは次節にあります。
    チャットやGitには貼りません。検証用secretとは別の値です。
 5. 本番Worker `pkgfactory` の配備準備時に、そのWorkerの **Settings → Variables and Secrets** へ
    Type **Secret**、名前 **GITHUB_OAUTH_CLIENT_SECRET** で登録します。
-   本番Workerはまだ未配備なので、この登録は配備準備の案内後に行います。
+   本番Workerはまだ未配備なので、この登録は配備準備の案内後に行います。CLIで登録する手順は2.4にあります。
 
 本番用secretを検証用Worker `pkgfactory-staging` に登録しないでください。
 旧本番で使用中のOAuthアプリは、新版への切替が完了するまで残します。
@@ -140,6 +144,48 @@ OAuth AppのClient IDやsecretを作り直す必要はありません。
 Webは認証後にプロフィールと作成先を読み込み、本人とactive/adminの組織を選択肢にします。
 [組織membership API](https://docs.github.com/en/rest/orgs/members#list-organization-memberships-for-the-authenticated-user)
 Client IDは変数、Client secretはWorker secretへ設定します。チャットやGitにsecretを貼らないでください。
+
+### 2.4 本番WorkerのKVとsecret
+
+本番の初回配備の前後に、運営者が次の順で準備します。Wranglerのコマンドには必ず `--env production` を付けます。
+付け忘れるとトップレベルの設定、つまり検証用Worker `pkgfactory-staging` が対象になり、ステージングのsecretを上書きします。
+
+1. 本番用OAuth KVを作成し、表示されたIDで `env.production.kv_namespaces[0].id` の `CONFIGURE_PRODUCTION_KV_ID` を置き換え、PRでmainへ反映します。
+   `CONFIGURE_` が残っている間、Deploy productionはCloudflareへ接続する前に失敗します。
+
+   ```sh
+   npx wrangler kv namespace create PKGFACTORY_TS_PRODUCTION_OAUTH --config apps/cloudflare/wrangler.jsonc --env production
+   ```
+
+2. 4節の手順でDeploy productionを実行します。`MAINTENANCE=true` のままで、secretが揃うまで `/health` 以外は503を返します。
+3. 2.3で生成した本番用Client secretを登録します。入力プロンプトに貼り付けます。
+
+   ```sh
+   npx wrangler secret put GITHUB_OAUTH_CLIENT_SECRET --config apps/cloudflare/wrangler.jsonc --env production
+   ```
+
+4. `SESSION_KEY` は本番用に新しく生成します。ステージングの値を流用しないでください。共用すると、ステージングの鍵の漏えいが本番の鍵の漏えいになります。
+   次のコマンドは乱数32バイトを画面に表示せず、そのまま登録します。鍵を保管する必要はありません。
+   作り直した場合の影響は、Webの利用者がログインし直すことだけです。
+
+   ```sh
+   node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('base64'))" | npx wrangler secret put SESSION_KEY --config apps/cloudflare/wrangler.jsonc --env production
+   ```
+
+5. 登録先を確認します。本番の一覧に2つの名前があり、ステージングの一覧が変わっていないことを確かめます。
+
+   ```sh
+   npx wrangler secret list --config apps/cloudflare/wrangler.jsonc --env production
+   ```
+
+   ```sh
+   npx wrangler secret list --config apps/cloudflare/wrangler.jsonc
+   ```
+
+6. `https://pkgfactory.ohnolab.workers.dev/` が503でなくなったことを確認します。
+   Workerは32バイトにならない `SESSION_KEY` を受け付けず、`/health` 以外に503と `SESSION_KEY must be 32 bytes of Base64` を返します。
+
+Dashboardで登録する場合も、Worker `pkgfactory` の **Settings → Variables and Secrets** を開いていることを確認してください。
 
 ## 3. Cloudflareステージング
 
@@ -238,6 +284,7 @@ npx wrangler secret put SESSION_KEY --config apps/cloudflare/wrangler.jsonc
 新環境の `SESSION_KEY` は暗号学的乱数32バイトのBase64文字列です。パスワードマネージャーで生成・保管し、
 secret入力プロンプトへ渡してください。CLIで生成するなら
 `node -e "console.log(require('node:crypto').randomBytes(32).toString('base64'))"` を手元で実行します。
+Base64を復号して32バイトにならない値では、Workerは `/health` 以外に503を返します。
 キー変更は既存Webセッションを復号できなくするため、利用者は未ログイン表示になり、ログインし直しが必要です。
 
 ```sh
@@ -344,7 +391,7 @@ Ed25519またはRSAのTagBot PoCログ、ステージングWeb/MCP OAuthの結�
 
 1. 旧 `pkgfactory-web` と `pkgfactory-mcp` の新規作成受付を止める。
 2. 旧版の実行中操作と残存ロックをGitHub状態と照合する。未解決操作を新版で自動再実行しない。
-3. 新版の本番専用KV・OAuth・SESSION secretsを設定し、`--env production` で配備する。
+3. 新版の本番専用KV・OAuth・SESSION secretsを2.4の手順で設定し、`--env production` で配備する。
    既定 `MAINTENANCE=true` のため書込みは停止したまま。
 4. 旧Web/MCPの案内URLを新版originと `/mcp` へ更新する。旧grant・プレビューの引継ぎは行わず再認可する。
    MCPのPOSTをHTTPリダイレクトで移転させない。
