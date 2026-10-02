@@ -202,3 +202,19 @@ test('anonymous OAuth writes are limited per source and API use per GitHub accou
     assert.equal((await mf.dispatchFetch('https://pkgfactory.test/api/templates', {headers: second})).status, 429, 'Suggestions consume the shared API quota');
   } finally {await mf.dispose();}
 });
+
+test('a SESSION_KEY that is not 32 bytes refuses every route except /health', async () => {
+  const mf = new Miniflare(convertV4MiniflareOptions({...options, scriptPath: resolve('apps/cloudflare/dist/worker.js'), kvNamespaces: ['OAUTH_KV'],
+    ratelimits: ratelimits({SOURCE_RATE_LIMIT: 1000, REGISTRATION_RATE_LIMIT: 1000, ACCOUNT_RATE_LIMIT: 1000}),
+    // A 24-byte key still encrypts with AES-GCM, so the Worker must reject it before any route runs.
+    bindings: {SESSION_KEY: btoa('a'.repeat(24)), ORIGIN: 'https://pkgfactory.test', GITHUB_OAUTH_CLIENT_ID: 'test', GITHUB_OAUTH_CLIENT_SECRET: 'secret'},
+  }));
+  try {
+    assert.equal((await mf.dispatchFetch('https://pkgfactory.test/health')).status, 200);
+    for (const path of ['/', '/auth/login', '/api/templates', '/mcp', '/oauth/register']) {
+      const response = await mf.dispatchFetch('https://pkgfactory.test' + path, {redirect: 'manual'});
+      assert.equal(response.status, 503, path);
+      assert.equal((await response.json() as any).error, 'SESSION_KEY must be 32 bytes of Base64');
+    }
+  } finally {await mf.dispose();}
+});

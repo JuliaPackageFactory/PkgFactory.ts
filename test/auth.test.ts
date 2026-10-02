@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { encrypt, decrypt, exchangeGitHub, revokeGitHub, type Env } from '../apps/cloudflare/src/auth.js';
+import { encrypt, decrypt, exchangeGitHub, revokeGitHub, sessionKeyValid, type Env } from '../apps/cloudflare/src/auth.js';
 import { errorResponse } from '../packages/pkgfactory/src/web/http.js';
 import { deviceLogin } from '../packages/pkgfactory/src/github/device.js';
 import { consentNotices, redirectAllowed, registrationPolicy } from '../apps/cloudflare/src/consent.js';
@@ -50,6 +50,11 @@ test('session ciphertext is authenticated and bound to its server-side identifie
   assert.deepEqual(await decrypt(env, encrypted, 'session:one'), session);
   await assert.rejects(decrypt(env, encrypted, 'session:two'));
   await assert.rejects(decrypt({SESSION_KEY: btoa('x'.repeat(32))}, encrypted, 'session:one'));
+});
+test('SESSION_KEY must decode to exactly 32 bytes', () => {
+  assert.equal(sessionKeyValid(btoa('k'.repeat(32))), true);
+  // Shorter AES keys would still encrypt; a typo or truncated paste must not run as a weaker key.
+  for (const bad of [undefined, '', btoa('k'.repeat(16)), btoa('k'.repeat(24)), btoa('k'.repeat(31)), btoa('k'.repeat(33)), 'not base64!', 'k'.repeat(32)]) assert.equal(sessionKeyValid(bad), false, String(bad));
 });
 test('Device Flow polls only after user-code notification and respects cancellation', async () => {
   const controller = new AbortController(); let calls = 0, notified = false;

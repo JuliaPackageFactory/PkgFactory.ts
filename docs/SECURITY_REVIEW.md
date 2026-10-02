@@ -64,3 +64,26 @@ Workers Rate Limitingのカウンタは拠点ごとの概算です。一つの�
 - GitHub OAuth Appの `Expire user access tokens` が両アプリで有効かの確認。GitHubの管理画面で行います（[DEPLOYMENT.md](DEPLOYMENT.md)）。
 - MCPのgrantを失効したときのGitHubトークン失効。
 - 生成リポジトリのテンプレートに含まれるActions（`julia-docdeploy`・`TagBot` など）のSHA固定。生成物の方針に関わるため別に判断します。
+
+## 本番公開前の認証設定レビュー（2026-10-02）
+
+本番配備の前に、認証まわりの設定と運用手順を確認しました。コードで防げるものはコードで止め、管理画面でしか確認できないものは手順に残します。
+
+| 指摘 | 判断 | 対応 |
+|---|---|---|
+| 本番のOAuth KV IDがプレースホルダー `CONFIGURE_PRODUCTION_KV_ID` のまま | 妥当。Cloudflare側の検証で配備が失敗する見込みだが、Wranglerの挙動に任せない | Deploy productionが `wrangler.jsonc` に `CONFIGURE_` を見つけると、Node準備・Cloudflare接続の前に失敗する。KVの作成は運営者が行う（[DEPLOYMENT.md](DEPLOYMENT.md) 2.4） |
+| `SESSION_KEY` の長さを検証していない | 妥当。WebCryptoは16・24バイトのAES鍵も受け付けるため、修正前は24バイトの鍵でもトップページが200を返し、弱い鍵のまま動いた | Base64を復号して32バイトにならない鍵では、`/health` 以外を503で拒否する |
+| 本番secretの登録漏れ・登録先の誤り | 妥当。未登録なら503で止まる安全側の動作。ただし既存の手順に `--env production` がなく、付け忘れるとステージングのsecretを上書きする | 本番用の登録・確認手順をDEPLOYMENT.md 2.4に追加 |
+| ステージングと本番で `SESSION_KEY` を共用する | 妥当だが影響は限定的。共用しても直ちに侵入にはつながらないが、ステージングの鍵の漏えいが本番の鍵の漏えいになる | 本番用の鍵を新しく生成し、画面に表示せず登録する手順を明記 |
+| 本番OAuth AppのDevice Flow | 妥当。公開Client IDだけで開始でき、本番アプリ名で `repo`・`workflow` のコード入力を求めるフィッシングに使える。公開Web・MCPは使わない | 運営者が無効化済み。文書の本番設定値を「無効」に更新し、CLIの `--device` には別のOAuth Appを使うようREADMEを修正 |
+| `Expire user access tokens` | 妥当 | GitHubの管理画面でしか確認できないため、既存の確認手順（DEPLOYMENT.md 2.1）のまま |
+| `MAINTENANCE=true` での初回配備、callback URLの完全一致 | 既存の公開手順どおりで、コードの問題ではない | 変更なし |
+| ステージングと本番が同一サイトとして扱われる | 現状で安全。両者は `ohnolab.workers.dev` の下にあり、SameSite Cookieはステージングからの要求を区別しない。ただし書込みにはOriginの完全一致とCSRFトークンの両方が必要で、セッションCookieは `__Host-` 接頭辞のため他のサブドメインから設定できない | 運用上の注意として記録。ステージングには本番と同じ水準のコードと権限管理だけを置き、信頼できないコードを配備しない |
+| 匿名の動的クライアント登録 | MCPクライアントの接続に必要な仕様 | 変更なし。既存の接続元ごとの登録制限と戻り先の制限を維持 |
+| MCP grantの失効時にGitHubトークンを失効しない | 既知の除外事項（前回の表を参照） | 変更なし。refresh tokenの期限は発行時に8時間で固定され、更新しても延びないことをライブラリのコードで確認した（`refreshTokenIdleTTL` は未設定、更新時の `refreshTokenTTL` 変更はライブラリが拒否） |
+| 広いGitHubスコープ（`repo`・`workflow`） | リポジトリ作成とWorkflow設定に必要 | 変更なし |
+| レート制限の容量 | 既知の除外事項。拠点ごとの概算で、大規模な分散攻撃への容量保証ではない | 変更なし |
+
+配備時の注意: このコードを配備すると、32バイトでない `SESSION_KEY` を登録しているWorkerは `/health` 以外が503になります。
+ステージングの鍵は32バイトで作成した記録があります（[DEPLOYMENT.md](DEPLOYMENT.md) 3節）。
+ステージング用OAuth App `PkgFactory Staging` もDevice Flowが有効なため、同じ手口のフィッシングに使えます。CLIで使わない場合は無効化を検討してください。

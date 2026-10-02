@@ -19,6 +19,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # Stop before any Cloudflare call while wrangler.jsonc still names placeholder resources.
+      - name: Reject placeholder production settings
+        run: |
+          if grep -n 'CONFIGURE_' apps/cloudflare/wrangler.jsonc; then
+            echo '::error file=apps/cloudflare/wrangler.jsonc::Replace the CONFIGURE_ placeholders with production resources first (docs/DEPLOYMENT.md 2.4).'
+            exit 1
+          fi
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24'
