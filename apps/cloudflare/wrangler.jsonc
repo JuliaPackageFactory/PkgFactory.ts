@@ -26,7 +26,7 @@
     "ai": {"binding": "AI"},
     "vars": {"ORIGIN": "https://pkgfactory.ohnolab.workers.dev", "GITHUB_OAUTH_CLIENT_ID": "Ov23liW9Mpoaeo70n071", "KEY_ALGORITHM": "ed25519", "MAINTENANCE": "true"},
     "durable_objects": {"bindings": [{"name": "STATE", "class_name": "ApplicationState"}, {"name": "AUTH", "class_name": "AuthState"}]},
-    "kv_namespaces": [{"binding": "OAUTH_KV", "id": "CONFIGURE_PRODUCTION_KV_ID"}],
+    "kv_namespaces": [{"binding": "OAUTH_KV", "id": "7458325f1140408f9cc44ae5ad273e34"}],
     "ratelimits": [
       {"name": "SOURCE_RATE_LIMIT", "namespace_id": "7311", "simple": {"limit": 120, "period": 60}},
       {"name": "REGISTRATION_RATE_LIMIT", "namespace_id": "7312", "simple": {"limit": 10, "period": 60}},

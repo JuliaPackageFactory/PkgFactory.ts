@@ -147,6 +147,9 @@ Client IDは変数、Client secretはWorker secretへ設定します。チャッ
 
 ### 2.4 本番WorkerのKVとsecret
 
+本番専用KV `PKGFACTORY_TS_PRODUCTION_OAUTH` は2026-10-02にStandardで作成済みです。
+Namespace ID `7458325f1140408f9cc44ae5ad273e34` を本番設定へ反映しました。下記1のKV作成は完了しているため、再作成せず2から進めます。
+
 本番の初回配備の前後に、運営者が次の順で準備します。Wranglerのコマンドには必ず `--env production` を付けます。
 付け忘れるとトップレベルの設定、つまり検証用Worker `pkgfactory-staging` が対象になり、ステージングのsecretを上書きします。
 
