@@ -24,7 +24,7 @@
   "env": {"production": {
     "name": "pkgfactory",
     "ai": {"binding": "AI"},
-    "vars": {"ORIGIN": "https://pkgfactory.ohnolab.workers.dev", "GITHUB_OAUTH_CLIENT_ID": "Ov23liW9Mpoaeo70n071", "KEY_ALGORITHM": "ed25519", "MAINTENANCE": "true"},
+    "vars": {"ORIGIN": "https://pkgfactory.ohnolab.workers.dev", "GITHUB_OAUTH_CLIENT_ID": "Ov23liW9Mpoaeo70n071", "KEY_ALGORITHM": "ed25519", "MAINTENANCE": "false"},
     "durable_objects": {"bindings": [{"name": "STATE", "class_name": "ApplicationState"}, {"name": "AUTH", "class_name": "AuthState"}]},
     "kv_namespaces": [{"binding": "OAUTH_KV", "id": "7458325f1140408f9cc44ae5ad273e34"}],
     "ratelimits": [

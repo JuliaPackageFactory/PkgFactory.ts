@@ -1,7 +1,9 @@
 # 配備と切替手順
 
-実装・ビルド・ローカル受入検証は実施済みです。本番公開、npm公開、旧リポジトリのアーカイブは未実施です。
-先に [ACCEPTANCE.md](ACCEPTANCE.md) の未完了条件を解消してください。
+実装・ビルド・ローカル受入検証、本番Workerの配備、専用KVとsecretsの登録は実施済みです。
+2026-10-03に運営者が旧版の未完了操作がないことを確認し、旧Workerの受付を停止しました。
+本番設定は `MAINTENANCE=false` に変更しています。受付開始は4節の本番配備後、`/health` の `status: "ok"` と作成APIのmaintenance解除を確認して判定します。
+npm公開、旧リソースの撤去、旧リポジトリのアーカイブは未実施です。受入検証の記録は [ACCEPTANCE.md](ACCEPTANCE.md) を参照してください。
 
 ## 1. GitHubのDeploy key許可
 
@@ -37,14 +39,14 @@ CLI既定値とWorker `KEY_ALGORITHM` をRSAへ合わせます。成功済みプ
 
 | 用途 | URL |
 |---|---|
-| 本番Web（公開前） | `https://pkgfactory.ohnolab.workers.dev/` |
-| 本番MCP（公開前） | `https://pkgfactory.ohnolab.workers.dev/mcp` |
+| 本番Web | `https://pkgfactory.ohnolab.workers.dev/` |
+| 本番MCP | `https://pkgfactory.ohnolab.workers.dev/mcp` |
 | 検証Web | `https://pkgfactory-staging.ohnolab.workers.dev/` |
 | 検証MCP | `https://pkgfactory-staging.ohnolab.workers.dev/mcp` |
 
-本番URLは設定済みですが、公開はまだ実施していません。検証用の `-staging` は本番と区別するために残します。
+本番Workerは配備済みです。検証用の `-staging` は本番と区別するために残します。
 旧検証Worker `pkgfactory-ts-staging` は短い名前への配備確認後に削除済みです。
-旧版 `pkgfactory-web`・`pkgfactory-mcp` の切替・撤去は本番公開の承認後に行います。
+旧版 `pkgfactory-web`・`pkgfactory-mcp` は `MAINTENANCE=true` で受付を停止し、既存のコード・bindings・データを保持しています。
 
 ### 2.1 検証用OAuthアプリ（作成済み）
 
@@ -103,7 +105,7 @@ CLIで登録する場合のコマンドは次節にあります。
 
 管理対象は `PkgFactory`（本番用）と `PkgFactory Staging`（検証用）の2つに整理します。
 新しい本番用 `PkgFactory` のClient ID `Ov23liW9Mpoaeo70n071` は
-`env.production.vars.GITHUB_OAUTH_CLIENT_ID` に反映済みです。本番配備・公開はまだ実施していません。
+`env.production.vars.GITHUB_OAUTH_CLIENT_ID` に反映済みです。本番WorkerとClient secretも登録済みです。
 以下は設定値の確認と、別環境を用意する場合の手順です。
 所有者をリポジトリと揃える場合は `JuliaPackageFactory` 組織を選びます。
 
@@ -132,7 +134,7 @@ CLIで登録する場合のコマンドは次節にあります。
    チャットやGitには貼りません。検証用secretとは別の値です。
 5. 本番Worker `pkgfactory` の配備準備時に、そのWorkerの **Settings → Variables and Secrets** へ
    Type **Secret**、名前 **GITHUB_OAUTH_CLIENT_SECRET** で登録します。
-   本番Workerはまだ未配備なので、この登録は配備準備の案内後に行います。CLIで登録する手順は2.4にあります。
+   既存の本番Workerでは登録済みです。CLIで登録する手順は2.4にあります。
 
 本番用secretを検証用Worker `pkgfactory-staging` に登録しないでください。
 旧本番で使用中のOAuthアプリは、新版への切替が完了するまで残します。
@@ -148,7 +150,8 @@ Client IDは変数、Client secretはWorker secretへ設定します。チャッ
 ### 2.4 本番WorkerのKVとsecret
 
 本番専用KV `PKGFACTORY_TS_PRODUCTION_OAUTH` は2026-10-02にStandardで作成済みです。
-Namespace ID `7458325f1140408f9cc44ae5ad273e34` を本番設定へ反映しました。下記1のKV作成は完了しているため、再作成せず2から進めます。
+Namespace ID `7458325f1140408f9cc44ae5ad273e34` を本番設定へ反映しました。
+本番Workerへの `GITHUB_OAUTH_CLIENT_SECRET` と本番専用の `SESSION_KEY` 登録も完了しています。既存環境ではKVや鍵を再作成しません。
 
 本番の初回配備の前後に、運営者が次の順で準備します。Wranglerのコマンドには必ず `--env production` を付けます。
 付け忘れるとトップレベルの設定、つまり検証用Worker `pkgfactory-staging` が対象になり、ステージングのsecretを上書きします。
@@ -160,7 +163,7 @@ Namespace ID `7458325f1140408f9cc44ae5ad273e34` を本番設定へ反映しま�
    npx wrangler kv namespace create PKGFACTORY_TS_PRODUCTION_OAUTH --config apps/cloudflare/wrangler.jsonc --env production
    ```
 
-2. 4節の手順でDeploy productionを実行します。`MAINTENANCE=true` のままで、secretが揃うまで `/health` 以外は503を返します。
+2. 別環境を新規配備する場合は、先に `env.production.vars.MAINTENANCE=true` を設定してから4節のDeploy productionを実行します。secretが揃うまで `/health` 以外は503を返します。
 3. 2.3で生成した本番用Client secretを登録します。入力プロンプトに貼り付けます。
 
    ```sh
@@ -190,12 +193,16 @@ Namespace ID `7458325f1140408f9cc44ae5ad273e34` を本番設定へ反映しま�
 
 Dashboardで登録する場合も、Worker `pkgfactory` の **Settings → Variables and Secrets** を開いていることを確認してください。
 
+`Maintenance: creation is temporarily paused` は `MAINTENANCE=true` による受付停止です。
+この応答はGitHubの作成処理を開始する前に返すため、そのリクエストによるリポジトリ作成はありません。
+5節の切替確認後に `env.production.vars.MAINTENANCE=false` を配備します。画面を再読み込みし、プレビューからやり直してください。
+
 ## 3. Cloudflareステージング
 
 2026-09-28時点で [pkgfactory-staging](https://pkgfactory-staging.ohnolab.workers.dev/health) は配備済みです。
 新版専用のOAuth KV `PKGFACTORY_TS_STAGING_OAUTH`、SQLite DO、32バイトの `SESSION_KEY` secretを準備しました。
 旧WorkerのKVやDOは流用していません。Client secret登録後、トップレベルの `MAINTENANCE=false` を配備し、受付を有効化しました。
-本番の `env.production.vars.MAINTENANCE` は `true` のままです。
+本番の `env.production.vars.MAINTENANCE` も受付開始用の `false` に設定しています。
 
 このステージングのClient ID/secretは設定済みです。以下はsecretを更新する場合のコマンドです。
 既存のSESSION_KEYやKVを作り直す必要はありません。
@@ -395,7 +402,7 @@ Ed25519またはRSAのTagBot PoCログ、ステージングWeb/MCP OAuthの結�
 1. 旧 `pkgfactory-web` と `pkgfactory-mcp` の新規作成受付を止める。
 2. 旧版の実行中操作と残存ロックをGitHub状態と照合する。未解決操作を新版で自動再実行しない。
 3. 新版の本番専用KV・OAuth・SESSION secretsを2.4の手順で設定し、`--env production` で配備する。
-   既定 `MAINTENANCE=true` のため書込みは停止したまま。
+   初回準備時は明示的に `MAINTENANCE=true` とし、書込みを停止したままにする。
 4. 旧Web/MCPの案内URLを新版originと `/mcp` へ更新する。旧grant・プレビューの引継ぎは行わず再認可する。
    MCPのPOSTをHTTPリダイレクトで移転させない。
 5. 新版 `MAINTENANCE=false` を設定・配備し、確認済み検証プランで疎通を確かめる。
