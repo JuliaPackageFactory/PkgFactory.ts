@@ -127,6 +127,6 @@ test('Web preview repeats the availability check and new creation rechecks organ
   role = 'member';
   await assert.rejects(factory.execute(preview.id, credentials), {code: 'owner'});
   assert.deepEqual(writes, []);
-  assert.match(page('', true, false), /id="package-form"[^>]*hidden/);
-  assert.match(page('', true, false), /href="\/auth\/login"/);
+  assert.match(page('', true, false, 'https://pkgfactory.test'), /id="package-form"[^>]*hidden/);
+  assert.match(page('', true, false, 'https://pkgfactory.test'), /href="\/auth\/login"/);
 });

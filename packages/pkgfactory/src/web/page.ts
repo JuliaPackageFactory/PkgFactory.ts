@@ -2,10 +2,30 @@ import { escapeHtml } from './http.js';
 
 // Workflow and styling adapted from PkgFactory.jl at 7c7d4af. Authentication
 // uses the agreed server-side session and PKCE instead of tab-held tokens.
-export function page(csrf: string, publicWeb: boolean, authenticated: boolean, templateSuggestions = false) {
+export function page(csrf: string, publicWeb: boolean, authenticated: boolean, origin: string, templateSuggestions = false) {
+  const pageUrl = escapeHtml(new URL('/', origin).href);
+  const imageUrl = escapeHtml(new URL('/assets/ogp.png', origin).href);
+  const description = 'Connect GitHub, choose a template, and publish a repository with CI, documentation, and release automation already configured.';
   return `<!doctype html><html lang="en"><head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="csrf-token" content="${escapeHtml(csrf)}">
-  <title>PkgFactory</title><link rel="icon" type="image/svg+xml" href="/assets/logo.svg"><link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script>
+  <title>Julia Package Factory</title>
+  <meta name="description" content="${description}">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Julia Package Factory">
+  <meta property="og:title" content="Julia Package Factory">
+  <meta property="og:description" content="${description}">
+  <meta property="og:url" content="${pageUrl}">
+  <meta property="og:image" content="${imageUrl}">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1280">
+  <meta property="og:image:height" content="640">
+  <meta property="og:image:alt" content="Julia Package Factory — colorful packages on a factory conveyor belt">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Julia Package Factory">
+  <meta name="twitter:description" content="${description}">
+  <meta name="twitter:image" content="${imageUrl}">
+  <meta name="twitter:image:alt" content="Julia Package Factory — colorful packages on a factory conveyor belt">
+  <link rel="icon" type="image/svg+xml" href="/assets/logo.svg"><link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script>
   </head><body data-authenticated="${authenticated}" data-template-suggestions="${templateSuggestions}">
   <header class="app-header"><div class="header-inner">
     <a class="brand" href="/" aria-label="Julia Package Factory home"><img class="brand-logo" src="/assets/logo.svg" width="42" height="42" alt=""><span>Julia Package Factory</span></a>
@@ -13,7 +33,7 @@ export function page(csrf: string, publicWeb: boolean, authenticated: boolean, t
     <a class="github-link" href="https://github.com/JuliaPackageFactory/PkgFactory.ts" target="_blank" rel="noreferrer" aria-label="View PkgFactory on GitHub" title="View PkgFactory on GitHub"><img src="/assets/github.svg" width="30" height="30" alt=""></a></div>
   </div></header>
   <main class="main-content"><div id="reconnect-notice" class="notice notice-error" role="alert" hidden>GitHub authorization has expired or changed. ${publicWeb ? '<a id="reconnect" href="/auth/login">Reconnect GitHub</a> to continue with your settings.' : 'Restart the local Web with a valid GitHub credential.'}</div><section class="intro" aria-labelledby="page-title"><p class="eyebrow">JULIA PACKAGE FACTORY</p><h1 id="page-title">Let's generate a Julia package!</h1>
-    <p>Connect GitHub, choose a template, and publish a repository with CI, documentation, and release automation already configured.</p></section>
+    <p>${description}</p></section>
   <div class="workflow" aria-label="Package creation workflow">
     <section id="connect-panel" class="workflow-card is-active" data-step="1" aria-current="step"><div class="card-heading"><span class="step-badge">1</span><div><div class="title-row"><h2>Connect GitHub</h2><span class="step-state" role="status">Ready</span></div><p id="connect-description"><span id="connect-status" role="status">${authenticated ? 'Loading your GitHub profile and repository owners…' : 'Connect first to choose a repository owner and fill in your author name.'}</span>${publicWeb && authenticated ? ' <button id="logout" class="inline-action" type="button">Click here to sign out.</button>' : ''}</p></div></div>
       <div id="connect-actions" class="card-body">

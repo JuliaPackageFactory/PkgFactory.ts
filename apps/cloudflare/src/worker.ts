@@ -30,8 +30,9 @@ async function web(request: Request, env: Env): Promise<Response> {
   if (url.pathname === '/assets/logo.svg' && request.method === 'GET') return new Response(assets.logo, {headers: {'Content-Type': 'image/svg+xml'}});
   if (url.pathname === '/assets/github.svg' && request.method === 'GET') return new Response(assets.github, {headers: {'Content-Type': 'image/svg+xml'}});
   if (url.pathname === '/assets/hero.png' && request.method === 'GET') return new Response(unbase64(assets.hero), {headers: {'Content-Type': 'image/png'}});
+  if (url.pathname === '/assets/ogp.png' && request.method === 'GET') return new Response(unbase64(assets.ogp), {headers: {'Content-Type': 'image/png'}});
   const identity = await session(request, env);
-  if (url.pathname === '/' && request.method === 'GET') return new Response(page(identity?.csrf ?? '', true, !!identity, !!env.AI), {headers: {'Content-Type': 'text/html; charset=utf-8'}});
+  if (url.pathname === '/' && request.method === 'GET') return new Response(page(identity?.csrf ?? '', true, !!identity, env.ORIGIN, !!env.AI), {headers: {'Content-Type': 'text/html; charset=utf-8'}});
   if (url.pathname.startsWith('/api/')) {
     if (!identity) return json({error: 'Connect GitHub to save and execute a preview'}, 401);
     if (request.method !== 'GET' && (request.headers.get('origin') !== env.ORIGIN || request.headers.get('x-pkgfactory-csrf') !== identity.csrf)) {securityEvent('csrf_rejected', request); return json({error: 'Invalid CSRF token or Origin'}, 403);}

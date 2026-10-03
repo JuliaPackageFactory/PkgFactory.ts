@@ -28,7 +28,7 @@ test('typed and pasted author separators become newlines without changing text l
 
 test('all workflow steps have text status, and resume controls are absent for every Web entry point', () => {
   for (const publicWeb of [false, true]) for (const authenticated of [false, true]) {
-    const html = page('csrf', publicWeb, authenticated);
+    const html = page('csrf', publicWeb, authenticated, 'https://pkgfactory.test');
     assert.equal((html.match(/class="step-state" role="status"/g) ?? []).length, 6);
     assert.doesNotMatch(html, /Resume interrupted setup|id="recovery"|id="planId"|id="resume"|id="status"/);
     assert.match(html, /id="codecov-row" class="automation-row"/);

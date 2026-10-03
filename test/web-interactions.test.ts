@@ -10,7 +10,7 @@ const suggested = {template: 'all-in-one', probabilities: {minimum: 0.05, simple
 const suggestionMessage = 'Jev recommends All-in-one. (minimum: 5%, simple: 15%, all-in-one: 80%)';
 const deferred = () => {let resolve!: (value?: any) => void; const promise = new Promise<any>(r => {resolve = r;}); return {promise, resolve};};
 async function fixture(options: {draft?: string; login?: string; suggestions?: boolean} = {}) {
-  const dom = new JSDOM(page('csrf', true, true, options.suggestions), {url: 'https://pkgfactory.test/', runScripts: 'outside-only'});
+  const dom = new JSDOM(page('csrf', true, true, 'https://pkgfactory.test', options.suggestions), {url: 'https://pkgfactory.test/', runScripts: 'outside-only'});
   const w = dom.window, $ = (id: string) => w.document.getElementById(id);
   const calls: {url: string; body: any; signal?: AbortSignal}[] = [], scrolls: string[] = [];
   const state = {appsGate: undefined as ReturnType<typeof deferred> | undefined, createGate: deferred(),
