@@ -4,6 +4,7 @@ import { mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import TOML from '@iarna/toml';
 import { markerPath, planPackage } from '../../packages/pkgfactory/src/core/plan.js';
+import { markdownText, documenterText } from '../../packages/pkgfactory/src/core/markdown.js';
 import { sourceRepository, type Target } from './config.js';
 
 export function git(directory: string, ...args: string[]): string {
@@ -25,9 +26,16 @@ export async function snapshot(directory: string, target: Target) {
   // Use the repository's first commit date so repeated runs do not churn the
   // license year and citation date. The UUID is also retained across renames.
   const date = previous ? git(directory, 'log', '--reverse', '--format=%cI').split('\n')[0] : new Date().toISOString();
+  const description = `Integration tests for the ${target.template} template of [PkgFactory](https://github.com/${sourceRepository}).`;
   const plan = await planPackage({owner: 'JuliaPackageFactory', name: target.name, template: target.template, authors: ['Shuhei Ohno'],
-    description: `Integration tests for the ${target.template} template of [PkgFactory](https://github.com/${sourceRepository}).`},
+    description},
   {id: 'persistent-template-test', uuid, date});
+  // This description is maintained here, not supplied by a user. Preserve its
+  // Markdown link without relaxing the renderer's handling of user input.
+  plan.files['README.md'] = plan.files['README.md'].replace(markdownText(description), description);
+  if (plan.files['docs/src/index.md']) {
+    plan.files['docs/src/index.md'] = plan.files['docs/src/index.md'].replace(documenterText(description), description);
+  }
   // The operation journal marker belongs to create/resume tests, not to these
   // continuously regenerated snapshots, which have no Factory operation.
   delete plan.files[markerPath];

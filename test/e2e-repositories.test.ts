@@ -50,6 +50,11 @@ test('renamed fixed repositories keep UUIDs and render the same output on subseq
     assert.equal(expected.uuid, uuid);
     assert.equal(TOML.parse(expected.files['Project.toml']).name, target.name);
     assert(!('.pkgfactory.json' in expected.files));
+    const description = `Integration tests for the ${target.template} template of [PkgFactory](https://github.com/JuliaPackageFactory/PkgFactory.ts).`;
+    assert(expected.files['README.md'].includes(`\n\n${description}\n\n`));
+    if (target.template !== 'minimum') {
+      assert(expected.files['docs/src/index.md'].includes(`\n\n${description}\n\n`));
+    }
     await publishSnapshot(checkout, expected.files, 'Rename from PkgFactory');
     assert.equal(git(checkout, 'rev-parse', 'HEAD^'), before);
     await assert.rejects(readFile(join(checkout, `src/${oldName}.jl`)));
