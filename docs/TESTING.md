@@ -20,6 +20,8 @@ GitHub ActionsのテストはLinux（`ubuntu-latest`）で実行します。本�
 | simple | [ExampleSimple.jl](https://github.com/JuliaPackageFactory/ExampleSimple.jl) | TestSimple / TemplateSimple / PkgFactorySimple |
 | all-in-one | [ExampleAllInOne.jl](https://github.com/JuliaPackageFactory/ExampleAllInOne.jl) | TestAllInOne / TemplateAllInOne / TamplateAllInOne / PkgFactoryAllInOne |
 
+GitHub Actionsのワークフロー名は **Template E2E tests**、各ジョブの表示名は `E2E (ExampleMinimum.jl)`・`E2E (ExampleSimple.jl)`・`E2E (ExampleAllInOne.jl)` です。サマリーにも同じジョブ名が使われます。
+
 既存リポジトリとmainを必須とし、リポジトリの作成・削除はしません。
 Project.toml・モジュール・テスト・README・docsの名前とURLを生成器で一貫して更新し、UUIDとGit履歴を維持します。
 生成物にない古い追跡ファイルは除去するため、これらの専用リポジトリに手書きのファイルを混在させないでください。
