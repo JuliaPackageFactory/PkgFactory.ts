@@ -5,7 +5,7 @@ import { escapeHtml } from './http.js';
 export function page(csrf: string, publicWeb: boolean, authenticated: boolean, origin: string, templateSuggestions = false) {
   const pageUrl = escapeHtml(new URL('/', origin).href);
   const imageUrl = escapeHtml(new URL('/assets/ogp.png', origin).href);
-  const description = 'Connect GitHub, choose a template, and publish a repository with CI, documentation, and release automation already configured.';
+  const description = 'Create a Julia package repository and set up its infrastructure from a package name and GitHub username. Use Julia Package Factory through the CLI, Web UI, or MCP.';
   return `<!doctype html><html lang="en"><head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="csrf-token" content="${escapeHtml(csrf)}">
   <title>Julia Package Factory</title>
@@ -21,6 +21,7 @@ export function page(csrf: string, publicWeb: boolean, authenticated: boolean, o
   <meta property="og:image:height" content="640">
   <meta property="og:image:alt" content="Julia Package Factory — colorful packages on a factory conveyor belt">
   <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:site" content="@ohnolab">
   <meta name="twitter:title" content="Julia Package Factory">
   <meta name="twitter:description" content="${description}">
   <meta name="twitter:image" content="${imageUrl}">
@@ -33,7 +34,7 @@ export function page(csrf: string, publicWeb: boolean, authenticated: boolean, o
     <a class="github-link" href="https://github.com/JuliaPackageFactory/PkgFactory.ts" target="_blank" rel="noreferrer" aria-label="View PkgFactory on GitHub" title="View PkgFactory on GitHub"><img src="/assets/github.svg" width="30" height="30" alt=""></a></div>
   </div></header>
   <main class="main-content"><div id="reconnect-notice" class="notice notice-error" role="alert" hidden>GitHub authorization has expired or changed. ${publicWeb ? '<a id="reconnect" href="/auth/login">Reconnect GitHub</a> to continue with your settings.' : 'Restart the local Web with a valid GitHub credential.'}</div><section class="intro" aria-labelledby="page-title"><p class="eyebrow">JULIA PACKAGE FACTORY</p><h1 id="page-title">Let's generate a Julia package!</h1>
-    <p>${description}</p></section>
+    <p>Connect GitHub, choose a template, and publish a repository with CI, documentation, and release automation already configured.</p></section>
   <div class="workflow" aria-label="Package creation workflow">
     <section id="connect-panel" class="workflow-card is-active" data-step="1" aria-current="step"><div class="card-heading"><span class="step-badge">1</span><div><div class="title-row"><h2>Connect GitHub</h2><span class="step-state" role="status">Ready</span></div><p id="connect-description"><span id="connect-status" role="status">${authenticated ? 'Loading your GitHub profile and repository owners…' : 'Connect first to choose a repository owner and fill in your author name.'}</span>${publicWeb && authenticated ? ' <button id="logout" class="inline-action" type="button">Click here to sign out.</button>' : ''}</p></div></div>
       <div id="connect-actions" class="card-body">
