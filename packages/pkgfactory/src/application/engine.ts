@@ -235,6 +235,10 @@ export class Factory {
       if (remote.repository.default_branch !== 'main' || remote.repository.description !== op.plan.spec.description) {
         await write('settings', 'PATCH', root, {default_branch: 'main', description: op.plan.spec.description}); await checkpoint();
       }
+      const topics = await github.request<{names: string[]}>('GET', `${root}/topics`);
+      if (!topics.names.includes('julia')) {
+        await write('topics', 'PUT', `${root}/topics`, {names: [...topics.names, 'julia']}); await checkpoint();
+      }
       if (op.plan.spec.template !== 'minimum') {
         if (!await github.request('GET', `${root}/git/ref/heads/gh-pages`, undefined, true)) {
           await write('gh-pages', 'POST', `${root}/git/refs`, {ref: 'refs/heads/gh-pages', sha: op.commit}); await checkpoint();

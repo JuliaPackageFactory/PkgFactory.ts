@@ -20,13 +20,14 @@ export class FakeGitHub {
     if (path === '/user') return respond({id: 42, login: 'tester', name: 'Test Author'});
     if (path === '/user/memberships/orgs') return respond([]);
     if (path === '/user/repos' || /\/orgs\/.*\/repos/.test(path)) {
-      this.repository = {id: 10, default_branch: 'main', description: body.description};
+      this.repository = {id: 10, default_branch: 'main', description: body.description, topics: []};
       if (body.auto_init) this.refs.main = 'initial'; return respond(this.repository, 201);
     }
     const suffix = path.replace(/^\/repos\/[^/]+\/[^/]+/, '');
     if (!this.repository) return respond({}, 404);
     if (suffix === '/branches') return respond(Object.keys(this.refs).map(name => ({name})));
     if (!suffix) {if (method === 'PATCH') Object.assign(this.repository, body); return respond(this.repository);}
+    if (suffix === '/topics') {if (method === 'PUT') this.repository.topics = body.names; return respond({names: this.repository.topics});}
     if (suffix.startsWith('/git/ref/heads/')) {const branch = decodeURIComponent(suffix.slice(15)); return this.refs[branch] ? respond({object: {sha: this.refs[branch]}}) : respond({}, Object.keys(this.refs).length ? 404 : 409);}
     if (suffix.startsWith('/contents/')) {
       const file = suffix.slice(10);

@@ -43,6 +43,8 @@ pkgfactory mcp --stdio
 | `simple` | 上記＋Documenter、TagBot |
 | `all-in-one` | 上記＋Aqua、JET、書式検証、引用情報、ノートブック |
 
+どのテンプレートでも、作成したGitHubリポジトリに `julia` トピックを自動付与します。再開時も既存のトピックを保持します。
+
 CLIのプレビューはオフラインで動作し、UUIDと全ファイルの内容を固定します。
 作成には確認済みプランと `--yes` が必要です。再開では設定の再入力やUUIDの再生成をしません。
 状態は既定で `~/.pkgfactory` に保存します。`--state-dir` または `PKGFACTORY_STATE_DIR` で変更できます。
