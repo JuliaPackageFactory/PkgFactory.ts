@@ -236,8 +236,9 @@ export class Factory {
         await write('settings', 'PATCH', root, {default_branch: 'main', description: op.plan.spec.description}); await checkpoint();
       }
       const topics = await github.request<{names: string[]}>('GET', `${root}/topics`);
-      if (!topics.names.includes('julia')) {
-        await write('topics', 'PUT', `${root}/topics`, {names: [...topics.names, 'julia']}); await checkpoint();
+      const missingTopics = ['julia', 'juliapackagefactory'].filter(topic => !topics.names.includes(topic));
+      if (missingTopics.length) {
+        await write('topics', 'PUT', `${root}/topics`, {names: [...topics.names, ...missingTopics]}); await checkpoint();
       }
       if (op.plan.spec.template !== 'minimum') {
         if (!await github.request('GET', `${root}/git/ref/heads/gh-pages`, undefined, true)) {

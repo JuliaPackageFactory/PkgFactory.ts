@@ -13,7 +13,7 @@ for (const template of ['minimum', 'simple', 'all-in-one']) test(`create ${templ
   const {factory, remote} = fixture(); const plan = await factory.preview(input(template), '42');
   const result = await factory.execute(plan.id, credentials); assert.equal(result.state, 'complete');
   assert.equal(remote.files['Project.toml'], plan.files['Project.toml']);
-  assert.deepEqual(remote.repository.topics, ['julia']);
+  assert.deepEqual(remote.repository.topics, ['julia', 'juliapackagefactory']);
   const initial = remote.calls.find(c => c.method === 'PUT' && c.path.endsWith('/contents/README.md'))!;
   assert.equal(initial.body.message, 'Using PkgFactory\n\nhttps://github.com/JuliaPackageFactory/PkgFactory.ts');
   const templateCommit = remote.calls.find(c => c.method === 'POST' && c.path.endsWith('/git/commits'))!;
@@ -44,11 +44,16 @@ for (const stage of ['repository', 'initialize', 'tree', 'commit', 'files', 'top
   assert.ok((await store.get(plan.id))?.reconciliation);
   assert.equal(remote.keys.length, 1);
   assert.equal(remote.calls.filter(c => c.method === 'PUT' && c.path.endsWith('/contents/README.md')).length, 1);
-  assert.deepEqual(remote.repository.topics, ['julia']);
+  assert.deepEqual(remote.repository.topics, ['julia', 'juliapackagefactory']);
   assert.equal(remote.calls.filter(c => c.method === 'PUT' && c.path.endsWith('/topics')).length, 1);
   assert.ok(!JSON.stringify(await store.get(plan.id)).includes(credentials.token));
 });
-for (const topics of [['scientific-computing'], ['scientific-computing', 'julia']]) test(`resume preserves existing topics: ${topics.join(', ')}`, async () => {
+for (const {topics, writes} of [
+  {topics: ['scientific-computing'], writes: 1},
+  {topics: ['scientific-computing', 'julia'], writes: 1},
+  {topics: ['scientific-computing', 'juliapackagefactory'], writes: 1},
+  {topics: ['scientific-computing', 'julia', 'juliapackagefactory'], writes: 0},
+]) test(`resume preserves existing topics: ${topics.join(', ')}`, async () => {
   const {factory, remote, store, advance} = fixture(); const plan = await factory.preview(input('minimum'), '42');
   remote.before = (method, path) => {if (method === 'PUT' && path.endsWith('/topics')) throw new Error('Topic update failed');};
   await assert.rejects(factory.execute(plan.id, credentials), /GitHub request failed/);
@@ -58,8 +63,8 @@ for (const topics of [['scientific-computing'], ['scientific-computing', 'julia'
   advance();
   const result = await factory.execute(plan.id, credentials, true);
   assert.equal(result.state, 'complete');
-  assert.deepEqual(remote.repository.topics, ['scientific-computing', 'julia']);
-  assert.equal(remote.calls.filter(c => c.method === 'PUT' && c.path.endsWith('/topics')).length, topics.includes('julia') ? 0 : 1);
+  assert.deepEqual([...remote.repository.topics].sort(), ['julia', 'juliapackagefactory', 'scientific-computing']);
+  assert.equal(remote.calls.filter(c => c.method === 'PUT' && c.path.endsWith('/topics')).length, writes);
 });
 test('disconnect stops all subsequent GitHub requests and retains lock', async () => {
   const {factory, remote, store} = fixture(); const plan = await factory.preview(input(), '42'); const abort = new AbortController();
