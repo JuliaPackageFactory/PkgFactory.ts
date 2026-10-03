@@ -4,6 +4,7 @@ import { api } from '../../../packages/pkgfactory/src/web/routes.js';
 import { page } from '../../../packages/pkgfactory/src/web/page.js';
 import { json, errorResponse, limitedBody, readJson } from '../../../packages/pkgfactory/src/web/http.js';
 import assets from '../../../packages/pkgfactory/src/web/assets.json' with {type: 'json'};
+import { unbase64 } from '../../../packages/pkgfactory/src/core/encoding.js';
 import { mcpHttp } from '../../../packages/pkgfactory/src/mcp/server.js';
 import { webAuth, session, sessionKeyValid, type Env } from './auth.js';
 import { oauthRoutes, refreshGitHub } from './oauth.js';
@@ -28,6 +29,7 @@ async function web(request: Request, env: Env): Promise<Response> {
   if (url.pathname === '/style.css' && request.method === 'GET') return new Response(assets.css, {headers: {'Content-Type': 'text/css'}});
   if (url.pathname === '/assets/logo.svg' && request.method === 'GET') return new Response(assets.logo, {headers: {'Content-Type': 'image/svg+xml'}});
   if (url.pathname === '/assets/github.svg' && request.method === 'GET') return new Response(assets.github, {headers: {'Content-Type': 'image/svg+xml'}});
+  if (url.pathname === '/assets/hero.png' && request.method === 'GET') return new Response(unbase64(assets.hero), {headers: {'Content-Type': 'image/png'}});
   const identity = await session(request, env);
   if (url.pathname === '/' && request.method === 'GET') return new Response(page(identity?.csrf ?? '', true, !!identity, !!env.AI), {headers: {'Content-Type': 'text/html; charset=utf-8'}});
   if (url.pathname.startsWith('/api/')) {

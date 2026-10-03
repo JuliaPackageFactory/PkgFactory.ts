@@ -4,7 +4,7 @@ import { api } from '../web/routes.js';
 import { page } from '../web/page.js';
 import { json, errorResponse } from '../web/http.js';
 import assets from '../web/assets.json' with {type: 'json'};
-import { randomToken } from '../core/encoding.js';
+import { randomToken, unbase64 } from '../core/encoding.js';
 export async function localWeb(factory: Factory, token: string | undefined, port = 8787, parentSignal?: AbortSignal) {
   const csrf = randomToken();
   let origin = '';
@@ -27,6 +27,7 @@ export async function localWeb(factory: Factory, token: string | undefined, port
       else if (request.method === 'GET' && path === '/style.css') response = new Response(assets.css, {headers: {'Content-Type': 'text/css'}});
       else if (request.method === 'GET' && path === '/assets/logo.svg') response = new Response(assets.logo, {headers: {'Content-Type': 'image/svg+xml'}});
       else if (request.method === 'GET' && path === '/assets/github.svg') response = new Response(assets.github, {headers: {'Content-Type': 'image/svg+xml'}});
+      else if (request.method === 'GET' && path === '/assets/hero.png') response = new Response(unbase64(assets.hero), {headers: {'Content-Type': 'image/png'}});
       else if (path.startsWith('/api/')) {
         if (request.method !== 'GET' && (headers.get('origin') !== origin || headers.get('x-pkgfactory-csrf') !== csrf)) throw new FactoryError('csrf', 'Invalid CSRF token or Origin', 403);
         response = await api(request, factory, 'local', () => {if (!token) throw new FactoryError('auth', 'Start pkgfactory web with GITHUB_TOKEN, --device, or --gh', 401); return {token, subject: 'local'};});

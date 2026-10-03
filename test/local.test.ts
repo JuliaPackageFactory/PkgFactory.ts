@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { request as httpRequest } from 'node:http';
@@ -11,6 +11,16 @@ import { MemoryStore } from '../packages/pkgfactory/src/application/state.js';
 import { FileStore } from '../packages/pkgfactory/src/node/store.js';
 import { localWeb } from '../packages/pkgfactory/src/node/web.js';
 import { FakeGitHub } from './fake-github.js';
+test('local Web serves the bundled hero image before connecting GitHub', async () => {
+  const {server, origin} = await localWeb(new Factory(new MemoryStore(), {local: true}), undefined, 0);
+  try {
+    const hero = await fetch(origin + '/assets/hero.png');
+    assert.equal(hero.status, 200);
+    assert.equal(hero.headers.get('content-type'), 'image/png');
+    assert.deepEqual(Buffer.from(await hero.arrayBuffer()), await readFile(new URL('../packages/pkgfactory/src/web/hero.png', import.meta.url)));
+  } finally {server.closeAllConnections(); await new Promise<void>(r => server.close(() => r()));}
+});
+
 test('local Web previews, creates, and refuses invalid Origin, CSRF, and Host', async () => {
   const remote = new FakeGitHub();
   const {server, origin} = await localWeb(new Factory(new MemoryStore(), {local: true, fetcher: remote.fetch}), 'token', 0);

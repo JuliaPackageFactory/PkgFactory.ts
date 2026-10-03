@@ -1,5 +1,5 @@
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
   --bg: #f8fafc;
   --bg-accent: #eef2ff;
   --surface: rgba(255, 255, 255, .88);
@@ -75,15 +75,21 @@ button, select { cursor: pointer; }
   position: sticky;
   z-index: 10;
   top: 0;
-  border-bottom: 1px solid var(--border);
-  background: color-mix(in srgb, var(--surface-solid) 82%, transparent);
-  backdrop-filter: blur(14px);
+  border-bottom: 1px solid transparent;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  transform: translateY(0);
+  transition: transform .2s ease, background-color .2s ease, border-color .2s ease, box-shadow .2s ease, backdrop-filter .2s ease;
 }
+
+/* Keyboard focus always keeps the header's navigation within view. */
+.app-header.is-hidden:not(:focus-within) { transform: translateY(-100%); box-shadow: none; pointer-events: none; }
 
 .header-inner {
   display: flex;
   width: min(1120px, calc(100% - 40px));
-  min-height: 66px;
+  min-height: 60px;
   margin: 0 auto;
   align-items: center;
   justify-content: space-between;
@@ -93,7 +99,7 @@ button, select { cursor: pointer; }
 .brand {
   display: inline-flex;
   align-items: center;
-  gap: 11px;
+  gap: 9px;
   color: var(--text-strong);
   font-size: 18px;
   font-weight: 750;
@@ -104,8 +110,8 @@ button, select { cursor: pointer; }
 .brand-logo {
   display: block;
   flex: 0 0 auto;
-  width: 52px;
-  height: 48px;
+  width: 42px;
+  height: 42px;
   object-fit: contain;
 }
 
@@ -243,6 +249,7 @@ input:disabled { color: var(--muted); border-color: var(--border); background: v
 #creation-error { margin-top: 16px; }
 @keyframes progress-slide { from { transform: translateX(-100%); } to { transform: translateX(350%); } }
 @media (prefers-reduced-motion: reduce) {
+  .app-header { transition: none; }
   .spinner, .progress-track span { animation: none; }
   .progress-track span { width: 100%; opacity: .5; }
 }
@@ -256,38 +263,8 @@ input:disabled { color: var(--muted); border-color: var(--border); background: v
 .app-footer a { color: inherit; text-decoration: none; }
 .app-footer a:hover { color: var(--text-strong); }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #030712;
-    --bg-accent: #17163b;
-    --surface: rgba(17, 24, 39, .84);
-    --surface-solid: #111827;
-    --surface-muted: #1f2937;
-    --text: #e5e7eb;
-    --text-strong: #f8fafc;
-    --muted: #9ca3af;
-    --border: #273449;
-    --border-strong: #475569;
-    --primary: #818cf8;
-    --primary-hover: #6366f1;
-    --primary-soft: #25254d;
-    --ready: #a78bfa;
-    --ready-soft: #2e2051;
-    --success-text: #6ee7b7;
-    --success-soft: #123d32;
-    --danger: #fca5a5;
-    --danger-soft: #3b171d;
-    --shadow: 0 1px 2px rgba(0, 0, 0, .2), 0 18px 36px rgba(0, 0, 0, .12);
-  }
-
-  .info-panel { color: #c7d2fe; border-color: #373b75; }
-  input::placeholder, textarea::placeholder { color: #6b7280; }
-  .notice-error { border-color: #7f1d1d; }
-}
-
 @media (max-width: 680px) {
   .header-inner, .main-content, .app-footer { width: min(calc(100% - 24px), 780px); }
-  .header-inner { min-height: 61px; }
   .brand { font-size: 16px; }
   .account { display: none; }
   .main-content { padding: 38px 0 58px; }
@@ -316,3 +293,94 @@ input:disabled { color: var(--muted); border-color: var(--border); background: v
   #files, #content { scrollbar-color: auto; }
   .file[aria-pressed="true"], .workflow-card.is-active, .workflow-card.is-complete { border-color: Highlight; }
 }
+
+/* Theme 03 — Glass Factory
+   More expressive, with translucent panels and cool pastel depth.
+*/
+:root {
+  color-scheme: light;
+  --bg: #eef7fb;
+  --bg-accent: #e7efff;
+  --surface: rgba(255,255,255,.70);
+  --surface-solid: rgba(255,255,255,.93);
+  --surface-muted: rgba(243,249,252,.78);
+  --text: #30475b;
+  --text-strong: #153148;
+  --muted: #6e8293;
+  --border: rgba(159,195,214,.52);
+  --border-strong: rgba(127,171,195,.68);
+  --primary: #3f78b6;
+  --primary-hover: #32679e;
+  --primary-soft: rgba(225,239,255,.76);
+  --ready: #7c64b7;
+  --ready-soft: rgba(240,233,252,.78);
+  --success: #4d987b;
+  --success-hover: #3c8065;
+  --success-text: #35745c;
+  --success-soft: rgba(228,247,238,.82);
+  --danger: #b75f63;
+  --danger-soft: rgba(255,235,235,.82);
+  --shadow: 0 8px 24px rgba(55,100,126,.09), 0 28px 70px rgba(55,100,126,.10);
+}
+
+body {
+  background:
+    radial-gradient(circle at 8% 18%, rgba(99,165,201,.18) 0 15px, transparent 16px),
+    radial-gradient(circle at 88% 10%, rgba(146,112,191,.16) 0 22px, transparent 23px),
+    radial-gradient(circle at 96% 38%, rgba(236,161,177,.18) 0 11px, transparent 12px),
+    radial-gradient(circle at 14% 72%, rgba(116,197,169,.15) 0 17px, transparent 18px),
+    linear-gradient(135deg, #edf7fb 0%, #f5f3ff 48%, #fff8fa 100%);
+}
+
+.app-header.is-scrolled {
+  background: rgba(255,255,255,.62);
+  border-bottom-color: rgba(159,195,214,.45);
+  box-shadow: 0 8px 30px rgba(56,96,120,.05);
+  backdrop-filter: blur(10px) saturate(130%);
+}
+
+.intro {
+  position: relative;
+  isolation: isolate;
+  filter: saturate(.96);
+  border-radius: 16px;
+  /* Use the text container's full height; preserve the image's proportions. */
+  background: url('/assets/hero.png') right center / auto 100% no-repeat;
+}
+
+.intro::after {
+  content: "";
+  position: absolute;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: -1;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(238,247,251,.98) 0%, rgba(238,247,251,.90) 42%, rgba(238,247,251,.24) 82%, rgba(238,247,251,0) 90%);
+}
+
+.workflow-card {
+  border-color: rgba(159,195,214,.55);
+  background: rgba(255,255,255,.68);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(18px) saturate(125%);
+}
+.workflow-card.is-active { box-shadow: 0 0 0 3px rgba(124,100,183,.09), 0 12px 30px rgba(55,100,126,.10), 0 34px 80px rgba(55,100,126,.12); }
+.card-heading { border-bottom-color: rgba(159,195,214,.42); }
+.is-active .step-badge { background: var(--ready); border-color: var(--ready); }
+.step-badge, .step-state, .app-state { background: rgba(245,250,252,.72); }
+
+input, select, textarea, .input-suffix, .button-secondary { background: rgba(255,255,255,.83); }
+input:focus, select:focus, textarea:focus, .input-suffix:focus-within { box-shadow: 0 0 0 3px rgba(63,120,182,.10), 0 8px 24px rgba(63,120,182,.06); }
+.automation-row, .creation-progress, #files { background: rgba(241,248,251,.70); }
+.button-primary { box-shadow: 0 8px 20px rgba(63,120,182,.20); }
+.button-success { box-shadow: 0 8px 20px rgba(77,152,123,.18); }
+.app-footer { border-top-color: rgba(159,195,214,.45); }
+
+@media (max-width: 680px) {
+  .intro::after {
+    background: linear-gradient(90deg, rgba(238,247,251,.99) 0%, rgba(238,247,251,.96) 66%, rgba(238,247,251,.60) 100%);
+  }
+}
+
+/* Keep the white GitHub asset visible on the light header. */
+.github-link img { filter: brightness(0) saturate(100%) opacity(.72); }

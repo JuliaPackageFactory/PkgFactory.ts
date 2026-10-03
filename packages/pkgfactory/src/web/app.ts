@@ -1,3 +1,4 @@
+import './header.js';
 import { appSlugs, unknownInstallations, type AppInstallations } from '../github/apps.js';
 import { normalizeAuthorSeparators, parseAuthors, workflowStates } from './workflow.js';
 import { packageNameError } from '../core/package-name.js';

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { build } from 'esbuild';
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import { resolve } from 'node:path';
+import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { planPackage } from '../../packages/pkgfactory/src/core/plan.js';
 import { encrypt, decrypt, sessionCookieValue } from '../../apps/cloudflare/src/auth.js';
@@ -47,6 +48,10 @@ test('Worker routes, Durable Object persistence, OAuth PKCE and CSRF rejection',
   try {
     const health = await mf.dispatchFetch('https://pkgfactory.test/health');
     assert.equal(health.status, 200); assert.equal(health.headers.get('referrer-policy'), 'no-referrer');
+    const hero = await mf.dispatchFetch('https://pkgfactory.test/assets/hero.png');
+    assert.equal(hero.status, 200);
+    assert.equal(hero.headers.get('content-type'), 'image/png');
+    assert.deepEqual(Buffer.from(await hero.arrayBuffer()), await readFile(new URL('../../packages/pkgfactory/src/web/hero.png', import.meta.url)));
     assert.equal((await mf.dispatchFetch('https://evil.test/health')).status, 403);
     assert.equal((await mf.dispatchFetch('https://pkgfactory.test/api/preview', {method: 'POST', body: '{}', headers: {Origin: 'https://evil.test'}})).status, 403);
     assert.equal((await mf.dispatchFetch('https://pkgfactory.test/mcp', {method: 'POST'})).status, 401);
