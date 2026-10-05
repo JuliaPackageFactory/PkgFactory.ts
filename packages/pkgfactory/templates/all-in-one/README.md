@@ -17,17 +17,11 @@
 
 ## Quick Start
 
-Run the following command in the Julia REPL or a notebook:
+Requires [Julia](https://julialang.org/install/) 1.12 or later. Paste the following into the Julia REPL or a notebook cell:
 
 ```julia
 import Pkg; Pkg.add(url="https://github.com/{{{OWNER}}}/{{{PKG}}}.jl.git")
-```
-
-After installation, load the package and verify it works:
-
-```julia
-julia> import {{{PKG}}}; {{{PKG}}}.hello()
-"Hello, World!"
+import {{{PKG}}}; {{{PKG}}}.hello()  # returns "Hello, World!"
 ```
 
 ## Documentation
