@@ -26,4 +26,4 @@ julia --project=. --startup-file=no -e "using Pkg; Pkg.test()"
 
 ## Acknowledgments
 
-This package is built on an initial project template generated using [PkgFactory.ts](https://github.com/JuliaPackageFactory/PkgFactory.ts).
+This package is built on an initial project template generated using [Julia Package Factory](https://github.com/JuliaPackageFactory).
