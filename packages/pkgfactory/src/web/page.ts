@@ -73,10 +73,25 @@ export function page(csrf: string, publicWeb: boolean, authenticated: boolean, o
           <div id="creation-error" class="notice notice-error" role="alert" hidden></div><p id="creation-recovery" class="permission-copy" hidden>Setup may have made changes on GitHub. Creation is paused to avoid repeating them. <a id="interrupted-repository-link" target="_blank" rel="noreferrer">Check the repository</a> before starting another setup.</p>
         </div></div>
       </div></section>
-      <section class="workflow-card" data-step="6"><div class="card-heading"><span class="step-badge">6</span><div><div class="title-row"><h2 tabindex="-1">Next steps</h2><span class="step-state" role="status">Upcoming</span></div><p>Open your repository and take the next steps.</p></div></div><div class="card-body">
+      <section class="workflow-card" data-step="6"><div class="card-heading"><span class="step-badge">6</span><div><div class="title-row"><h2 tabindex="-1">Check results</h2><span class="step-state" role="status">Upcoming</span></div><p>Open your repository and take the next steps.</p></div></div><div class="card-body">
         <p id="success-placeholder" class="permission-copy">Your repository link and next steps will appear here after creation.</p>
         <div id="success-panel" class="creation-result" hidden><p id="success-copy" role="status"></p><div class="success-actions"><a id="repository-link" class="button button-success" target="_blank" rel="noreferrer">Go to repository</a><button id="create-another" class="button button-secondary" type="button">Create another package</button></div>
           <p id="next-steps">Follow the builds in <a id="actions-link" target="_blank" rel="noreferrer">GitHub Actions</a><span id="documentation-followup" hidden> and <a id="documentation-link" target="_blank" rel="noreferrer">check documentation deployment</a></span>.<span id="codecov-followup" hidden> Ensure <a href="https://github.com/apps/codecov" target="_blank" rel="noreferrer">Codecov can access this repository</a>.</span><span id="registration-guide"> If you wish to register your package in <a href="https://github.com/JuliaRegistries/General" target="_blank" rel="noreferrer">Julia’s General registry</a>, a separate <a href="https://github.com/JuliaRegistries/General#registering-a-package-in-general" target="_blank" rel="noreferrer">registration process</a> is required.</span></p>
+        </div>
+      </div></section>
+      <section class="workflow-card" data-step="7"><div class="card-heading"><span class="step-badge">7</span><div class="title-row"><h2 tabindex="-1">Develop with AI</h2><span class="step-state" role="status">Upcoming</span></div></div><div class="card-body">
+        <p id="ai-handoff-placeholder" class="permission-copy">Your AI prompt will be available after repository creation.</p>
+        <div id="ai-handoff" hidden>
+          <div class="ai-prompt-toolbar"><div class="ai-languages" role="group" aria-label="Prompt language"><button type="button" class="button button-small button-secondary" data-prompt-language="en" aria-pressed="true">English</button><button type="button" class="button button-small button-secondary" data-prompt-language="ja" aria-pressed="false">日本語</button></div><p id="ai-prompt-help">Select a prompt language and customize the text.</p></div>
+          <textarea id="ai-prompt" rows="5" spellcheck="false" aria-label="Prompt" aria-describedby="ai-prompt-help"></textarea>
+          <div class="ai-actions" role="group" aria-label="Copy or open an AI agent">
+            <button id="copy-prompt" class="button button-primary" type="button" disabled><svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M15 8V3H3v13h5"/></svg>Copy prompt</button>
+            <a id="open-chatgpt" class="button button-secondary" target="_blank" rel="noopener noreferrer" aria-disabled="true">Open ChatGPT${externalLinkIcon()}</a>
+            <a id="open-codex" class="button button-secondary" aria-disabled="true">Open Codex${externalLinkIcon()}</a>
+            <a id="open-claude" class="button button-secondary" href="https://claude.ai/" target="_blank" rel="noopener noreferrer">Open Claude${externalLinkIcon()}</a>
+          </div>
+          <p id="prompt-copy-status" class="permission-copy" role="status" aria-live="polite"></p>
+          <p class="permission-copy">Paste into your AI agent if the prompt is not filled in.</p>
         </div>
       </div></section>
     </form>
@@ -86,4 +101,8 @@ export function page(csrf: string, publicWeb: boolean, authenticated: boolean, o
 
 function githubAppRow(slug: string, name: string, description: string) {
   return `<div id="${slug}-row" class="automation-row"><div class="automation-copy"><strong>${name} GitHub App</strong><small id="${slug}-description">${description}</small><small id="${slug}-detail" role="status">Check installation and repository access on GitHub.</small><a id="${slug}-link" href="https://github.com/apps/${slug}" target="_blank" rel="noreferrer">Install or configure ${name}</a><label id="${slug}-confirmation" class="check-field app-confirmation"><input id="${slug}-confirmed" type="checkbox"><span>I confirmed ${name} is installed for this owner.</span></label></div><span id="${slug}-state" class="app-state">Check on GitHub</span></div>`;
+}
+
+function externalLinkIcon() {
+  return '<svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4H4v16h16v-5M14 4h6v6M20 4 10 14"/></svg>';
 }
