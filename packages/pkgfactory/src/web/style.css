@@ -89,7 +89,7 @@ button, select { cursor: pointer; }
 .header-inner {
   display: flex;
   width: min(1120px, calc(100% - 40px));
-  min-height: 60px;
+  min-height: 64px;
   margin: 0 auto;
   align-items: center;
   justify-content: space-between;
@@ -101,7 +101,7 @@ button, select { cursor: pointer; }
   align-items: center;
   gap: 9px;
   color: var(--text-strong);
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 750;
   letter-spacing: -.025em;
   text-decoration: none;
@@ -110,8 +110,8 @@ button, select { cursor: pointer; }
 .brand-logo {
   display: block;
   flex: 0 0 auto;
-  width: 42px;
-  height: 42px;
+  width: 40px;
+  height: 40px;
   object-fit: contain;
 }
 
@@ -265,7 +265,6 @@ input:disabled { color: var(--muted); border-color: var(--border); background: v
 
 @media (max-width: 680px) {
   .header-inner, .main-content, .app-footer { width: min(calc(100% - 24px), 780px); }
-  .brand { font-size: 16px; }
   .account { display: none; }
   .main-content { padding: 38px 0 58px; }
   .intro { margin-bottom: 26px; }
