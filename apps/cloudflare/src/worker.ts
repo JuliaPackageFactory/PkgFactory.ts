@@ -60,7 +60,8 @@ function oauthProvider(env: Env) {return new OAuthProvider<Env>({
   }},
   defaultHandler: {fetch: web}, authorizeEndpoint: '/authorize', tokenEndpoint: '/oauth/token', clientRegistrationEndpoint: '/oauth/register',
   scopesSupported: ['pkgfactory'], resourceMetadata: {resource: env.ORIGIN + '/mcp', scopes_supported: ['pkgfactory']},
-  allowPlainPKCE: false, allowImplicitFlow: false, accessTokenTTL: 3600, refreshTokenTTL: 8 * 3600,
+  // OAuth provider 1.2 enforces S256 PKCE and excludes the implicit flow.
+  accessTokenTTL: 3600, refreshTokenTTL: 8 * 3600,
   clientIdMetadataDocumentEnabled: true, tokenExchangeCallback: refreshGitHub, clientRegistrationCallback: registrationPolicy,
   // The default log includes descriptions that can echo client input. Keep fixed identifiers only.
   onError: ({status, code, internal}) => {console.warn(JSON.stringify({event: 'oauth_error', status, code, category: internal?.category, reason: internal?.reason}));},
