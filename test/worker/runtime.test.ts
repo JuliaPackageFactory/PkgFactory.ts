@@ -78,6 +78,18 @@ test('Worker routes, Durable Object persistence, OAuth PKCE and CSRF rejection',
     assert.equal(registration.status, 201);
     const registered = await registration.json() as any;
     const authorize = 'https://pkgfactory.test/authorize?' + new URLSearchParams({client_id: registered.client_id, redirect_uri: 'http://127.0.0.1:12345/callback', response_type: 'code', scope: 'pkgfactory', resource: 'https://pkgfactory.test/mcp', state: 'test-state', code_challenge: 'a'.repeat(43), code_challenge_method: 'S256'});
+    // Removed provider options must not enable plain PKCE or the implicit flow.
+    for (const variant of ['plain', 'default-plain', 'missing-pkce', 'implicit']) {
+      const invalid = new URL(authorize);
+      if (variant === 'plain') invalid.searchParams.set('code_challenge_method', 'plain');
+      if (variant === 'default-plain' || variant === 'missing-pkce') invalid.searchParams.delete('code_challenge_method');
+      if (variant === 'missing-pkce') invalid.searchParams.delete('code_challenge');
+      if (variant === 'implicit') invalid.searchParams.set('response_type', 'token');
+      const rejected = await mf.dispatchFetch(invalid.toString(), {redirect: 'manual'});
+      assert.equal(rejected.status, 400, variant);
+      assert.equal(rejected.headers.get('location'), null, variant);
+      assert.equal(rejected.headers.get('set-cookie'), null, variant);
+    }
     for (const decision of ['approve', 'deny']) {
       const consent = await mf.dispatchFetch(authorize);
       assert.equal(consent.status, 200);
