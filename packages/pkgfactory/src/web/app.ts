@@ -2,6 +2,7 @@ import './header.js';
 import { appSlugs, unknownInstallations, type AppInstallations } from '../github/apps.js';
 import { normalizeAuthorSeparators, parseAuthors, workflowStates } from './workflow.js';
 import { packageNameError } from '../core/package-name.js';
+import { setupAiHandoff } from './ai-handoff.js';
 
 const element = <T = HTMLElement>(id: string) => document.getElementById(id) as T;
 const form = element<HTMLFormElement>('package-form');
@@ -14,6 +15,8 @@ const description = element<HTMLTextAreaElement>('description');
 const template = element<HTMLSelectElement>('template');
 const csrf = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')!.content;
 const cards = [...document.querySelectorAll<HTMLElement>('.workflow-card[data-step]')];
+const setAiRepository = setupAiHandoff();
+setAiRepository();
 const displayedApps = appSlugs.filter(slug => document.getElementById(`${slug}-row`));
 let profileReady = false, working = false, available = false, previewReady = false, created = false;
 let planId = '', checkedAppsOwner = '', composing = false;
@@ -72,6 +75,8 @@ function controls() {
   synchronizePreview(settingsReady && appsConfirmed && !composing);
   if (!created && settingsReady && !appsConfirmed && !appsLoading) element('review-status').textContent = 'Confirm Codecov in Configure automation to prepare your review.';
   const states = workflowStates([profileReady && !authRequired, available, !!template.value && metadataReady, automationReady, created, false]);
+  // Both post-creation sections are ready; visiting results does not complete a check.
+  states.push(created ? 'ready' : 'upcoming');
   for (const [index, card] of cards.entries()) {
     const state = states[index];
     const activity = index === 3 && !created && settingsReady && appsLoading && hasAutomation() ? 'Checking'
@@ -81,7 +86,7 @@ function controls() {
     card.classList.toggle('is-active', state === 'ready');
     card.classList.toggle('is-busy', !!activity && activity !== 'Needs attention');
     card.classList.toggle('has-error', activity === 'Needs attention');
-    if (state === 'ready') card.setAttribute('aria-current', 'step'); else card.removeAttribute('aria-current');
+    if (index === states.indexOf('ready')) card.setAttribute('aria-current', 'step'); else card.removeAttribute('aria-current');
     const label = card.querySelector<HTMLElement>('.step-state')!;
     const text = activity || (state === 'complete' ? 'Completed' : state === 'ready' ? 'Ready' : 'Upcoming');
     if (label.textContent !== text) label.textContent = text;
@@ -439,6 +444,7 @@ element('create').onclick = () => void busy(async () => {
     element<HTMLAnchorElement>('repository-link').href = `https://github.com/${result.repository}`;
     element('success-copy').textContent = `${result.repository} was created and configured.`;
     const repositoryUrl = `https://github.com/${result.repository}`;
+    setAiRepository(repositoryUrl);
     element<HTMLAnchorElement>('actions-link').href = `${repositoryUrl}/actions`;
     const docsLink = element<HTMLAnchorElement>('documentation-link');
     element('documentation-followup').hidden = !hasAutomation(); docsLink.href = `${repositoryUrl}/settings/pages`;
@@ -460,6 +466,7 @@ element('create').onclick = () => void busy(async () => {
 });
 element('create-another').onclick = () => {
   form.reset(); authors.value = defaultAuthor; planId = ''; created = false;
+  setAiRepository();
   creationFailed = false; authorsTouched = false; advancedToAutomation = false; selectedFile = ''; fileScroll = 0; contentScroll = {top: 0, left: 0};
   element('documentation-link').textContent = 'check documentation deployment';
   element('creation-error').hidden = true;

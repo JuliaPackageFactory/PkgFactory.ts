@@ -9,9 +9,10 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 const suggested = {template: 'all-in-one', probabilities: {minimum: 0.05, simple: 0.15, 'all-in-one': 0.8}};
 const suggestionMessage = 'Jev recommends All-in-one. (minimum: 5%, simple: 15%, all-in-one: 80%)';
 const deferred = () => {let resolve!: (value?: any) => void; const promise = new Promise<any>(r => {resolve = r;}); return {promise, resolve};};
-async function fixture(options: {draft?: string; login?: string; suggestions?: boolean} = {}) {
+async function fixture(options: {draft?: string; login?: string; suggestions?: boolean; language?: string} = {}) {
   const dom = new JSDOM(page('csrf', true, true, 'https://pkgfactory.test', options.suggestions), {url: 'https://pkgfactory.test/', runScripts: 'outside-only'});
   const w = dom.window, $ = (id: string) => w.document.getElementById(id);
+  if (options.language) Object.defineProperty(w.navigator, 'language', {value: options.language});
   const calls: {url: string; body: any; signal?: AbortSignal}[] = [], scrolls: string[] = [];
   const state = {appsGate: undefined as ReturnType<typeof deferred> | undefined, createGate: deferred(),
     app: {state: 'unknown', selection: undefined as string | undefined}, appsFailure: false, failPreview: false, authExpired: false,
@@ -444,6 +445,7 @@ test('failed creation exposes attention and cannot resubmit the same request', a
     f.state.createGate.resolve({error: 'Inspect status, then explicitly resume', code: 'resume'});
     await f.wait(() => !f.$('creation-error').hidden && f.$('create-spinner').hidden);
     assert.equal(f.badge(5), 'Needs attention'); assert.equal(f.$('create').disabled, true); assert.equal(f.$('creation-recovery').hidden, false);
+    assert.equal(f.$('ai-handoff').hidden, true); assert.equal(f.badge(7), 'Upcoming');
     f.$('create').click(); assert.equal(f.count('/api/create'), 1);
   } finally {f.close();}
 });
@@ -471,6 +473,88 @@ test('success preserves review and combines relevant next steps in one plain par
     await f.wait(() => f.$('codecov-followup').hidden);
     assert.equal(f.badge(4), 'Completed'); assert.equal(f.badge(5), 'Completed');
     f.$('create-another').click(); assert.equal(f.$('template').value, ''); assert.equal(f.$('success-panel').hidden, true);
+  } finally {f.close();}
+});
+
+test('AI handoff uses the created repository, preserves language drafts, and encodes edited prompts', async () => {
+  const f = await fixture({language: 'ja-JP'});
+  try {
+    const {$, w} = f;
+    const language = (lang: string) => w.document.querySelector(`[data-prompt-language="${lang}"]`).click();
+    assert.equal($('ai-handoff').hidden, true); assert.equal($('copy-prompt').disabled, true);
+    assert.equal($('open-chatgpt').hasAttribute('href'), false); assert.equal($('open-codex').hasAttribute('href'), false);
+    f.input('package-name', 'TestPackage'); f.select('template', 'minimum'); await f.wait(f.ready);
+    $('confirm').click(); $('create').click();
+    f.state.createGate.resolve({state: 'complete', repository: 'Tester/TestPackage.jl'});
+    await f.wait(() => !$('ai-handoff').hidden && !$('create-another').disabled);
+    assert.equal($('ai-handoff-placeholder').hidden, true);
+    assert.equal(f.badge(6), 'Ready'); assert.equal(f.badge(7), 'Ready');
+    assert.equal(w.document.querySelectorAll('[aria-current="step"]').length, 1);
+    assert.equal(w.document.querySelector('[aria-current="step"]').dataset.step, '6');
+    const japanese = $('ai-prompt').value;
+    assert.match(japanese, /私へのヒアリング/); assert.match(japanese, /合意した内容を実装・検証/);
+    assert.equal(japanese.split('\n')[1], 'https://github.com/Tester/TestPackage.jl');
+    assert.equal($('ai-prompt').lang, 'ja');
+    const edited = japanese + '\n日本語 & a+b? #tag <example> "quotes"';
+    const requests = f.calls.length;
+    f.input('ai-prompt', edited); language('en');
+    assert.match($('ai-prompt').value, /^Interview me/); assert.equal($('ai-prompt').lang, 'en');
+    f.input('ai-prompt', 'Custom English prompt'); language('ja');
+    assert.equal($('ai-prompt').value, edited);
+    assert.equal(w.document.querySelector('[data-prompt-language="ja"]').getAttribute('aria-pressed'), 'true');
+    assert.equal(new URL($('open-chatgpt').href).searchParams.get('q'), edited);
+    const codex = new URL($('open-codex').href);
+    assert.equal(codex.protocol, 'codex:'); assert.equal(codex.hostname, 'new');
+    assert.equal(codex.searchParams.get('prompt'), edited);
+    assert.equal(codex.searchParams.get('originUrl'), 'https://github.com/Tester/TestPackage.jl.git');
+    assert.equal($('open-claude').href, 'https://claude.ai/');
+    let copied = '';
+    Object.defineProperty(w.navigator, 'clipboard', {value: {writeText: async (text: string) => {copied = text;}}});
+    $('copy-prompt').click(); await f.wait(() => $('prompt-copy-status').textContent.startsWith('Copied'));
+    assert.equal(copied, edited);
+    language('en'); assert.equal($('ai-prompt').value, 'Custom English prompt');
+    assert.equal($('prompt-copy-status').textContent, '');
+    f.input('ai-prompt', ' \n');
+    assert.equal($('copy-prompt').disabled, true);
+    for (const id of ['open-chatgpt', 'open-codex']) {
+      assert.equal($(id).hasAttribute('href'), false); assert.equal($(id).getAttribute('aria-disabled'), 'true');
+    }
+    assert.equal(f.calls.length, requests, 'Editing and copying never send the prompt to the server');
+    $('create-another').click();
+    assert.equal($('ai-handoff').hidden, true); assert.equal($('ai-prompt').value, '');
+    assert.equal(f.badge(7), 'Upcoming');
+    f.state.createGate = deferred();
+    f.input('package-name', 'AnotherPackage'); f.select('template', 'minimum'); await f.wait(f.ready);
+    $('confirm').click(); $('create').click(); f.state.createGate.resolve({state: 'complete', repository: 'tester/AnotherPackage.jl'});
+    await f.wait(() => !$('ai-handoff').hidden && !$('create-another').disabled);
+    for (const lang of ['en', 'ja']) {
+      language(lang);
+      assert.match($('ai-prompt').value, /https:\/\/github.com\/tester\/AnotherPackage.jl$/);
+      assert.doesNotMatch($('ai-prompt').value, /TestPackage|Custom English|#tag/);
+    }
+  } finally {f.close();}
+});
+
+test('AI prompt copying falls back to selection and ignores stale clipboard completions', async () => {
+  const f = await fixture();
+  try {
+    const {$, w} = f;
+    f.input('package-name', 'TestPackage'); f.select('template', 'minimum'); await f.wait(f.ready);
+    $('confirm').click(); $('create').click(); f.state.createGate.resolve({state: 'complete', repository: 'tester/TestPackage.jl'});
+    await f.wait(() => !$('ai-handoff').hidden && !$('create-another').disabled);
+    for (const clipboard of [undefined, {writeText: async () => {throw Error('Permission denied');}}]) {
+      Object.defineProperty(w.navigator, 'clipboard', {configurable: true, value: clipboard});
+      f.input('ai-prompt', 'Copy this prompt'); $('copy-prompt').click();
+      await f.wait(() => $('prompt-copy-status').textContent.startsWith('Text selected'));
+      assert.equal(w.document.activeElement.id, 'ai-prompt');
+      assert.equal($('ai-prompt').selectionStart, 0); assert.equal($('ai-prompt').selectionEnd, $('ai-prompt').value.length);
+    }
+    const pending = deferred();
+    Object.defineProperty(w.navigator, 'clipboard', {configurable: true, value: {writeText: () => pending.promise}});
+    $('copy-prompt').click(); $('create-another').click(); pending.resolve();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal($('prompt-copy-status').textContent, '');
+    assert.equal(w.document.activeElement.id, 'package-name');
   } finally {f.close();}
 });
 
