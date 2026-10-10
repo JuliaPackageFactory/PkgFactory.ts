@@ -6,6 +6,7 @@ on:
       - 'packages/pkgfactory/templates/**'
       - 'packages/pkgfactory/src/core/**'
       - 'scripts/e2e/**'
+      - 'scripts/templates.mjs'
       - 'scripts/template-repositories.ts'
       - 'test/e2e-*.test.ts'
       - 'package.json'
@@ -37,10 +38,6 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci
-      - name: Render current template sources
-        run: node scripts/templates.mjs
-      - name: Check committed template bundle
-        run: git diff --exit-code -- packages/pkgfactory/src/core/templates.json
       - name: Update existing repository and verify history
         id: update_repository
         env:

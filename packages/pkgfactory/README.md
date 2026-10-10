@@ -113,6 +113,11 @@ Deploy keyの既定値はEd25519。`--key-algorithm rsa4096` / Workerの `KEY_AL
 
 ## 開発・配備
 
+テンプレートの編集元は `packages/pkgfactory/templates/` です。
+`src/core/templates.json` はNode.js版とCloudflare Workers版にテンプレートを埋め込むための生成ファイルで、Git管理しません。
+`npm ci`、型検査・テスト・ローカルE2E、ビルドの際に自動生成し、npmパッケージの `pack` / `publish` 前にもビルドします。
+テンプレート編集後にソースを直接 `tsx` で実行する場合や、インストール時に `--ignore-scripts` を使った場合は、先に `npm run templates` を実行してください。
+
 ```sh
 npm ci
 npm run check
