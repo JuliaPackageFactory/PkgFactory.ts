@@ -8,6 +8,7 @@ const npmCli = process.env.npm_execpath || (process.platform === 'win32' ? join(
 const npmRun = (args, cwd = process.cwd()) => execFileSync(npmCli ? process.execPath : 'npm', npmCli ? [npmCli, ...args] : args, {cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe']});
 await mkdir('.tmp/pack-smoke', {recursive: true});
 const packed = JSON.parse(npmRun(['pack', '--workspace', '@juliapackagefactory/pkgfactory', '--pack-destination', '.tmp/pack-smoke', '--json']));
+assert.ok(!packed[0].files.some(({path}) => path.startsWith('templates/') || path.endsWith('/templates.json')));
 const destination = resolve('.tmp/pack-smoke/install'); await mkdir(destination, {recursive: true});
 await writeFile(`${destination}/package.json`, '{"private":true,"type":"module"}');
 const tarball = packed[0].filename.replace(/^@/, '').replaceAll('/', '-');
@@ -17,6 +18,11 @@ assert.match(execFileSync(process.execPath, [bin, 'templates'], {encoding: 'utf8
 const spec = `${destination}/spec.json`; await writeFile(spec, JSON.stringify({owner: 'tester', name: 'PackSmoke', authors: ['Tester'], template: 'all-in-one'}));
 const preview = JSON.parse(execFileSync(process.execPath, [bin, 'preview', '--spec', spec], {encoding: 'utf8'}));
 assert.ok(preview.files['.github/workflows/CI.yml']); assert.ok(preview.files['examples/PackSmoke.ipynb']);
+for (const template of ['minimum', 'simple']) {
+  await writeFile(spec, JSON.stringify({owner: 'tester', name: 'PackSmoke', authors: ['Tester'], template}));
+  const plan = JSON.parse(execFileSync(process.execPath, [bin, 'preview', '--spec', spec], {encoding: 'utf8'}));
+  assert.ok(plan.files['src/PackSmoke.jl']);
+}
 const env = {...process.env, GITHUB_TOKEN: '', GH_TOKEN: '', PKGFACTORY_STATE_DIR: `${destination}/state`};
 const transport = new StdioClientTransport({command: process.execPath, args: [bin, 'mcp', '--stdio'], env, stderr: 'pipe'});
 const client = new Client({name: 'pack-smoke', version: '1'});

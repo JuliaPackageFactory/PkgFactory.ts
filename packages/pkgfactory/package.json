@@ -11,6 +11,9 @@
   "engines": {
     "node": ">=24 <25"
   },
+  "scripts": {
+    "prepack": "npm --silent --prefix ../.. run build"
+  },
   "bin": {
     "pkgfactory": "dist/cli.js"
   },
