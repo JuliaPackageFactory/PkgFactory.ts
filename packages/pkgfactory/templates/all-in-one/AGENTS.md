@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Follow https://juliapackagefactory.github.io/DevGuide/README.md with package_name={{{PKG}}}.jl and owner={{{OWNER}}}.
+Follow https://juliapackagefactory.github.io/julia-package-guidelines/README.md with package_name={{{PKG}}}.jl and owner={{{OWNER}}}.
 
 ## Package
 

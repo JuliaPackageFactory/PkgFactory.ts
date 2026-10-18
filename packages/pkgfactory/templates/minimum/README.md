@@ -2,7 +2,7 @@
 
 [![Julia 1.12+](https://badgen.net/static/Julia/1.12%2B/007ec6?icon=https%3A%2F%2Fraw.githubusercontent.com%2FJuliaLang%2Fjulia-logo-graphics%2Fmaster%2Fimages%2Fjulia-dots.svg)](https://julialang.org/downloads/)
 [![CI](https://github.com/{{{OWNER}}}/{{{PKG}}}.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/{{{OWNER}}}/{{{PKG}}}.jl/actions/workflows/CI.yml?query=branch%3Amain)
-[![dev guide: JuliaPackageFactory](https://img.shields.io/badge/dev%20guide-JuliaPackageFactory-blueviolet)](https://juliapackagefactory.github.io/DevGuide/?package_name={{{PKG}}}.jl&owner={{{OWNER}}})
+[![dev guide: JuliaPackageFactory](https://img.shields.io/badge/dev%20guide-JuliaPackageFactory-blueviolet)](https://juliapackagefactory.github.io/julia-package-guidelines/?package_name={{{PKG}}}.jl&owner={{{OWNER}}})
 
 {{{DESCR}}}
 
