@@ -5,6 +5,8 @@
 [![license](https://img.shields.io/github/license/{{{OWNER}}}/{{{PKG}}}.jl?label=license)](LICENSE)
 [![code style: runic](https://img.shields.io/badge/code_style-%E1%9A%B1%E1%9A%A2%E1%9A%BE%E1%9B%81%E1%9A%B2-black)](https://github.com/fredrikekre/Runic.jl)
 [![CI](https://github.com/{{{OWNER}}}/{{{PKG}}}.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/{{{OWNER}}}/{{{PKG}}}.jl/actions/workflows/CI.yml?query=branch%3Amain)
+[![Aqua](https://img.shields.io/github/actions/workflow/status/{{{OWNER}}}/{{{PKG}}}.jl/Aqua.yml?branch=main&event=push&label=Aqua&logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA3OS4zNzUgNTguNjc0Ij48ZyBzdHJva2U9IiNmNWY1ZjUiIHN0cm9rZS13aWR0aD0iNC44ODciPjxjaXJjbGUgZmlsbD0iIzM4OTgyNiIgY3g9IjM5LjY4OCIgY3k9IjIzLjk5MiIgcj0iMjEuNTQ5Ii8%2BPGNpcmNsZSBmaWxsPSIjY2IzYzMzIiBjeD0iMTcuNDQzIiBjeT0iNDEuMjMxIiByPSIxNSIvPjxjaXJjbGUgZmlsbD0iIzk1NThiMiIgY3g9IjYxLjkzMiIgY3k9IjQxLjIzMSIgcj0iMTUiLz48L2c%2BPC9zdmc%2B)](https://github.com/{{{OWNER}}}/{{{PKG}}}.jl/actions/workflows/Aqua.yml?query=branch%3Amain)
+[![JET](https://img.shields.io/github/actions/workflow/status/{{{OWNER}}}/{{{PKG}}}.jl/JET.yml?branch=main&event=push&label=%F0%9F%9B%A9%EF%B8%8F%20JET)](https://github.com/{{{OWNER}}}/{{{PKG}}}.jl/actions/workflows/JET.yml?query=branch%3Amain)
 
 {{{DESCR}}}
 
@@ -19,25 +21,8 @@ import {{{PKG}}}; {{{PKG}}}.hello()  # returns "Hello, World!"
 
 ## Development
 
-This package is set up for development with AI coding agents (Claude Code, Codex, Cursor, Copilot, and others).
-[AGENTS.md](AGENTS.md) holds the instructions that agents and contributors follow: the commands to run, the
-conventions to keep, and the checks that must pass before a change is finished.
-
-Clone the repository, move into its directory, and run the test suite with:
-
-```shell
-git clone https://github.com/{{{OWNER}}}/{{{REPO}}}.git
-cd {{{PKG}}}.jl
-julia --project=. --startup-file=no -e "using Pkg; Pkg.test()"
-```
-
-The test suite also runs doctests, [Aqua](https://github.com/JuliaTesting/Aqua.jl), [ExplicitImports](https://github.com/JuliaTesting/ExplicitImports.jl),
-[JET](https://github.com/aviatesk/JET.jl), and a [Runic](https://github.com/fredrikekre/Runic.jl) formatting check.
-Format the code with:
-
-```shell
-julia --project=test --startup-file=no -m Runic --inplace src test
-```
+Development, by AI coding agents and by people, follows [AGENTS.md](AGENTS.md): the commands to run,
+the conventions to keep, and the checks that must pass before a change is finished.
 
 ## Citation
 
