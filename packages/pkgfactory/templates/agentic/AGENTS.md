@@ -37,6 +37,12 @@ julia --project=test --startup-file=no test/<feature>.jl
 
 # Full suite: package tests + doctests + Aqua + ExplicitImports + Runic + JET.
 julia --project=. --startup-file=no -e 'using Pkg; Pkg.test()'
+
+# Which lines are not exercised by the tests? Run the suite with coverage, then
+# list the source lines whose execution count is 0 (non-code lines show "-").
+rm -f src/*.cov
+julia --project=. --startup-file=no -e 'using Pkg; Pkg.test(coverage=true)'
+grep -n "^ *0 " src/*.cov
 ```
 
 A full `Pkg.test()` takes one to three minutes once the dependencies are
@@ -63,8 +69,9 @@ as done otherwise; report what failed instead.
    signature, a short description, and a `jldoctest` example. Doctests run in
    the test suite, so the example output must be exact: check the type of what
    is printed (`1//2` and `1` are not `0.5` and `1.0`).
-5. `CHANGELOG.md` has an entry under `[Unreleased]` for user-visible changes,
-   and `README.md` shows the main usage when the public API changed.
+5. `README.md` shows the main usage when the public API changed.
+6. The coverage listing above shows no untested lines in the code you added,
+   or you explain why a line cannot be exercised.
 
 ## Rules
 
