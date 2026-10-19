@@ -150,7 +150,7 @@ npm run check          # typecheck, test, build, test:worker
 node scripts/pack-smoke.mjs
 ```
 
-構成、作成手順、Cloudflare Workerの設計、配備、テストは [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) を参照してください。
+構成、作成手順、Cloudflare Workerの設計、配備、テストは [AGENTS.md](AGENTS.md) を参照してください。
 
 ## ライセンスと帰属
 
