@@ -417,9 +417,10 @@ test('Agentic is treated like Minimum: no app checks and no documentation automa
     input('package-name', 'TestPackage'); await wait(() => $('package-availability').classList.contains('is-available'));
     select('template', 'agentic'); await wait(ready);
     assert.equal(f.count('/api/github/apps'), 0);
-    for (const id of ['documenter', 'tagbot', 'codecov']) {assert.equal($(`${id}-state`).textContent, 'Not included'); assert.equal($(`${id}-state`).className, 'configured-pill');}
+    for (const id of ['documenter', 'codecov']) {assert.equal($(`${id}-state`).textContent, 'Not included'); assert.equal($(`${id}-state`).className, 'configured-pill');}
+    assert.equal($('tagbot-state').textContent, 'Automatic'); assert.equal($('tagbot-state').className, 'configured-pill');
     assert.equal($('codecov-detail').textContent, 'Coverage uploads are not included in this template.');
-    assert.match($('automation-description').textContent, /^Agentic includes package tests, quality checks, Runic formatting, and CI\./);
+    assert.match($('automation-description').textContent, /^Agentic includes package tests, quality checks, Runic formatting, CI, and TagBot releases./);
     select('visibility', 'private'); await wait(ready); assert.equal($('private-docs-help').hidden, true);
     assert.equal(f.calls.find(call => call.url === '/api/preview')!.body.template, 'agentic');
   } finally {f.close();}

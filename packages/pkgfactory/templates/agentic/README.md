@@ -10,53 +10,19 @@
 
 {{{DESCR}}}
 
-This package requires Julia 1.12 or later because it uses Pkg workspaces.
-See `[compat]` in [Project.toml](Project.toml) for the supported versions.
-
 ## Quick Start
 
-Install [Julia](https://julialang.org/install/), then run the following in the Julia REPL or a notebook:
+Requires [Julia](https://julialang.org/install/) 1.12 or later. Paste the following into the Julia REPL or a notebook cell:
 
 ```julia
 import Pkg; Pkg.add(url="https://github.com/{{{OWNER}}}/{{{PKG}}}.jl.git")
-```
-
-After installation, load the package and verify that it works:
-
-```julia
 import {{{PKG}}}; {{{PKG}}}.hello()  # returns "Hello, World!"
 ```
 
-## Usage
-
-This section is the user guide: it shows what the package does and how to call it, and it is kept up to
-date with the public API.
-
-```julia
-import {{{PKG}}}
-greeting = {{{PKG}}}.hello()
-"$(greeting) Welcome to {{{PKG}}}.jl."
-```
-
-## API Reference
-
-Every public name has a docstring with its signature, a description, and a tested example. Read them in
-the REPL with the help mode, and list the public names with `names`:
-
-```julia
-julia> ?{{{PKG}}}.hello
-julia> names({{{PKG}}})
-```
-
-## Issues and Contributing
-
-Bug reports and feature requests go to [GitHub Issues](https://github.com/{{{OWNER}}}/{{{PKG}}}.jl/issues);
-the issue forms ask for a minimal reproducer and your Julia environment. Open an issue before starting
-significant changes.
+## Development
 
 Development, by AI coding agents and by people, follows [AGENTS.md](AGENTS.md): the commands to run,
-the conventions to keep, and the checks that must pass before a change is finished. The
-[ColPrac](https://github.com/SciML/ColPrac) guidelines apply to collaboration.
+the conventions to keep, and the checks that must pass before a change is finished.
 
 ## Releasing
 
@@ -66,8 +32,8 @@ This package follows [Semantic Versioning](https://semver.org/). To release a ve
    (`version`, and `date-released` to the release date).
 2. Register the version with [Registrator](https://github.com/JuliaRegistries/Registrator.jl#via-the-github-app)
    by commenting `@JuliaRegistrator register` on the release commit.
-3. After the registration is merged, tag the commit and publish a GitHub release:
-   `git tag vX.Y.Z && git push origin vX.Y.Z`.
+3. After the registration is merged, [TagBot](https://github.com/JuliaRegistries/TagBot) creates the tag
+   and the GitHub release automatically.
 
 ## Citation
 
@@ -76,4 +42,4 @@ GitHub's "Cite this repository" button on the repository page renders it as APA 
 
 ## Acknowledgments
 
-This package is written in the [Julia programming language](https://julialang.org/), built on an initial project template generated using [Julia Package Factory](https://github.com/JuliaPackageFactory). This repository is hosted on [GitHub](https://github.com/{{{OWNER}}}/{{{PKG}}}.jl), and continuous integration is run using [GitHub Actions](https://github.com/{{{OWNER}}}/{{{PKG}}}.jl/actions).
+This package is built on an initial project template generated using [Julia Package Factory](https://github.com/JuliaPackageFactory).

@@ -20,7 +20,7 @@ export type PackageSpec = z.infer<typeof specSchema>;
 // configures the gh-pages branch, a deploy key, and the DOCUMENTER_KEY secret.
 const details: Record<Template, {documentation: boolean; description: string}> = {
   minimum: {documentation: false, description: 'Package, tests, and CI'},
-  agentic: {documentation: false, description: 'Package, tests, quality checks, Runic formatting, and AGENTS.md for AI coding agents'},
+  agentic: {documentation: false, description: 'Package, tests, quality checks, Runic formatting, TagBot, and AGENTS.md for AI coding agents'},
   simple: {documentation: true, description: 'Package, tests, Documenter, and TagBot'},
   'all-in-one': {documentation: true, description: 'Documentation, quality checks, citation, and notebook'},
 };

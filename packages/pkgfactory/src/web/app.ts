@@ -31,6 +31,9 @@ const suggestionTemplateOrder = ['minimum', 'agentic', 'simple', 'all-in-one'] a
 // Templates whose creation configures Documenter, TagBot, and Codecov (see core/spec.ts).
 const documentationTemplates: readonly string[] = ['simple', 'all-in-one'];
 const hasDocumentation = () => documentationTemplates.includes(template.value);
+// Templates that ship TagBot.yml. Agentic runs TagBot with GITHUB_TOKEN alone, without a deploy key.
+const tagbotTemplates: readonly string[] = ['agentic', 'simple', 'all-in-one'];
+const hasTagBot = () => tagbotTemplates.includes(template.value);
 // Page lifetime only: resets and aborted/failed requests do not replenish the budget.
 let suggestionRequests = 0;
 let descriptionComposing = false;
@@ -309,10 +312,10 @@ function automation() {
   const privateRepository = element<HTMLSelectElement>('visibility').value === 'private';
   element('documenter-state').textContent = documentation ? 'Automatic' : minimum ? 'Not included' : 'Choose a template';
   element('documenter-state').className = template.value ? 'configured-pill' : 'app-state';
-  element('tagbot-state').textContent = documentation ? 'Automatic' : minimum ? 'Not included' : 'Choose a template';
+  element('tagbot-state').textContent = hasTagBot() ? 'Automatic' : minimum ? 'Not included' : 'Choose a template';
   element('tagbot-state').className = template.value ? 'configured-pill' : 'app-state';
-  element('tagbot-detail').textContent = documentation ? 'Creates tags and GitHub releases after versions are registered in Julia’s General registry.'
-    : 'Select Simple or All-in-one to include release automation.';
+  element('tagbot-detail').textContent = hasTagBot() ? 'Creates tags and GitHub releases after versions are registered in Julia’s General registry.'
+    : 'Select Agentic, Simple, or All-in-one to include release automation.';
   element('documenter-detail').textContent = documentation ? 'Deploy key and DOCUMENTER_KEY repository secret are configured during creation.'
     : 'Select Simple or All-in-one to include documentation deployment.';
   element('codecov-description').textContent = documentation ? 'Coverage reports and pull request checks. Uploads use GitHub OIDC; no upload token is required.'
@@ -320,7 +323,7 @@ function automation() {
   element('registration-guide').hidden = privateRepository;
   element('private-docs-help').hidden = !privateRepository || minimum;
   element('automation-description').textContent = !template.value ? 'Choose a template to see which automation will be configured.'
-    : template.value === 'agentic' ? 'Agentic includes package tests, quality checks, Runic formatting, and CI. Documentation, coverage, and release workflows are not included.'
+    : template.value === 'agentic' ? 'Agentic includes package tests, quality checks, Runic formatting, CI, and TagBot releases. Documentation and coverage workflows are not included.'
     : minimum ? 'Minimum includes package tests and CI. Documentation, coverage, and release workflows are not included.'
     : 'Documenter and TagBot are configured automatically.';
   renderApps();

@@ -40,7 +40,7 @@ pkgfactory mcp --stdio
 | テンプレート | 内容 |
 |---|---|
 | `minimum` | パッケージ、テスト、CI |
-| `agentic` | 上記＋Aqua、JET、ExplicitImports、Runic書式検証、AIコーディングエージェント向けの `AGENTS.md`（ドキュメントなし） |
+| `agentic` | 上記＋Aqua、JET、ExplicitImports、Runic書式検証、TagBot、AIコーディングエージェント向けの `AGENTS.md`（ドキュメントなし） |
 | `simple` | `minimum`＋Documenter、TagBot |
 | `all-in-one` | 上記＋Aqua、JET、書式検証、引用情報、ノートブック |
 

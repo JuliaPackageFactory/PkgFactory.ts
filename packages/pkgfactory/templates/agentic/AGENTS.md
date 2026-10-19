@@ -16,9 +16,9 @@ repository. Read this whole file before changing anything.
 - All text files use LF line endings (`.gitattributes`, `.editorconfig`). On
   Windows, write files with LF explicitly (for example `newline="\n"` in
   Python); Git warns "CRLF will be replaced by LF" when a tool wrote CRLF.
-- `src/{{{PKG}}}.jl` ships with a placeholder `hello` function, its test, and
-  README Quick Start and Usage examples that call it. Replace all of them with
-  the real API once the package does something; do not keep `hello` around.
+- `src/{{{PKG}}}.jl` ships with a placeholder `hello` function, its test, and a
+  README Quick Start that calls it. Replace all three with the real API once
+  the package does something; do not keep `hello` around.
 
 ## Commands
 
@@ -69,9 +69,8 @@ as done otherwise; report what failed instead.
    signature, a short description, and a `jldoctest` example. Doctests run in
    the test suite, so the example output must be exact: check the type of what
    is printed (`1//2` and `1` are not `0.5` and `1.0`).
-5. The Usage section of `README.md` shows the main usage when the public API
-   changed. There is no documentation site: README.md and the docstrings are
-   the documentation.
+5. `README.md` shows the main usage when the public API changed. There is no
+   documentation site: README.md and the docstrings are the documentation.
 6. The coverage listing above shows no untested lines in the code you added,
    or you explain why a line cannot be exercised.
 
