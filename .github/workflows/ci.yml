@@ -102,7 +102,7 @@ jobs:
           WRANGLER_SEND_METRICS: 'false'
         run: |
           if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
-            echo '::error::Configure CLOUDFLARE_API_TOKEN (secret) and CLOUDFLARE_ACCOUNT_ID (variable) in the staging environment. See docs/DEPLOYMENT.md.'
+            echo '::error::Configure CLOUDFLARE_API_TOKEN (secret) and CLOUDFLARE_ACCOUNT_ID (variable) in the staging environment. See docs/DEVELOPMENT.md.'
             exit 1
           fi
           npm run deploy:staging -- --env=""

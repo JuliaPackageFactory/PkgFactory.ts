@@ -7,15 +7,13 @@ TypeScriptで書かれた一つの生成エンジンを、CLI・Web・MCPサー�
 |---|---|
 | サービス名 | PkgFactory |
 | CLI | `pkgfactory` |
-| npm | `@juliapackagefactory/pkgfactory`（未公開） |
+| npmパッケージ | `@juliapackagefactory/pkgfactory`（未公開） |
+| 公開Web / MCP | https://pkgfactory.ohnolab.workers.dev / 同origin の `/mcp` |
 | 実行環境 | Node.js 24 |
 
 Julia、Docker、Git、OpenSSHは不要です。GitHubへの操作はすべてREST APIで行います。
 
 ## インストール
-
-npm公開後は `npm install -g @juliapackagefactory/pkgfactory` でインストールできます。
-現時点ではこのリポジトリからビルドします。
 
 ```sh
 npm ci
@@ -23,7 +21,7 @@ npm run build
 node packages/pkgfactory/dist/cli.js --help
 ```
 
-`npm pack --workspace @juliapackagefactory/pkgfactory` で作ったtarballをインストールしても同じです。
+`npm pack --workspace @juliapackagefactory/pkgfactory` で作ったtarballを `npm install` しても同じです。
 
 ## CLI
 
@@ -62,8 +60,6 @@ pkgfactory mcp --stdio                                 # stdio MCPサーバー
 パッケージ名の規則は[PkgFactory.jl](https://github.com/JuliaPackageFactory/PkgFactory.jl/blob/6cf2962ceab3e7ee3662d5bb980960fbb434a5f9/src/verification.jl)と同じです。
 5〜100文字のASCII英数字、先頭は大文字、小文字を1文字以上含み、`Julia`/`julia` を含まず、`Ju` で始まらず、`jl` で終わらないこと。末尾の `.jl` はAPI・CLI・MCPでは取り除いて受け付けます。
 
-### プランと状態
-
 `preview` はネットワークなしで動き、プランID・パッケージUUID・全ファイルの内容を固定します。
 `create` と `resume` はそのプランに対してだけ動き、`--yes` を要求します。
 状態は `~/.pkgfactory/journal.json` に保存します（`--state-dir` または `PKGFACTORY_STATE_DIR` で変更）。
@@ -85,9 +81,9 @@ pkgfactory mcp --stdio                                 # stdio MCPサーバー
 | 入口 | 資格情報 |
 |---|---|
 | CLI / ローカルWeb | `GITHUB_TOKEN` または `GH_TOKEN`。`--gh` で `gh auth token`、`--device` でDevice Flow |
-| stdio MCP | `GITHUB_TOKEN`/`GH_TOKEN` または `--gh`。対話ログインはしない |
+| stdio MCP | `GITHUB_TOKEN` / `GH_TOKEN` または `--gh` |
 | 公開Web | GitHub OAuth 認可コード ＋ S256 PKCE。セッションはHttpOnly/Secure Cookie |
-| 公開MCP | OAuth 2.1（S256 PKCE）。GitHubへ上流認可する。GitHub PATをBearerとして受け付けない |
+| 公開MCP | OAuth 2.1（S256 PKCE）。GitHubへ上流認可する |
 
 Device Flowは、Device Flowを有効にしたOAuth AppのClient IDを `PKGFACTORY_GITHUB_CLIENT_ID`（または `--client-id`）に設定して使います。取得したトークンはプロセス内にだけ保持します。
 
@@ -104,16 +100,12 @@ Fine-grained PATを使う場合は、対象リポジトリの作成権限と、A
 - 接続後、自分のアカウントとオーナー権限のある組織を作成先に選べます。著者名はGitHubの表示名から補完します。
 - 名前の形式と既存リポジトリの有無を入力中に確認し、設定が揃うとプレビューを自動生成します。
 - `simple` / `all-in-one` ではCodecov Appの導入を確認します。組織では自動で確認し、確認できない場合は手動のチェックで進めます。
+- 公開Webでは、説明文からテンプレートを推薦します（Cloudflare Workers AIの `typesafe/jev`）。
 - 作成後はリポジトリ、Actions、ドキュメントへのリンクと、AIエージェント用のプロンプトを表示します。
 
-公開Webでは、説明文からテンプレートを推薦する機能があります（Cloudflare Workers AIの `typesafe/jev`）。ローカルWebにはありません。
-
-ローカルWebは `127.0.0.1` だけで待ち受け、Host・Origin・CSRFトークンを検証します。
-Webに再開画面はありません。中断したプランはCLIかMCPの `status` / `resume` で扱います。
+ローカルWebは `127.0.0.1` だけで待ち受け、Host・Origin・CSRFトークンを検証します。中断したプランはCLIかMCPの `status` / `resume` で扱います。
 
 ## MCP
-
-ツールは5つです。
 
 | ツール | 内容 |
 |---|---|
@@ -124,7 +116,7 @@ Webに再開画面はありません。中断したプランはCLIかMCPの `sta
 | `resume_package` | `planId` と `confirm: true` で明示的に再開する |
 
 `pkgfactory mcp --stdio --read-only` では `create_package` と `resume_package` を公開しません。
-クライアント設定の例は [examples/mcp.json](examples/mcp.json)、公開MCPのURLはWorkerの `/mcp` です。
+クライアント設定の例は [examples/mcp.json](examples/mcp.json) です。
 
 ## ライブラリ
 
@@ -142,15 +134,13 @@ await factory.execute(plan.id, {subject, token: githubToken}, false, signal);
 
 ## 中断と再開
 
-GitHubへの書き込みは、送信前にジャーナルへ記録し、自動では再送しません。
+GitHubへの書き込みは、送信前にジャーナルへ記録します。自動では再送しません。
 接続切断、120秒の実行期限、30秒の要求期限のいずれかで、以後のGitHub操作を止めます。
 結果が不明な操作はロックとして残り、150秒のリース期限後に `status` で照合してから `resume` で再開します。
 再開時はリポジトリID、回復マーカー `.pkgfactory.json`、Project.tomlを照合し、他人や別プランのリポジトリを上書きしません。
 
 秘密鍵は保存しません。Secret登録の結果が不明なら、再開時に新しい鍵ペアを作り、登録後にそのプランの古い鍵だけを削除します。
 Deploy keyは既定でEd25519です。`--key-algorithm rsa4096`（Workerでは `KEY_ALGORITHM=rsa4096`）でRSA-4096に切り替えられます。
-
-詳細は [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) を参照してください。
 
 ## 開発
 
@@ -160,15 +150,12 @@ npm run check          # typecheck, test, build, test:worker
 node scripts/pack-smoke.mjs
 ```
 
-テンプレートの編集元は `packages/pkgfactory/templates/` です。
-`src/core/templates.json` はそこから生成する埋め込み用ファイルで、Gitには含めません。
-`npm ci`、型検査、テスト、ビルド、`npm pack` の前に自動生成されます。`tsx` で直接実行する前には `npm run templates` を実行してください。
+構成、作成手順、Cloudflare Workerの設計、配備、テストは [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) を参照してください。
 
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — 構成、作成手順、再開、公開環境の設計
-- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — Cloudflare Workerの設定と配備
-- [docs/TESTING.md](docs/TESTING.md) — テストとE2E
+## ライセンスと帰属
 
-## 由来
+MITライセンスです（[LICENSE](LICENSE)）。Copyright (c) 2025-2026 Shuhei Ohno and contributors.
 
-テンプレートとWeb画面は [PkgFactory.jl](https://github.com/JuliaPackageFactory/PkgFactory.jl) の `7c7d4af` から移植しました。
-旧版のAPI・CLI・生成物との互換は保証しません。ライセンスは [LICENSE](LICENSE)、帰属は [NOTICE.md](NOTICE.md) を参照してください。
+- テンプレート（58ファイル）とWeb画面のスタイルシート・ロゴは、[PkgFactory.jl](https://github.com/JuliaPackageFactory/PkgFactory.jl) のコミット `7c7d4afeaa3b4b708726af4795c13c192fc3c948`（MIT）に由来します。テンプレートの描画はJulia文字列をエスケープするため、旧版とバイト単位の互換はありません。
+- OAuthには [@cloudflare/workers-oauth-provider](https://github.com/cloudflare/workers-oauth-provider)（MIT）、MCPには [@modelcontextprotocol/sdk](https://github.com/modelcontextprotocol/typescript-sdk)（MIT）を使用しています。
+- `packages/pkgfactory/src/web/github.svg` のGitHub Invertocatロゴは、[GitHubのロゴ使用ガイドライン](https://brand.github.com/foundations/logo)に従います。
