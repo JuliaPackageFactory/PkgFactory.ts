@@ -22,9 +22,9 @@ import {{{PKG}}}; {{{PKG}}}.hello()  # returns "Hello, World!"
 
 ## Development
 
-Development, by AI coding agents and by people, follows [AGENTS.md](AGENTS.md): the commands to run,
-the conventions to keep, and the checks that must pass before a change is finished. See
-[CONTRIBUTING.md](CONTRIBUTING.md) for how issues and pull requests are handled.
+Please open an [issue](https://github.com/{{{OWNER}}}/{{{PKG}}}.jl/issues) to discuss significant changes before you start on them.
+For collaboration, we follow the [ColPrac](https://github.com/SciML/ColPrac) guidelines.
+Everyone who changes this package, people and AI coding agents alike, follows [AGENTS.md](AGENTS.md).
 
 ## Releasing
 
