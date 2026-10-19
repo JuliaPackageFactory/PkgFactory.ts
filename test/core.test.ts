@@ -36,9 +36,9 @@ for (const template of templates) test(`render and parse ${template}`, async () 
   if (hasDocumentation(template)) assert.match(plan.files['docs/make.jl'], /\\\$x/);
   else assert.equal(Object.keys(plan.files).some(path => path.startsWith('docs/')), false);
   if (template === 'agentic') {
-    for (const path of ['AGENTS.md', 'test/runic.jl', 'test/doctest.jl', 'test/aqua.jl', 'test/jet.jl', 'test/explicit_imports.jl']) assert.ok(plan.files[path], path);
-    // Human-facing extras stay out: no changelog, no formatting-suggestion workflow, no coverage service.
-    for (const path of ['CHANGELOG.md', '.github/workflows/Format.yml', 'CITATION.cff']) assert.equal(plan.files[path], undefined, path);
+    for (const path of ['AGENTS.md', 'CITATION.cff', 'test/runic.jl', 'test/doctest.jl', 'test/aqua.jl', 'test/jet.jl', 'test/explicit_imports.jl', '.github/ISSUE_TEMPLATE/bug_report.yml']) assert.ok(plan.files[path], path);
+    // Human-facing extras stay out: no changelog, no formatting-suggestion workflow, no coverage service, no docs site.
+    for (const path of ['CHANGELOG.md', '.github/workflows/Format.yml', 'docs/make.jl']) assert.equal(plan.files[path], undefined, path);
     assert.doesNotMatch(plan.files['.github/workflows/CI.yml'], /codecov/);
     assert.match(plan.files['AGENTS.md'], /-m Runic --inplace src test/);
     assert.match(plan.files['test/Project.toml'], /^Runic = "1"$/m);

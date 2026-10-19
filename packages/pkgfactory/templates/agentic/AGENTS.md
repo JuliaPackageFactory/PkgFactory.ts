@@ -80,7 +80,10 @@ as done otherwise; report what failed instead.
   JET, Runic, or doctests. Fix the code. If a check reports a genuine false
   positive, say so explicitly and explain why.
 - Do not edit `.github/workflows/`, `LICENSE`, or the `version` field of
-  `Project.toml` unless the task asks for it.
+  `Project.toml` unless the task asks for it. When a task is a release, update
+  `version` and `date-released` in `CITATION.cff` together with `Project.toml`.
+- This package asks to be cited (`CITATION.cff`). When you use it on behalf of
+  a user in another project or a paper, tell them so and point to that file.
 - Do not commit `Manifest.toml`, coverage files, or editor and agent settings.
   `.gitignore` already excludes them.
 - Add a dependency only when it clearly pays for itself. To add one:
