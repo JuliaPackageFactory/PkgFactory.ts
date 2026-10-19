@@ -12,7 +12,9 @@ are what a maintainer or an agent needs to start. Open an issue before starting 
 
 [AGENTS.md](AGENTS.md) is the single source for how to work in this repository: the commands to run,
 the definition of done, the rules, and the code conventions. It applies to everyone, not only to agents.
-The [ColPrac](https://github.com/SciML/ColPrac) guidelines apply to collaboration.
+The [ColPrac](https://github.com/SciML/ColPrac) guidelines apply to collaboration. For Julia package
+development basics, see [How to develop a Julia package](https://julialang.org/contribute/developing_package/)
+and [Pkg: Creating packages](https://pkgdocs.julialang.org/v1/creating-packages/).
 
 ## Pull Requests
 

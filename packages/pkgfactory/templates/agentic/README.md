@@ -4,6 +4,7 @@
 [![Citation](https://img.shields.io/badge/citation-CFF-7A8288)](CITATION.cff)
 [![license](https://img.shields.io/github/license/{{{OWNER}}}/{{{PKG}}}.jl?label=license)](LICENSE)
 [![code style: runic](https://img.shields.io/badge/code_style-%E1%9A%B1%E1%9A%A2%E1%9A%BE%E1%9B%81%E1%9A%B2-black)](https://github.com/fredrikekre/Runic.jl)
+[![contributer's guide: ColPrac](https://img.shields.io/badge/contributer%27s%20guide-ColPrac-blueviolet)](https://github.com/SciML/ColPrac)
 [![CI](https://github.com/{{{OWNER}}}/{{{PKG}}}.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/{{{OWNER}}}/{{{PKG}}}.jl/actions/workflows/CI.yml?query=branch%3Amain)
 [![Aqua](https://img.shields.io/github/actions/workflow/status/{{{OWNER}}}/{{{PKG}}}.jl/Aqua.yml?branch=main&event=push&label=Aqua&logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA3OS4zNzUgNTguNjc0Ij48ZyBzdHJva2U9IiNmNWY1ZjUiIHN0cm9rZS13aWR0aD0iNC44ODciPjxjaXJjbGUgZmlsbD0iIzM4OTgyNiIgY3g9IjM5LjY4OCIgY3k9IjIzLjk5MiIgcj0iMjEuNTQ5Ii8%2BPGNpcmNsZSBmaWxsPSIjY2IzYzMzIiBjeD0iMTcuNDQzIiBjeT0iNDEuMjMxIiByPSIxNSIvPjxjaXJjbGUgZmlsbD0iIzk1NThiMiIgY3g9IjYxLjkzMiIgY3k9IjQxLjIzMSIgcj0iMTUiLz48L2c%2BPC9zdmc%2B)](https://github.com/{{{OWNER}}}/{{{PKG}}}.jl/actions/workflows/Aqua.yml?query=branch%3Amain)
 [![JET](https://img.shields.io/github/actions/workflow/status/{{{OWNER}}}/{{{PKG}}}.jl/JET.yml?branch=main&event=push&label=%F0%9F%9B%A9%EF%B8%8F%20JET)](https://github.com/{{{OWNER}}}/{{{PKG}}}.jl/actions/workflows/JET.yml?query=branch%3Amain)
@@ -22,7 +23,8 @@ import {{{PKG}}}; {{{PKG}}}.hello()  # returns "Hello, World!"
 ## Development
 
 Development, by AI coding agents and by people, follows [AGENTS.md](AGENTS.md): the commands to run,
-the conventions to keep, and the checks that must pass before a change is finished.
+the conventions to keep, and the checks that must pass before a change is finished. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for how issues and pull requests are handled.
 
 ## Releasing
 
