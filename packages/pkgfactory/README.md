@@ -124,13 +124,13 @@ npm ci
 npm run check
 node scripts/pack-smoke.mjs
 npm run poc
-# 既存の固定3リポジトリを読み取り、更新内容をローカルに生成
+# 既存の固定4リポジトリを読み取り、更新内容をローカルに生成
 npm run e2e:templates -- --gh
 # 新規作成が必要な検証だけ、1回に1件
 npm run e2e -- --gh --template=simple --confirm-create-test-repository
 ```
 
-通常のテンプレートE2Eは既存の `ExampleMinimum.jl`・`ExampleSimple.jl`・`ExampleAllInOne.jl` を継続更新します。
+通常のテンプレートE2Eは既存の `ExampleMinimum.jl`・`ExampleSimple.jl`・`ExampleAllInOne.jl`・`ExampleAgentic.jl` を継続更新します。
 新規作成E2Eは `JuliaPackageFactory/TestYYYYMMDDHHMMSS.jl`（UTC）の1件だけです。
 テンプレートを選択して実行し、途中停止時は保存済みplanIdを明示的に再開します。自動削除はしません。
 OpenSSHとJuliaは開発時の鍵PoC・生成パッケージ検証にのみ使用します。
