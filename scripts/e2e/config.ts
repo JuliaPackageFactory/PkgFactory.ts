@@ -15,7 +15,7 @@ export function snapshotTarget(name: string): Target {
 export function selectedTemplate(args: string[]): PackageSpec['template'] {
   const values = args.filter(a => a.startsWith('--template='));
   const value = values[0]?.slice('--template='.length) ?? 'simple';
-  if (values.length > 1 || !templates.includes(value as PackageSpec['template'])) throw new Error('Choose one --template=minimum|simple|all-in-one');
+  if (values.length > 1 || !templates.includes(value as PackageSpec['template'])) throw new Error('Choose one --template=minimum|agentic|simple|all-in-one');
   return value as PackageSpec['template'];
 }
 export function freshTestName(date = new Date()): string {

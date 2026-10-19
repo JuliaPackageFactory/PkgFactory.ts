@@ -1,5 +1,5 @@
 import { planPackage, validatePlan, markerPath, type PackagePlan } from '../core/plan.js';
-import { specSchema } from '../core/spec.js';
+import { hasDocumentation, specSchema } from '../core/spec.js';
 import { base64, decode, sha256, unbase64, utf8 } from '../core/encoding.js';
 import { GitHub, GitHubError } from '../github/client.js';
 import { organizationInstallations, unknownInstallations } from '../github/apps.js';
@@ -125,7 +125,7 @@ export class Factory {
       const raw = await github.request('GET', `${root}/contents/${markerPath}?ref=${head.object.sha}`, undefined, true);
       if (raw) {try {marker = JSON.parse(decode(unbase64(raw.content.replace(/\s/g, ''))));} catch {throw new FactoryError('marker', 'Invalid recovery marker');}}
     }
-    const docs = op.plan.spec.template !== 'minimum';
+    const docs = hasDocumentation(op.plan.spec.template);
     const keys = docs ? await github.pages<any>(`${root}/keys`) : [];
     const secret = docs ? await github.request('GET', `${root}/actions/secrets/DOCUMENTER_KEY`, undefined, true) : null;
     const pages = docs ? await github.request('GET', `${root}/pages`, undefined, true) : null;
@@ -240,7 +240,7 @@ export class Factory {
       if (missingTopics.length) {
         await write('topics', 'PUT', `${root}/topics`, {names: [...topics.names, ...missingTopics]}); await checkpoint();
       }
-      if (op.plan.spec.template !== 'minimum') {
+      if (hasDocumentation(op.plan.spec.template)) {
         if (!await github.request('GET', `${root}/git/ref/heads/gh-pages`, undefined, true)) {
           await write('gh-pages', 'POST', `${root}/git/refs`, {ref: 'refs/heads/gh-pages', sha: op.commit}); await checkpoint();
         }

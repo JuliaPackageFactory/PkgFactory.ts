@@ -9,7 +9,7 @@ function fixture() {
   return {remote, store, factory: new Factory(store, {fetcher: remote.fetch, now: () => now}), advance: () => {now += 160000;}};
 }
 const input = (template = 'simple') => ({owner: 'tester', name: 'TestPackage', authors: ['Tester'], template});
-for (const template of ['minimum', 'simple', 'all-in-one']) test(`create ${template}; repeated success performs no writes`, async () => {
+for (const template of ['minimum', 'agentic', 'simple', 'all-in-one']) test(`create ${template}; repeated success performs no writes`, async () => {
   const {factory, remote} = fixture(); const plan = await factory.preview(input(template), '42');
   const result = await factory.execute(plan.id, credentials); assert.equal(result.state, 'complete');
   assert.equal(remote.files['Project.toml'], plan.files['Project.toml']);
@@ -20,7 +20,9 @@ for (const template of ['minimum', 'simple', 'all-in-one']) test(`create ${templ
   assert.match(templateCommit.body.message, /\[skip ci\]/);
   const complete = remote.calls.find(c => c.method === 'PUT' && c.path.endsWith('/contents/.pkgfactory.json'))!;
   assert.doesNotMatch(complete.body.message, /\[skip ci\]/);
-  if (template !== 'minimum') assert(remote.calls.indexOf(complete) > remote.calls.findIndex(c => c.method === 'PUT' && c.path.endsWith('/DOCUMENTER_KEY')));
+  const documenter = remote.calls.findIndex(c => c.method === 'PUT' && c.path.endsWith('/DOCUMENTER_KEY'));
+  if (template === 'simple' || template === 'all-in-one') assert(remote.calls.indexOf(complete) > documenter);
+  else {assert.equal(documenter, -1); assert.equal(remote.calls.some(c => c.path.endsWith('/pages') || c.path.endsWith('/keys')), false);}
   const count = remote.calls.length; await factory.execute(plan.id, credentials); assert.equal(remote.calls.length, count);
 });
 for (const stage of ['repository', 'initialize', 'tree', 'commit', 'files', 'topics', 'deploy-key', 'documenter-secret', 'pages', 'complete']) test(`lost ${stage} response requires explicit reconciled resume`, async () => {

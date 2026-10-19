@@ -40,7 +40,8 @@ pkgfactory mcp --stdio
 | テンプレート | 内容 |
 |---|---|
 | `minimum` | パッケージ、テスト、CI |
-| `simple` | 上記＋Documenter、TagBot |
+| `agentic` | 上記＋Aqua、JET、ExplicitImports、Runic書式検証、AIコーディングエージェント向けの `AGENTS.md`（ドキュメントなし） |
+| `simple` | `minimum`＋Documenter、TagBot |
 | `all-in-one` | 上記＋Aqua、JET、書式検証、引用情報、ノートブック |
 
 どのテンプレートでも、作成したGitHubリポジトリに `julia` と `juliapackagefactory` のトピックを自動付与します。再開時も既存のトピックを保持し、不足しているトピックだけを追加します。

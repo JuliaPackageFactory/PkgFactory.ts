@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import TOML from '@iarna/toml';
 import YAML from 'yaml';
 import { planPackage, validatePlan } from '../packages/pkgfactory/src/core/plan.js';
-import { templates, specSchema } from '../packages/pkgfactory/src/core/spec.js';
+import { hasDocumentation, templates, specSchema } from '../packages/pkgfactory/src/core/spec.js';
 import { packageNameError } from '../packages/pkgfactory/src/core/package-name.js';
 import { errorResponse } from '../packages/pkgfactory/src/web/http.js';
 import { descriptionPayload } from './description-payload.js';
@@ -14,7 +14,7 @@ test('description is literal Markdown in README and Documenter, while repository
     const plan = await planPackage({owner: 'tester', name: 'SafePackage', authors: ['Tester'], template, description: descriptionPayload});
     assert.equal(plan.spec.description, descriptionPayload);
     assert(plan.files['README.md'].includes(markdownText(descriptionPayload)));
-    if (template !== 'minimum') assert(plan.files['docs/src/index.md'].includes(documenterText(descriptionPayload)));
+    if (hasDocumentation(template)) assert(plan.files['docs/src/index.md'].includes(documenterText(descriptionPayload)));
   }
   assert.doesNotMatch(markdownText(descriptionPayload), /```|~~~|<script>/);
   const block = documenterText(descriptionPayload).split('\n');
@@ -33,7 +33,13 @@ for (const template of templates) test(`render and parse ${template}`, async () 
   }
   assert.ok(plan.files['src/Example.jl']);
   assert.deepEqual(TOML.parse(plan.files['Project.toml']).authors, plan.spec.authors);
-  if (template !== 'minimum') assert.match(plan.files['docs/make.jl'], /\\\$x/);
+  if (hasDocumentation(template)) assert.match(plan.files['docs/make.jl'], /\\\$x/);
+  else assert.equal(Object.keys(plan.files).some(path => path.startsWith('docs/')), false);
+  if (template === 'agentic') {
+    for (const path of ['AGENTS.md', 'test/runic.jl', 'test/aqua.jl', 'test/jet.jl', 'test/explicit_imports.jl', '.github/workflows/Format.yml']) assert.ok(plan.files[path], path);
+    assert.match(plan.files['AGENTS.md'], /-m Runic --inplace src test/);
+    assert.match(plan.files['test/Project.toml'], /^Runic = "1"$/m);
+  }
   assert.match(plan.files['.github/workflows/CI.yml'], /\$\{\{ github.workflow \}\}/);
   await validatePlan(plan);
   plan.files['Project.toml'] += '\n# tampered';
