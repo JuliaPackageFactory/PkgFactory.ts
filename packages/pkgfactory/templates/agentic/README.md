@@ -39,8 +39,7 @@ This package follows [Semantic Versioning](https://semver.org/). To release a ve
 
 ## Citation
 
-If you use this package in your work, please cite it. [CITATION.cff](CITATION.cff) holds the metadata;
-GitHub's "Cite this repository" button on the repository page renders it as APA or BibTeX.
+If you use this package in your work, please cite it using [CITATION.cff](CITATION.cff).
 
 ## Acknowledgments
 

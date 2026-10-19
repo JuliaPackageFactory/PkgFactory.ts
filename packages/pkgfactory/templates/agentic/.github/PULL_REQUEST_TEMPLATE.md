@@ -8,4 +8,4 @@ Describe the tests you ran and their results.
 
 - [ ] Added or updated tests for behavior changes.
 - [ ] Updated README.md and docstrings for user-visible changes.
-- [ ] Ran the test suite and checked formatting.
+- [ ] Ran the test suite.
