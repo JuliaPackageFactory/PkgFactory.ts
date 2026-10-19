@@ -7,7 +7,7 @@ on:
         options: [staging, npm]
         required: true
       confirmation:
-        description: 'Enter publish after reviewing docs/DEPLOYMENT.md and the acceptance report'
+        description: 'Enter publish after reviewing docs/DEPLOYMENT.md'
         required: true
 permissions:
   contents: read

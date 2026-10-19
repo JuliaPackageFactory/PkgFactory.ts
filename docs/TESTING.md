@@ -1,96 +1,91 @@
-# 継続テストと実GitHub受入
+# テスト
 
-旧版 `7c7d4af` の `test/e2e/repositories.jl`・`sync.jl`・`E2E.yml` に相当する仕組みは、
-`scripts/template-repositories.ts`・`scripts/e2e/snapshots.ts`・`template-repositories.yml` に移しました。
-当初のTypeScript版にはこの固定リポジトリのE2Eが欠けていました。ローカル生成・模擬GitHub・新規作成受入と役割を分けて補っています。
-
-| 検証 | 実行契機 | GitHubへの書込み |
+| 層 | コマンド | GitHubへの書き込み |
 |---|---|---|
-| Node/workerd・生成JuliaのCI | PR / main / 手動 | なし。3テンプレートの構文、Pkg.test、ドキュメントビルド、切断・再開など |
-| 固定リポジトリのE2E | 有効化後、mainのテンプレート/生成処理変更 / 手動 | 下記の既存3リポジトリに差分だけをcommit/push |
-| 作成・再開の受入 | 明示的な手動実行 | 1回の実行で新規リポジトリは最大1件。再開時は0件 |
+| 型検査 | `npm run typecheck` | なし |
+| Nodeテスト | `npm test` | なし。GitHubは模擬サーバー（`test/fake-github.ts`） |
+| workerdテスト | `npm run test:worker` | なし。Miniflare上でWorker全体を実行する |
+| tarball検証 | `node scripts/pack-smoke.mjs` | なし。`npm pack` の成果物をインストールしてCLI・stdio MCP・ローカルWebを起動する |
+| 生成パッケージのJulia実行 | CI `generated-julia` ジョブ | なし。3テンプレートで `Pkg.test` とdocsビルドを行い、説明文が実行されないことを確認する |
+| 固定リポジトリE2E | `npm run e2e:templates` | 既存3リポジトリへの差分commit/push |
+| 作成・再開の受入 | `npm run e2e`、`npm run e2e:staging` | 1回の実行で新規リポジトリ1件まで |
 
-GitHub ActionsのテストはLinux（`ubuntu-latest`）で実行します。本体CIとall-in-oneテンプレートのmacOS・Windows設定はコメントで残しています。
+`npm run check` は型検査、Nodeテスト、ビルド、workerdテストをまとめて実行します。
 
-## 固定3リポジトリ
+## Nodeテスト
 
-| テンプレート | 現在のリポジトリ | 初回更新で受け入れる旧パッケージ名 |
-|---|---|---|
-| minimum | [ExampleMinimum.jl](https://github.com/JuliaPackageFactory/ExampleMinimum.jl) | TestMinimum / TemplateMinimum / PkgFactoryMinimum |
-| simple | [ExampleSimple.jl](https://github.com/JuliaPackageFactory/ExampleSimple.jl) | TestSimple / TemplateSimple / PkgFactorySimple |
-| all-in-one | [ExampleAllInOne.jl](https://github.com/JuliaPackageFactory/ExampleAllInOne.jl) | TestAllInOne / TemplateAllInOne / TamplateAllInOne / PkgFactoryAllInOne |
+`test/*.test.ts` を `node:test` で実行します。主な対象:
 
-GitHub Actionsのワークフロー名は **Template E2E tests**、各ジョブの表示名は `E2E (ExampleMinimum.jl)`・`E2E (ExampleSimple.jl)`・`E2E (ExampleAllInOne.jl)` です。サマリーにも同じジョブ名が使われます。
+- `core`: 説明文のエスケープ、パス・Julia文字列のインジェクション、名前規則のメッセージ
+- `engine`: 切断後の書き込み停止、他subjectの拒否、競合プランと改変Project.tomlの拒否、置換・削除されたリポジトリの拒否
+- `github-context`: プロフィール、組織オーナー判定、名前の空き確認、GitHub App導入状況
+- `local`: ローカルWebのHost/Origin/CSRF、`FileStore` の再起動と多重プロセス、stdio MCP
+- `mcp-http`: Streamable HTTPでの初期化・一覧・作成・取り消し
+- `auth`: 接続元の正規化、同意画面の表示、戻り先の制限、セッションの暗号化と鍵長、Device Flow、PKCEの交換
+- `web-workflow` / `web-interactions`: jsdomでのブラウザー側の挙動（段階の遷移、IME、プレビュー、テンプレート推薦、AI引き継ぎ）
+- `template-suggestion`: Jev応答の検証とエラーの区別
+- `release`: 本番配備前のステージング配備履歴の照合
+- `e2e-repositories`: ローカルGitでの固定リポジトリ更新（改名、UUIDと履歴の維持、競合、dirty checkout）
 
-既存リポジトリとmainを必須とし、リポジトリの作成・削除はしません。
-Project.toml・モジュール・テスト・README・docsの名前とURLを生成器で一貫して更新し、UUIDとGit履歴を維持します。
-生成物にない古い追跡ファイルは除去するため、これらの専用リポジトリに手書きのファイルを混在させないでください。
-Factoryの作成ジャーナル用 `.pkgfactory.json` は継続スナップショットには含めません。
-日付はリポジトリの最初のコミットから決め、同じ入力で毎回日付が変わる差分を防ぎます。
-生成内容が同じならコミットしません。更新コミットの件名は `Update ExampleAllInOne from PkgFactory.ts <生成元の40桁SHA>` の形式で、対象パッケージ名と生成元のコミットIDを記録します。空行を挟んだ3行目にはそのコミットURLを記録します。
-dirty checkout・別パッケージ名・不正UUIDを拒否し、競合するpushは強制上書きも自動再送もしません。
+## workerdテスト
+
+`test/worker/*.test.ts` はMiniflareでWorkerをバンドルして実行します。
+
+- `runtime`: テンプレート生成とNodeとの一致、鍵生成とsealed box、ルート、Durable Objectの永続化、OAuth PKCEとCSRF、切断後の停止、ネイティブfetchでのWeb/MCP認可と3テンプレートの作成
+- `security`: subjectごとの容量分離、旧形式の移行、欠損プランの隔離、ログインの接続元制限、匿名ルートとアカウントのレート制限、`SESSION_KEY` の鍵長
+
+## 固定リポジトリE2E
+
+`scripts/template-repositories.ts` が3つの専用リポジトリを現在の生成器で更新します。リポジトリの作成・削除はしません。
+
+| テンプレート | リポジトリ |
+|---|---|
+| `minimum` | [ExampleMinimum.jl](https://github.com/JuliaPackageFactory/ExampleMinimum.jl) |
+| `simple` | [ExampleSimple.jl](https://github.com/JuliaPackageFactory/ExampleSimple.jl) |
+| `all-in-one` | [ExampleAllInOne.jl](https://github.com/JuliaPackageFactory/ExampleAllInOne.jl) |
+
+- 既存のUUIDとGit履歴を維持し、日付はリポジトリの最初のコミットから取る
+- 生成物にないファイルは削除する。これらのリポジトリに手書きのファイルを置かない
+- 回復マーカー `.pkgfactory.json` は含めない
+- 生成内容が同じならコミットしない。コミット名は `Update <Package> from PkgFactory.ts <生成元SHA>`
+- dirty checkout、別のパッケージ名、不正なUUID、remote mainの変化を検出すると停止する。強制pushと自動再送はしない
 
 ```sh
-# GitHubは読み取りだけ。生成予定の全ファイルを .tmp/template-repositories/ に保存
-npm run e2e:templates -- --gh
-# ソース変更をコミット後、固定3件を更新（新規作成0件）
-npm run e2e:templates -- --gh --publish
-# 1テンプレートのみ確認する場合
+npm run e2e:templates -- --gh                              # 読み取りのみ。生成内容を .tmp/template-repositories/ に出力
+npm run e2e:templates -- --gh --publish                    # 3件を更新
 npm run e2e:templates -- --gh --publish --package=ExampleSimple
 ```
 
-結果は `artifacts/template-repositories*.json` にUUID・更新前後SHA・チェックアウト先を保存します。
-失敗時はremote mainを確認してから明示的に再実行します。新しいcheckoutで最新状態を照合し、同一内容の再pushはしません。
-ローカル一時Gitリポジトリを使った回帰テストは `npm test` に含め、改名、UUID/履歴保持、削除のみの変更、同一出力、競合、汚れたcheckoutを検証します。
+結果は `artifacts/template-repositories*.json` に保存します。
 
-## GitHub Actionsの設定
+GitHub Actionsの `Template E2E tests`（`template-repositories.yml`）は、mainへのテンプレート関連の変更で順に1件ずつ更新し、その後に公開用トークンを渡さずにJuliaのテストとdocsビルドを行います。
+有効化には次が必要です。
 
-1. JuliaPackageFactoryをResource ownerとするfine-grained PATを用意し、対象を上記3リポジトリに限定します。
-   Repository permissionsは **Contents: Read and write**、**Workflows: Read and write**、**Metadata: Read-only**。
-   作成や鍵設定はこのCIでは行わないため、Administration/Secrets権限は不要です。
-   旧E2E用のトークンが手元にある場合は、対象3件の権限を確認して再利用できます。
-2. [PkgFactory.tsのActions secrets](https://github.com/JuliaPackageFactory/PkgFactory.ts/settings/secrets/actions) に
-   `PKGFACTORY_E2E_TOKEN` を登録します。旧リポジトリのSecretは自動的には引き継がれません。
-   トークンをチャットへ送ったり、ローカルghの広い権限の資格情報をそのままCIへコピーする必要はありません。
-3. 旧PkgFactory.jlの **Template repositories E2E** の実行完了を確認し、このWorkflowだけを無効化します。
-   二つのリポジトリのconcurrency設定は共通ロックにはならないため、固定リポジトリへの更新元を新版へ一本化します。
-   旧コードの変更やアーカイブは不要です。旧リポジトリを参照用とする方針に従い、この設定変更は本作業では行いません。
-4. 新版のmainへマージした後、[Actions variables](https://github.com/JuliaPackageFactory/PkgFactory.ts/settings/variables/actions) に
-   `PKGFACTORY_TEMPLATE_E2E_ENABLED=true` を登録し、**Template repositories E2E → Run workflow → main** を実行します。
-   有効化前とPRでは外部リポジトリへ書き込みません。
+1. 対象3リポジトリに限定したfine-grained PAT（Contents: Read and write、Workflows: Read and write、Metadata: Read-only）をActions secret `PKGFACTORY_E2E_TOKEN` に登録する
+2. Actions variable `PKGFACTORY_TEMPLATE_E2E_ENABLED` を `true` にする
 
-Workflowは固定3件を順に更新し、ファイル一致・UUID・履歴・remote SHAを検証します。
-その後、公開用PATを渡さずにJulia 1.12のPkg.test（JETを含む）とdocsビルドを行い、結果をartifactとjob summaryへ残します。
-pushされたリポジトリ自身のCIが、Linuxでの各Julia版のテスト・品質検査・Documenter公開を担当します。
-そのCIを同じ更新について二重にdispatchしません。GITHUB_TOKENによる別リポジトリ更新には制限があるため、上記の専用PATを使います。
-[GitHubのトークンとWorkflow起動の仕様](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow)
+## 作成・再開の受入
 
-ExampleSimple.jl・ExampleAllInOne.jlのDocumenter公開は、旧名のTestSimple.jl・TestAllInOne.jlで既存設定による成功を確認しています。
-現在はリポジトリ自身の `GITHUB_TOKEN`（contents: write）で認証し、Pagesは `gh-pages` の `/` を公開しています。
-TagBotが作るタグからCIを起動するSSH検証を追加する場合は、Deploy key（write許可）と、対応するBase64形式の秘密鍵をActions Secret `DOCUMENTER_KEY` に設定します。
-[Documenterの認証方式とTagBot](https://documenter.juliadocs.org/stable/man/hosting/)
-PkgFactory.ts側の公開用PATは生成リポジトリのSecretへコピーしません。
-固定リポジトリのE2E自体は既存の鍵・Secret・Pages設定を変更しません。
-
-## 新規作成が必要な受入
-
-Node版と公開MCP版が同じ命名と1件制限を使います。名前は `TestYYYYMMDDHHMMSS.jl`、時刻はUTCです。
-既定テンプレートはsimple。3テンプレートを一度に新規作成するループはありません。
-下記の新規作成コマンドは選択肢です。一連の受入ではNodeまたは公開MCPの一方を選び、まとめて実行しません。
-失敗・応答不明の作成も1件に数え、別リポジトリを作ってやり直しません。報告ファイルと保存プランを使って再開します。
+新規作成は `JuliaPackageFactory/TestYYYYMMDDHHMMSS.jl`（UTC）を1回の実行で1件だけ作ります。失敗や結果不明も1件に数え、別のリポジトリでやり直さず、保存したplanIdで再開します。
 
 ```sh
+# Node（状態は .tmp/e2e-state、記録は artifacts/github-e2e-*.json）
 npm run e2e -- --gh --template=simple --confirm-create-test-repository
 npm run e2e -- --gh --resume-plan=PLAN_ID --confirm-resume
-# 公開MCPの認可・8同時プレビュー（新規作成なし）
+
+# ステージングの公開MCP（OAuth認可をブラウザーで行う。新規作成なしで8同時プレビュー）
 npm run e2e:staging
-# 8プレビューのうち選択したテンプレートの1プランだけを作成
 npm run e2e:staging -- --template=all-in-one --confirm-create-test-repository
 npm run e2e:staging -- --resume-plan=PLAN_ID --confirm-resume
-# 作成1件の途中で切断し、状態照合後に同じプランを明示的に再開
+# 作成中にHTTP接続を切り、停止・照合・明示的再開を確認する
 npm run e2e:staging -- --template=simple --confirm-create-test-repository --confirm-disconnect-and-resume
 ```
 
-Nodeのプランは `.tmp/e2e-state` に保持します。両runnerは書込み前にplanIdを含む一意の報告ファイルへ保存し、その場所を実行結果に表示します。
-Deploy key PoCが必要なときも、その実行で作成した同じ1件を `scripts/install-key-poc.ts OWNER/TestYYYYMMDDHHMMSS.jl --confirm` に渡します。
-過去の受入記録のPkgFactoryPoc/Edgeリポジトリは履歴資料であり、今後の新規作成先には使いません。
+ステージングの記録は `artifacts/staging-{mcp,disconnect,resume}-*.json` に保存し、トークンや認可コードは含めません。
+
+Deploy keyの実機検証には、その実行で作ったリポジトリに手動実行のワークフローを追加し、TagBotのSSH設定とタグpushを実行します。
+
+```sh
+npx tsx scripts/install-key-poc.ts JuliaPackageFactory/TestYYYYMMDDHHMMSS.jl --confirm
+npm run poc   # Ed25519 / RSA-4096 の鍵生成だけを計測
+```

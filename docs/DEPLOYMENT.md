@@ -1,422 +1,105 @@
-# 配備と切替手順
+# 配備
 
-実装・ビルド・ローカル受入検証、本番Workerの配備、専用KVとsecretsの登録は実施済みです。
-2026-10-03に運営者が旧版の未完了操作がないことを確認し、旧Workerの受付を停止しました。
-本番設定は `MAINTENANCE=false` に変更しています。受付開始は4節の本番配備後、`/health` の `status: "ok"` と作成APIのmaintenance解除を確認して判定します。
-npm公開、旧リソースの撤去、旧リポジトリのアーカイブは未実施です。受入検証の記録は [ACCEPTANCE.md](ACCEPTANCE.md) を参照してください。
+公開Web・MCPは一つのCloudflare Workerです。設定は `apps/cloudflare/wrangler.jsonc` にあり、トップレベルがステージング、`env.production` が本番です。
 
-## 1. GitHubのDeploy key許可
+| 環境 | Worker名 | URL |
+|---|---|---|
+| ステージング | `pkgfactory-staging` | https://pkgfactory-staging.ohnolab.workers.dev |
+| 本番 | `pkgfactory` | https://pkgfactory.ohnolab.workers.dev |
 
-2026-09-28に組織所有者がDeploy keysを有効化し、停止していたsimple/all-in-oneの両プランを
-明示的に再開して完了しました。検証結果は [ACCEPTANCE.md](ACCEPTANCE.md) に記録しています。
-最初の実行で返された `Deploy keys are disabled for this repository` は組織ポリシーによるもので、鍵方式の非互換ではありませんでした。
+MCPのエンドポイントは各originの `/mcp` です。
 
-組織所有者が [JuliaPackageFactory / Settings / Member privileges](https://github.com/organizations/JuliaPackageFactory/settings/member_privileges)
-を開き、**Deploy keys → Enabled → Save** と設定します。組織全体への許可なので、実装作業から勝手に変更していません。
-Enterprise管理下では上位ポリシーの変更も必要です。[GitHub公式手順](https://docs.github.com/en/enterprise-cloud@latest/organizations/managing-organization-settings/restricting-deploy-keys-in-your-organization)
+## Workerの設定
 
-設定後は既存のテストリポジトリを明示的に再開します。新規作成を繰り返す必要はありません。
-Nodeのプランは `.tmp/e2e-state/journal.json`、planIdは各実行の `artifacts/github-e2e-*.json` に残します。
-過去の3件作成の記録は `artifacts/github-e2e.json` として保持していますが、現行runnerは1件だけを作成・再開します。
+| 種別 | 名前 | 内容 |
+|---|---|---|
+| var | `ORIGIN` | Workerの公開origin。Host・Origin・Cookieの検証に使う |
+| var | `GITHUB_OAUTH_CLIENT_ID` | GitHub OAuth AppのClient ID |
+| var | `KEY_ALGORITHM` | `ed25519`（既定）または `rsa4096` |
+| var | `MAINTENANCE` | `true` で `/mcp`・`/api/create`・`/api/resume` を503にする |
+| secret | `GITHUB_OAUTH_CLIENT_SECRET` | GitHub OAuth AppのClient secret |
+| secret | `SESSION_KEY` | 乱数32バイトのBase64。セッションの暗号化と署名、接続元ハッシュの鍵 |
+| KV | `OAUTH_KV` | `@cloudflare/workers-oauth-provider` のクライアント・grant・トークン |
+| Durable Object | `STATE` (`ApplicationState`) | プランとジャーナル（SQLite） |
+| Durable Object | `AUTH` (`AuthState`) | セッション、ログイン制限、state消費（SQLite） |
+| Rate limit | `SOURCE_RATE_LIMIT` | 匿名ルート、接続元ごと毎分120回 |
+| Rate limit | `REGISTRATION_RATE_LIMIT` | `/oauth/register`、接続元ごと毎分10回 |
+| Rate limit | `ACCOUNT_RATE_LIMIT` | `/api/*` と `/mcp`、GitHubアカウントごと毎分120回 |
+| AI | `AI` | テンプレート推薦（`typesafe/jev`） |
 
-```sh
-npm run e2e -- --gh --resume-plan=PLAN_ID --confirm-resume
-npx tsx scripts/install-key-poc.ts JuliaPackageFactory/TestYYYYMMDDHHMMSS.jl --confirm
-```
+`ratelimits` の `namespace_id` はCloudflareアカウント内で一意にします。ステージングと本番で別の値を使います。
+`observability` はWorkers Logsを有効にし、invocationログを無効、クエリ文字列を削除する設定です。
 
-後半のスクリプトはその実行で既に作成した1件に手動実行用Workflowを追加し、固定コミットのTagBotから
-実際のSSH設定・Git pushを行います。登録処理やGitHub Releaseは作成せず、`pkgfactory-key-poc-RUN_ID` の検証タグを作ります。
-同時にDocumenterのCIを再実行します。Documenterログで `DOCUMENTER_KEY` を使用したことを確認してください。
+Secretが欠けている、`SESSION_KEY` が32バイトでない、レート制限バインディングがない場合、Workerは `/health` 以外に503を返します。
 
-Ed25519がDocumenterまたはTagBotと非互換なら、エラーを記録してRSA-4096へ切り替えます。
-新しいPoCプランを `--key-algorithm rsa4096` で作り、同じテストを通した後、
-CLI既定値とWorker `KEY_ALGORITHM` をRSAへ合わせます。成功済みプランの `resume` は鍵を勝手に変更しません。
-今回の両テンプレートの実機検証ではEd25519が成功したため、既定値をEd25519のまま採用しています。
+## GitHub OAuth App
 
-## 2. GitHub OAuthアプリ
+環境ごとに1つ作ります。
 
-`-ts`・`-web`・`-mcp` はWorker名に不要です。WebとMCPは同じWorkerが提供し、パスで分けます。
-
-| 用途 | URL |
+| 設定 | 値 |
 |---|---|
-| 本番Web | `https://pkgfactory.ohnolab.workers.dev/` |
-| 本番MCP | `https://pkgfactory.ohnolab.workers.dev/mcp` |
-| 検証Web | `https://pkgfactory-staging.ohnolab.workers.dev/` |
-| 検証MCP | `https://pkgfactory-staging.ohnolab.workers.dev/mcp` |
+| Homepage URL | Workerのorigin |
+| Authorization callback URL | `<origin>/auth/callback`（Web）と `<origin>/callback`（MCP）の2つ |
+| Enable Device Flow | 本番は無効。公開Client IDだけで開始でき、本番アプリ名を使ったフィッシングに使えるため |
+| Expire user access tokens | 有効 |
 
-本番Workerは配備済みです。検証用の `-staging` は本番と区別するために残します。
-旧検証Worker `pkgfactory-ts-staging` は短い名前への配備確認後に削除済みです。
-旧版 `pkgfactory-web`・`pkgfactory-mcp` は `MAINTENANCE=true` で受付を停止し、既存のコード・bindings・データを保持しています。
+Workerは `repo workflow read:user read:org` を要求します。組織でOAuth Appの制限を有効にしている場合は、そのアプリを承認します。
+Workerはrefresh tokenを保存せず、GitHubトークンを自動更新しません。期限切れ時は再認可します。
 
-### 2.1 検証用OAuthアプリ（作成済み）
+CLIの `--device` に使うOAuth Appは、Device Flowを有効にした別のアプリにします。
 
-検証用 `PkgFactory Staging` は作成済みです。Client ID `Ov23li7iF0SLvIWtqPyX` を
-検証用Worker設定へ反映しています。このアプリを作り直す必要はありません。
-以下は設定値の確認と、別環境を用意する場合の手順です。
+## Secretの登録
 
-1. GitHubで `JuliaPackageFactory` 組織の **Settings → Developer settings → OAuth apps → New OAuth App** を開きます。
-   [組織のOAuthアプリ設定](https://github.com/organizations/JuliaPackageFactory/settings/applications)
-2. 次の値を入力します。対象は **OAuth App** です。
-
-| GitHubの入力欄 | 検証用の入力値 |
-|---|---|
-| Application name | `PkgFactory Staging` |
-| Homepage URL | `https://pkgfactory-staging.ohnolab.workers.dev/` |
-| Application description（任意） | `Julia package generator — staging` |
-| Authorization callback URL 1 | `https://pkgfactory-staging.ohnolab.workers.dev/auth/callback` |
-| Authorization callback URL 2（Add callback URLで追加） | `https://pkgfactory-staging.ohnolab.workers.dev/callback` |
-| callbackのwildcard matching | 両方とも無効 |
-| Enable Device Flow | 有効（ローカルCLIのDevice Flowでも使えるようにする） |
-| Expire user access tokens | 有効（期限切れ時は再認可） |
-
-3. **Register application** を押します。作成後の画面で **Client ID** を控えます。
-4. **Generate a new client secret** を押してsecretを生成します。再認証を求められた場合はGitHubで完了してください。
-
-**以前の「callbackにルートURLを一つ登録する」という説明は訂正します。**
-現在のGitHubはcallbackを複数登録でき、wildcard無効時は完全一致です。上記2つの実際のcallbackを登録します。
-ルートURLだけの登録やwildcard有効化は不要です。
-[GitHubの作成手順](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/creating-an-oauth-app)・
-[callback/PKCE仕様](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps#redirect-urls)
-
-`Expire user access tokens` は有効にしてください。GitHubのアクセストークンが8時間で失効し、漏えい時の被害期間を限定できます。
-2026-08-14以前に作成したOAuth Appでは無効の場合があるため、両アプリの設定画面で有効になっていることを確認します。
-[GitHubの変更履歴](https://github.blog/changelog/2026-08-14-multiple-redirect-uris-and-token-refresh-for-oauth-apps/)
-現実装はrefresh tokenを保存せず、GitHub tokenを自動更新しません。期限切れ時はログアウト・再認可します。Webセッションの上限も8時間です。
-Webのログアウトは、そのセッションのGitHubトークンをGitHub側でも失効させます。
-
-### 2.2 Client IDとsecretの登録先
-
-**Client IDは公開識別子なのでチャットで共有できます。**
-受け取ったIDを `apps/cloudflare/wrangler.jsonc` のトップレベル `GITHUB_OAUTH_CLIENT_ID` に設定します。
-本番Client IDは `env.production.vars.GITHUB_OAUTH_CLIENT_ID` に分けて設定しています。
-
-**Client secretはチャットやGitへ貼らず、Cloudflareへ直接登録します。**
-
-1. [Cloudflare Dashboard](https://dash.cloudflare.com/) を開きます。
-2. **Workers & Pages → pkgfactory-staging → Settings → Variables and Secrets → Add** を開きます。
-3. Typeを **Secret**、名前を **GITHUB_OAUTH_CLIENT_SECRET**、ValueをGitHubで生成したsecretにします。
-4. 画面の **Add / Deploy** または保存ボタンで反映します。
-
-`SESSION_KEY` はすでに登録済みです。GitHubのClient secretで上書きしないでください。
-このステージングではClient IDとsecretの登録を確認し、受付を有効化しました。Web/MCPのログイン検証を進めています。
-CLIで登録する場合のコマンドは次節にあります。
-
-### 2.3 本番用OAuthアプリ（作成済み）
-
-管理対象は `PkgFactory`（本番用）と `PkgFactory Staging`（検証用）の2つに整理します。
-新しい本番用 `PkgFactory` のClient ID `Ov23liW9Mpoaeo70n071` は
-`env.production.vars.GITHUB_OAUTH_CLIENT_ID` に反映済みです。本番WorkerとClient secretも登録済みです。
-以下は設定値の確認と、別環境を用意する場合の手順です。
-所有者をリポジトリと揃える場合は `JuliaPackageFactory` 組織を選びます。
-
-1. [JuliaPackageFactoryのOAuth apps](https://github.com/organizations/JuliaPackageFactory/settings/applications)
-   で **New OAuth App** を開きます。別の運営組織で管理する場合は、その組織の設定画面を使用します。
-2. 次の値を入力します。
-
-| GitHubの入力欄 | 本番用の入力値 |
-|---|---|
-| Application name | `PkgFactory` |
-| Homepage URL | `https://pkgfactory.ohnolab.workers.dev/` |
-| Application description（任意） | `Create Julia packages with PkgFactory` |
-| Authorization callback URL 1 | `https://pkgfactory.ohnolab.workers.dev/auth/callback` |
-| Authorization callback URL 2（Add callback URLで追加） | `https://pkgfactory.ohnolab.workers.dev/callback` |
-| callbackのwildcard matching | 両方とも無効 |
-| Enable Device Flow | 無効 |
-| Expire user access tokens | 有効（期限切れ時は再認可） |
-
-本番用アプリのDevice Flowは無効化済みです。Device Flowは公開Client IDだけで開始できるため、
-攻撃者が本番の `PkgFactory` の名前で `repo`・`workflow` 権限のコード入力を利用者に求めるフィッシングに使えます。
-公開Web・MCPは認可コード方式だけを使うため、Device Flowは不要です。CLIの `--device` には別のOAuth Appを使います。
-
-3. **Register application** を押します。表示された本番用Client IDを共有してください。
-   こちらで `env.production.vars.GITHUB_OAUTH_CLIENT_ID` に設定します。
-4. **Generate a new client secret** で本番用secretを作り、パスワードマネージャー等へ保存します。
-   チャットやGitには貼りません。検証用secretとは別の値です。
-5. 本番Worker `pkgfactory` の配備準備時に、そのWorkerの **Settings → Variables and Secrets** へ
-   Type **Secret**、名前 **GITHUB_OAUTH_CLIENT_SECRET** で登録します。
-   既存の本番Workerでは登録済みです。CLIで登録する手順は2.4にあります。
-
-本番用secretを検証用Worker `pkgfactory-staging` に登録しないでください。
-旧本番で使用中のOAuthアプリは、新版への切替が完了するまで残します。
-不要アプリは表示名だけで判断せず、所有者・Client ID・callbackを照合してから整理します。
-
-`repo workflow read:user read:org` を要求します。組織にOAuthアプリ制限がある場合は、そのアプリを承認します。
-以前の認可で組織の読み取り権限が不足する場合は、Webの「Connect with GitHub」から再認可します。
-OAuth AppのClient IDやsecretを作り直す必要はありません。
-Webは認証後にプロフィールと作成先を読み込み、本人とactive/adminの組織を選択肢にします。
-[組織membership API](https://docs.github.com/en/rest/orgs/members#list-organization-memberships-for-the-authenticated-user)
-Client IDは変数、Client secretはWorker secretへ設定します。チャットやGitにsecretを貼らないでください。
-
-### 2.4 本番WorkerのKVとsecret
-
-本番専用KV `PKGFACTORY_TS_PRODUCTION_OAUTH` は2026-10-02にStandardで作成済みです。
-Namespace ID `7458325f1140408f9cc44ae5ad273e34` を本番設定へ反映しました。
-本番Workerへの `GITHUB_OAUTH_CLIENT_SECRET` と本番専用の `SESSION_KEY` 登録も完了しています。既存環境ではKVや鍵を再作成しません。
-
-本番の初回配備の前後に、運営者が次の順で準備します。Wranglerのコマンドには必ず `--env production` を付けます。
-付け忘れるとトップレベルの設定、つまり検証用Worker `pkgfactory-staging` が対象になり、ステージングのsecretを上書きします。
-
-1. 本番用OAuth KVを作成し、表示されたIDで `env.production.kv_namespaces[0].id` の `CONFIGURE_PRODUCTION_KV_ID` を置き換え、PRでmainへ反映します。
-   `CONFIGURE_` が残っている間、Deploy productionはCloudflareへ接続する前に失敗します。
-
-   ```sh
-   npx wrangler kv namespace create PKGFACTORY_TS_PRODUCTION_OAUTH --config apps/cloudflare/wrangler.jsonc --env production
-   ```
-
-2. 別環境を新規配備する場合は、先に `env.production.vars.MAINTENANCE=true` を設定してから4節のDeploy productionを実行します。secretが揃うまで `/health` 以外は503を返します。
-3. 2.3で生成した本番用Client secretを登録します。入力プロンプトに貼り付けます。
-
-   ```sh
-   npx wrangler secret put GITHUB_OAUTH_CLIENT_SECRET --config apps/cloudflare/wrangler.jsonc --env production
-   ```
-
-4. `SESSION_KEY` は本番用に新しく生成します。ステージングの値を流用しないでください。共用すると、ステージングの鍵の漏えいが本番の鍵の漏えいになります。
-   次のコマンドは乱数32バイトを画面に表示せず、そのまま登録します。鍵を保管する必要はありません。
-   作り直した場合の影響は、Webの利用者がログインし直すことだけです。
-
-   ```sh
-   node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('base64'))" | npx wrangler secret put SESSION_KEY --config apps/cloudflare/wrangler.jsonc --env production
-   ```
-
-5. 登録先を確認します。本番の一覧に2つの名前があり、ステージングの一覧が変わっていないことを確かめます。
-
-   ```sh
-   npx wrangler secret list --config apps/cloudflare/wrangler.jsonc --env production
-   ```
-
-   ```sh
-   npx wrangler secret list --config apps/cloudflare/wrangler.jsonc
-   ```
-
-6. `https://pkgfactory.ohnolab.workers.dev/` が503でなくなったことを確認します。
-   Workerは32バイトにならない `SESSION_KEY` を受け付けず、`/health` 以外に503と `SESSION_KEY must be 32 bytes of Base64` を返します。
-
-Dashboardで登録する場合も、Worker `pkgfactory` の **Settings → Variables and Secrets** を開いていることを確認してください。
-
-`Maintenance: creation is temporarily paused` は `MAINTENANCE=true` による受付停止です。
-この応答はGitHubの作成処理を開始する前に返すため、そのリクエストによるリポジトリ作成はありません。
-5節の切替確認後に `env.production.vars.MAINTENANCE=false` を配備します。画面を再読み込みし、プレビューからやり直してください。
-
-## 3. Cloudflareステージング
-
-2026-09-28時点で [pkgfactory-staging](https://pkgfactory-staging.ohnolab.workers.dev/health) は配備済みです。
-新版専用のOAuth KV `PKGFACTORY_TS_STAGING_OAUTH`、SQLite DO、32バイトの `SESSION_KEY` secretを準備しました。
-旧WorkerのKVやDOは流用していません。Client secret登録後、トップレベルの `MAINTENANCE=false` を配備し、受付を有効化しました。
-本番の `env.production.vars.MAINTENANCE` も受付開始用の `false` に設定しています。
-
-このステージングのClient ID/secretは設定済みです。以下はsecretを更新する場合のコマンドです。
-既存のSESSION_KEYやKVを作り直す必要はありません。
+ステージングはトップレベル、本番は `--env production` を付けます。付け忘れるとステージングを上書きします。
 
 ```sh
-npx wrangler secret put GITHUB_OAUTH_CLIENT_SECRET --config apps/cloudflare/wrangler.jsonc
+npx wrangler secret put GITHUB_OAUTH_CLIENT_SECRET --config apps/cloudflare/wrangler.jsonc --env production
+node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('base64'))" \
+  | npx wrangler secret put SESSION_KEY --config apps/cloudflare/wrangler.jsonc --env production
+npx wrangler secret list --config apps/cloudflare/wrangler.jsonc --env production
 ```
 
-登録後に `npm run check` → `npm run deploy:staging` を実行済みです。下記の受入検証を続けます。
+`SESSION_KEY` は環境ごとに別の値を使います。変更すると既存のWebセッションは復号できなくなり、利用者はログインし直します。保存済みのプランやMCPのgrantには影響しません。
 
-### 3.1 レート制限とログ
-
-`wrangler.jsonc` の `ratelimits` で、接続元ごと・動的登録・GitHubアカウントごとの3つの上限を設定します。
-事前に作成するリソースはありません。`namespace_id` はCloudflareアカウント内で一意の整数で、
-検証用は `7301`〜`7303`、本番用は `7311`〜`7313` です。同じアカウントの他のWorkerが同じIDを使っていないことを確認してください。
-上限を超えると `429` と `Retry-After: 60` を返します。講習会などで多くの利用者が同じ接続元から同時にサインインする場合は、
-`SOURCE_RATE_LIMIT` の値を一時的に引き上げて配備します。
-
-Workers Logsを有効にし、invocationログは無効、クエリ文字列は削除する設定です。
-記録されるのは `rate_limited`、`origin_rejected`、`csrf_rejected`、`redirect_rejected`、`registration_rejected`、
-`github_revoke_failed`、`oauth_error` などのイベント名・メソッド・パスと、OAuthライブラリの警告です。
-アプリのイベントはIPアドレス・トークン・アカウントIDを含みません。
-Cloudflare DashboardのWorkers Logsで確認できます。[Workers Logs](https://developers.cloudflare.com/workers/observability/logs/workers-logs/)
-
-署名付きセッションCookieを導入した版を初めて配備すると、それ以前のWebセッションは無効になり、利用者は一度ログインし直します。
-保存済みの操作・プラン、MCPのgrantには影響しません。
-
-MCPの対話検証は次のコマンドで起動します。表示されたlocalhost URLを通常のブラウザーで開き、
-クライアントとGitHubの認可を行います。認証情報はプロセスのメモリだけに保持し、ファイルや標準出力へ出しません。
+新しい環境ではKVも作成し、返されたIDを `kv_namespaces[0].id` に設定します。
 
 ```sh
-# 読み取り検証: 5ツールの確認と8同時プレビュー（3テンプレート）
-npx tsx scripts/staging-mcp-e2e.ts
-# 明示的な実リポジトリ作成: JuliaPackageFactory/TestYYYYMMDDHHMMSS.jl の1件（UTC）
-npm run e2e:staging -- --template=simple --confirm-create-test-repository
-# 途中停止した場合: 状態を再取得し、リース満了後に明示的に再開
-npm run e2e:staging -- --resume-plan=PLAN_ID --confirm-resume
-# 実HTTP切断後の停止確認→リース満了→照合→明示的再開（検証repoを1件作成）
-npm run e2e:staging -- --template=simple --confirm-create-test-repository --confirm-disconnect-and-resume
+npx wrangler kv namespace create PKGFACTORY_TS_PRODUCTION_OAUTH --config apps/cloudflare/wrangler.jsonc --env production
 ```
 
-認可入口は30分有効です。結果は `artifacts/staging-{mcp,disconnect,resume}-Test<日時>-<run ID>.json` に記録し、
-認可の開始時にファイル名を表示します。過去の報告を上書きしません。
-書き込みを自動再送しません。実行が停止したら結果に記録されたplanIdを確認してください。
-MCPの同意フォームは、外部へのHTTPリダイレクトをCSPが遮断するブラウザーに対応するため、
-同意後に遷移用HTMLを返します。`form-action 'self'` は維持します。
-[MDNのform-action仕様説明](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy/form-action)
+## 配備の流れ
 
-同意画面の `Referrer-Policy` は `same-origin` とします。`no-referrer` ではHTMLフォームのPOSTに
-`Origin: null` が付いて正当な認可も拒否されるためです。他の応答は `no-referrer` を維持し、
-`Origin: null` や異なるOrigin自体は引き続き拒否します。
-[MDNのOriginへの影響](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Referrer-Policy#effect_on_the_origin_header)
+| ワークフロー | 契機 | 内容 |
+|---|---|---|
+| `ci.yml` | PR、mainへのpush、手動 | Nodeテスト、workerdテスト、tarballの検証、3テンプレートのJulia実行。mainで全ジョブ成功後にステージングへ配備し、`/health` を確認する |
+| `production.yml` | mainから手動 | 起動時点のmainがステージングへ配備済みかを `scripts/release-revision.ts` で照合してから本番へ配備し、`/health` を確認する |
+| `release.yml` | mainから手動、確認欄に `publish` | `staging` の再配備、または `npm publish --provenance` |
+| `template-repositories.yml` | mainのテンプレート関連変更、手動 | 固定3リポジトリの更新（[TESTING.md](TESTING.md)） |
 
-GitHubがパスキーによる本人確認を求める場合、普段使っているChrome/Edge等でlocalhost入口から
-認可を開始し、同じブラウザーで完了してください。OAuth Appへの権限付与はGitHubのAuthorizeで行います。
-途中でcallback URLを別ブラウザーへコピーせず、入口からやり直します（stateはブラウザーに結び付いています）。
+ステージング配備は、配備直前にmainの先頭が対象コミットのままであることを確認し、古い実行が新しい配備を巻き戻さないようにします。
+本番配備は `wrangler.jsonc` に `CONFIGURE_` が残っていればCloudflareへ接続する前に失敗します。
 
-認証エラーは作成操作のresumeでは回復しません。新しい認可を開始します。
-エラーの `code` が `oauth_client_credentials` なら、設定中のClient IDと同じOAuth AppのClient secretか確認します。
-`oauth_redirect_uri` なら登録済みcallback URLを確認し、`oauth_code_invalid` なら期限切れ/使用済みコードなので入口からやり直します。
-`oauth_scopes` ならrepo/workflow権限、`oauth_mcp_grant` ならMCPの認可保存処理を確認します。
-トークン応答・秘密鍵・Client secret・認可コードはログにも診断表示にも含めません。
+GitHubの `staging` / `production` environmentには、Cloudflareの **Edit Cloudflare Workers** 権限を持つAPIトークンを `CLOUDFLARE_API_TOKEN`（secret）、Account IDを `CLOUDFLARE_ACCOUNT_ID`（variable）として登録し、deployment branchを `main` に限定します。
+`npm` environmentには承認者を設定し、npmのTrusted Publishingをこのリポジトリの `release.yml` と `npm` environmentに結び付けます。
 
-認可の失敗時は、まず保存状態と認可コードの期限切れを切り分けます。保存状態は10分で失効し、
-GitHubのコードが失効していれば `oauth_code_invalid` になります。今回の `oauth_exchange_network` は、
-待ち時間を入れないworkerd検証でも再現した実行環境の非互換が原因でした。
-GitHubへの通信は `redirect: 'manual'` と3xxの拒否を用い、ネイティブfetchをクラスメソッドとして呼ばない実装に修正済みです。
-Nodeのモックfetchだけでなく、workerdのRequest/fetchを通る回帰テストで確認します。
+ローカルから配備するには `npm run deploy:staging` / `npm run deploy:production` を使います。
 
-別アカウントや新環境を準備する場合のみ、以下の初期設定を実施します。
-Workers PaidとDurable Objectsを使えるアカウント、Workers/KV/DOを配備できる認証が必要です。
-`ORIGIN`、`GITHUB_OAUTH_CLIENT_ID`、KV IDをその環境の実値へ変更します。
+## テンプレート推薦
 
-```sh
-npm ci
-npm run check
-node scripts/pack-smoke.mjs
-npx wrangler login
-npx wrangler kv namespace create PKGFACTORY_TS_STAGING_OAUTH --config apps/cloudflare/wrangler.jsonc
-```
+Webの説明文からテンプレートを推薦する機能は、`AI` バインディングで `typesafe/jev` の `choice` 質問を呼びます。
+`typesafe/jev` はサードパーティーモデルのため、AI GatewayのUnified Billingを使います。配備先アカウントにクレジットを追加してください。
+呼び出しは `gateway: {id: 'default', collectLog: false}` で行い、`default` Gatewayは初回要求時に自動作成されます。
 
-返されたIDをトップレベルの `kv_namespaces[0].id` に入れます。
+推薦の要求はブラウザー側で1ページあたり10回までです。失敗時は `template_suggestion_failed` イベントに `reason`、`upstreamStatus`、検証パスを記録し、説明文と応答本文は記録しません。
+ローカルWebにはAIバインディングがないため、この機能はありません。
 
-```sh
-npx wrangler secret put GITHUB_OAUTH_CLIENT_SECRET --config apps/cloudflare/wrangler.jsonc
-npx wrangler secret put SESSION_KEY --config apps/cloudflare/wrangler.jsonc
-```
+## 運用
 
-新環境の `SESSION_KEY` は暗号学的乱数32バイトのBase64文字列です。パスワードマネージャーで生成・保管し、
-secret入力プロンプトへ渡してください。CLIで生成するなら
-`node -e "console.log(require('node:crypto').randomBytes(32).toString('base64'))"` を手元で実行します。
-Base64を復号して32バイトにならない値では、Workerは `/health` 以外に503を返します。
-キー変更は既存Webセッションを復号できなくするため、利用者は未ログイン表示になり、ログインし直しが必要です。
+**メンテナンス:** `MAINTENANCE=true` で配備すると作成と再開を止めます。この応答はGitHubの操作を始める前に返るため、リポジトリは作られません。
 
-```sh
-npx wrangler deploy --config apps/cloudflare/wrangler.jsonc --dry-run
-npm run deploy:staging
-```
+**残存ロック:** 中断した操作は `status` で照合し、リース期限後に `resume` で再開します。マーカーやProject.tomlが一致しない場合は再開を拒否するので、リポジトリを手動で確認します。ロックだけを削除するAPIはありません。
+ローカルの `journal.lock` はファイル更新の短い排他で、記録されたPIDが終了していることを確認できた場合にだけ取り除けます。`journal.json` は削除しません。
 
-ステージングで `/health`、Web OAuth、MCP OAuth、選択したテンプレートの作成1件を確認します。
-3テンプレートの継続的な生成検証には既存のExampleMinimum.jl・ExampleSimple.jl・ExampleAllInOne.jlを使います。
-[固定リポジトリE2Eの設定](TESTING.md) を参照してください。
-WebとMCPで同じsubject・repositoryへの作成を競合させ、片方がロックで停止することを確認します。
-作成中にHTTP接続を切り、GitHubの操作が止まること、リース後の明示的再開で回復することを確認します。
-公開Edgeでの切断伝播と実CPU・メモリを確認します。今回の負荷測定は8同時プレビューと
-3テンプレートの逐次作成でした。今後の作成受入は1回に1件とします。8件同時作成の最大容量は未実測なので、受入結果と区別して記録します。
+**ログ:** Cloudflare DashboardのWorkers Logsで、[ARCHITECTURE.md](ARCHITECTURE.md) に挙げたイベント名を確認できます。
 
-## 4. npm公開準備
-
-`juliapackagefactory` npm organizationの公開権限を用意します。
-パッケージは `@juliapackagefactory/pkgfactory` の一つだけです。
-GitHub Actionsの環境 `npm` に承認者を設定し、npmのTrusted Publishingを
-リポジトリ `JuliaPackageFactory/PkgFactory.ts`、Workflow `release.yml`、environment `npm` に結び付けます。
-初回公開でTrusted Publishingを設定できない場合は、管理者の対話 `npm login` から初回公開します。
-
-```sh
-npm run build
-npm pack --workspace @juliapackagefactory/pkgfactory
-# 成果物レビュー・公開承認後にのみ実行
-npm publish --workspace @juliapackagefactory/pkgfactory --access public
-```
-
-ステージングは `ci.yml` が自動配備します。mainへのpush後、LinuxでNodeと3テンプレートのJuliaの全CIが成功したら、
-同じコミットを `staging` environmentの資格情報で配備し、`/health` の正常応答まで確認します。PRでは配備しません。
-配備直前にmainの先頭SHAを照合し、古いCIの遅延完了による巻き戻しを防ぎます。配備は直列化し、実行途中で取り消しません。
-資格情報が未登録の場合は `Deploy staging` が設定不足を明示して失敗します。登録後に失敗ジョブを再実行するか、mainでCIを手動実行できます。
-
-### テンプレート推薦（Jev）
-
-`wrangler.jsonc` はstagingとproductionに `AI` バインディングを設定しています。
-Webのテンプレート選択プルダウンを押すか、キーボードでフォーカスすると、既存の3テンプレートを
-[`typesafe/jev`](https://developers.cloudflare.com/ai/models/typesafe/jev/)の `choice` 質問で比較します。
-説明の入力開始時にスピナーと「Suggesting a template…」を表示します。この時点では通信せず、
-マウスやタッチではプルダウンの `pointerdown`（押した瞬間）に送信します。プルダウンが開いた後のフォーカス・クリック完了・候補へのホバーを待ちません。
-Tab移動などのキーボード操作ではフォーカス時に送信します。3秒の待機はありません。
-IME変換中は送信せず、プルダウンにフォーカスしたまま変換が確定した場合は確定後に送信します。
-成功・失敗・タイムアウト時にはスピナーを停止します。説明の編集は古いリクエストと結果を無効にし、次にプルダウンを押すかフォーカスした時に再取得します。
-同じ説明で通信中・取得済みの場合は、再度押したりフォーカスしたりしても追加リクエストを送りません。失敗時は同じ操作で再試行できます。
-説明文とテンプレートの説明だけをJevへ渡し、推薦と確率の内訳を表示します。選択値は変更しません。
-表示例: `Jev recommends Minimum. (minimum: 80%, simple: 15%, all-in-one: 5%)`。
-内訳はJevの `probabilities` を `minimum`、`simple`、`all-in-one` の順に整数％へ丸めたものです。表示上の合計は丸めにより100％にならないことがあります。
-推薦リクエストは1ページ読み込みあたり10回までです。失敗・中断したリクエストも数え、フォームのリセットでは回数を戻しません。
-上限到達後も手動選択でき、ページをリロードすると再び10回利用できます。この上限はブラウザ側で管理し、APIには既存のアカウント単位のレート制限を適用します。
-APIには既存のWebセッション・Origin・CSRF検証が適用されます。推論失敗時も手動選択できます。
-ローカルWebではAIバインディングがないため推薦は無効です。AI用のAPIキーやブラウザ側モデルの追加は不要です。
-Jevはサードパーティーモデルのため、Workers AIの無料Neurons枠ではなく
-[AI GatewayのUnified Billing](https://developers.cloudflare.com/ai-gateway/features/unified-billing/)を使います。
-配備先Cloudflareアカウントで事前にクレジットを購入・追加してください。
-呼び出しには `gateway: {id: 'default', collectLog: false}` を指定します。
-[`default` Gateway](https://developers.cloudflare.com/ai-gateway/usage/worker-binding-methods/)は初回リクエスト時に自動作成され、推薦リクエストのログ収集は無効にしています。
-
-AIバインディングからは `returnRawResponse: true` で応答を受け、`Response.json()` で読み取ります。
-これにより、Content-Typeに `charset` が付いたJSONも処理できます。
-Jevの直接応答（`answers.template.choice`）に加え、Cloudflareの完了応答（`state: "Completed"` と `result`）、
-およびその外側にAPIの `result` がある形式も処理します。`result` の展開は最大2段までです。
-`success` が存在して `true` でない応答、空でない `errors`、`Completed` 以外の `state` は、HTTP 200でも推薦として扱いません。
-最終的な回答は `type: "choice"` と既存の3テンプレートIDに限定して検証します。
-`probabilities` は3候補すべての0〜1の数値を必要とし、合計は丸め誤差を許容して1との差が0.02未満であることを確認します。
-GatewayのRequests増加だけでは推論成功を判断できません。失敗時には画面に上流HTTPステータス、通信失敗、JSON解析失敗、Gatewayの拒否、未完了の結果、選択値の不整合を区別して表示します。
-Workers Logsには `template_suggestion_failed` イベントの `reason` と、取得できた場合の `upstreamStatus` を記録します。
-選択値の検証失敗時には `resultDepth`（展開した段数）と `validation`（固定の検証パスとエラーコード）も記録します。
-再発時はこのイベントで `answers.template` の欠落と `answers.template.choice` の不整合を切り分けてください。
-説明文・応答本文・認証情報は記録しません。
-
-### GitHub Actionsの配備設定
-
-1. [CloudflareのAccount API tokens](https://dash.cloudflare.com/?to=/:account/api-tokens)で対象アカウントを選び、**Create Token → Permission policies → Custom → Edit Cloudflare Workers** を選びます。名前の例は `PkgFactory GitHub Actions`。対象アカウントをPkgFactoryの配備先だけに限定します。
-2. [PkgFactory.tsのEnvironments](https://github.com/JuliaPackageFactory/PkgFactory.ts/settings/environments)で **staging** と **production** のそれぞれに、Environment secret **CLOUDFLARE_API_TOKEN** を登録します。同じCloudflareアカウントを使う現在の構成では、同じトークンを両環境に登録できます。GitHubのPATやGitHub OAuthのClient secretとは別の値です。
-3. 両environmentのEnvironment variable **CLOUDFLARE_ACCOUNT_ID** に、配備先の32桁Account IDを登録します。両環境のdeployment branchは `main` に限定します。stagingは自動、本番は利用者が確認してからActionsを手動起動します。
-
-ローカルの `wrangler login` の状態はGitHub Actionsに引き継がれません。CIではこの専用APIトークンを使います。
-[Cloudflare公式のGitHub Actions認証手順](https://developers.cloudflare.com/workers/ci-cd/external-cicd/github-actions/)
-既存Workerの `GITHUB_OAUTH_CLIENT_SECRET` と `SESSION_KEY` はWorker側に保持し、GitHubへコピーする必要はありません。
-
-### ステージング確認後の本番反映
-
-1. mainの **CI → Deploy staging** が成功した後、ステージングのWeb/MCPを確認します。
-2. 問題がなければ [Deploy production](https://github.com/JuliaPackageFactory/PkgFactory.ts/actions/workflows/production.yml)の **Run workflow** を開き、branchを `main` のまま起動します。実行ID・target・確認文字列の入力はありません。
-3. Actionsは **起動時点のmain** を本番へ反映します。そのコミットのCI・ステージング実配備・health確認が成功しているかを自動で照合します。起動後にmainが更新されても、実行途中で対象コミットは変わりません。反映したSHAと照合したCIはActionsのSummaryに残ります。
-
-そのmainにステージング配備の成功履歴がなければ、本番への書込み前に停止します。CIの完了とステージングを確認してから、同じボタンで起動してください。
-別コミットの成功履歴、失敗・実行中・PRのCIや、実配備が省略されたCIでは確認を通しません。
-本番も手動配備を直列化し、配備後の `/health` を確認します。
-初回準備中の `MAINTENANCE=true` は正常なmaintenance応答として扱うため、このhealth確認だけで公開完了とは判定しません。
-
-別の `Release (manual)` (`release.yml`) は、target `staging` がステージング手動再配備、`npm` がnpm公開用です。
-いずれもmainから確認欄 `publish` を入力して手動起動します。環境に承認者が設定されている場合はその承認も必要です。
-WorkerのOAuth/SESSION secretsはWranglerで別途登録し、GitHub Workflowから表示しません。
-本番のKV、OAuth/SESSION secrets、受付開始の設定は、以下の本番公開手順で準備してから利用します。
-
-## 5. 本番公開前に提示するもの
-
-完成したコード/PR、固定依存lockfile、npm tarball、CI結果、3テンプレートの作成・再開・Documenter公開URL、
-Ed25519またはRSAのTagBot PoCログ、ステージングWeb/MCP OAuthの結果、Edge切断テストと負荷計測です。
-この一覧を確認した承認の後だけ本番公開を行います。
-
-1. 旧 `pkgfactory-web` と `pkgfactory-mcp` の新規作成受付を止める。
-2. 旧版の実行中操作と残存ロックをGitHub状態と照合する。未解決操作を新版で自動再実行しない。
-3. 新版の本番専用KV・OAuth・SESSION secretsを2.4の手順で設定し、`--env production` で配備する。
-   初回準備時は明示的に `MAINTENANCE=true` とし、書込みを停止したままにする。
-4. 旧Web/MCPの案内URLを新版originと `/mcp` へ更新する。旧grant・プレビューの引継ぎは行わず再認可する。
-   MCPのPOSTをHTTPリダイレクトで移転させない。
-5. 新版 `MAINTENANCE=false` を設定・配備し、確認済み検証プランで疎通を確かめる。
-6. 旧Juliaコンテナと専用設定を撤去する。旧DOやKVを削除する前に残存操作の照合を終える。
-7. 旧READMEの参照先更新と最終状態を提示し、アーカイブ承認後に `PkgFactory.jl` をアーカイブする。
-
-観察期間を設ける手順は含めていません。旧URLやAPIの完全互換も対象外です。
-新版に問題がある場合は `MAINTENANCE=true` に戻し、150秒以上待ってGitHub状態を照合します。
-中断ジャーナルを残したまま、直前の正常な新版Worker versionへ戻して明示的に再開します。
-
-## 残存ロックの運用
-
-通常は `status` → リース終了確認 → `resume` で完了します。認証主体・マーカー・Project.tomlが一致しなければ
-再開は拒否されます。その場合、リポジトリ内容を手動確認し、意図しない既存リポジトリを上書きしないでください。
-ロックを削除するだけのHTTP APIはありません。
-ローカルの `journal.lock` は短いファイル更新の排他です。記録されたPIDが終了していることを確認できた場合のみ
-このファイルを取り除けます。操作状態を保存した `journal.json` の削除ではありません。
+**認証エラーの切り分け:** エラーの `code` が `oauth_client_credentials` ならClient IDとsecretの組、`oauth_redirect_uri` なら登録済みcallback URL、`oauth_code_invalid` ならコードの期限切れ・再利用、`oauth_scopes` なら `repo`/`workflow` の付与を確認します。
