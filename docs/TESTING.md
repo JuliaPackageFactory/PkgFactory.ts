@@ -7,20 +7,21 @@
 | 検証 | 実行契機 | GitHubへの書込み |
 |---|---|---|
 | Node/workerd・生成JuliaのCI | PR / main / 手動 | なし。3テンプレートの構文、Pkg.test、ドキュメントビルド、切断・再開など |
-| 固定リポジトリのE2E | 有効化後、mainのテンプレート/生成処理変更 / 手動 | 下記の既存3リポジトリに差分だけをcommit/push |
+| 固定リポジトリのE2E | 有効化後、mainのテンプレート/生成処理変更 / 手動 | 下記の既存4リポジトリに差分だけをcommit/push |
 | 作成・再開の受入 | 明示的な手動実行 | 1回の実行で新規リポジトリは最大1件。再開時は0件 |
 
 GitHub ActionsのテストはLinux（`ubuntu-latest`）で実行します。本体CIとall-in-oneテンプレートのmacOS・Windows設定はコメントで残しています。
 
-## 固定3リポジトリ
+## 固定4リポジトリ
 
 | テンプレート | 現在のリポジトリ | 初回更新で受け入れる旧パッケージ名 |
 |---|---|---|
 | minimum | [ExampleMinimum.jl](https://github.com/JuliaPackageFactory/ExampleMinimum.jl) | TestMinimum / TemplateMinimum / PkgFactoryMinimum |
 | simple | [ExampleSimple.jl](https://github.com/JuliaPackageFactory/ExampleSimple.jl) | TestSimple / TemplateSimple / PkgFactorySimple |
 | all-in-one | [ExampleAllInOne.jl](https://github.com/JuliaPackageFactory/ExampleAllInOne.jl) | TestAllInOne / TemplateAllInOne / TamplateAllInOne / PkgFactoryAllInOne |
+| agentic | [ExampleAgentic.jl](https://github.com/JuliaPackageFactory/ExampleAgentic.jl) | なし（PkgFactory.tsのCLIで作成） |
 
-GitHub Actionsのワークフロー名は **Template E2E tests**、各ジョブの表示名は `E2E (ExampleMinimum.jl)`・`E2E (ExampleSimple.jl)`・`E2E (ExampleAllInOne.jl)` です。サマリーにも同じジョブ名が使われます。
+GitHub Actionsのワークフロー名は **Template E2E tests**、各ジョブの表示名は `E2E (ExampleMinimum.jl)`・`E2E (ExampleSimple.jl)`・`E2E (ExampleAllInOne.jl)`・`E2E (ExampleAgentic.jl)` です。サマリーにも同じジョブ名が使われます。
 
 既存リポジトリとmainを必須とし、リポジトリの作成・削除はしません。
 Project.toml・モジュール・テスト・README・docsの名前とURLを生成器で一貫して更新し、UUIDとGit履歴を維持します。
@@ -33,7 +34,7 @@ dirty checkout・別パッケージ名・不正UUIDを拒否し、競合するpu
 ```sh
 # GitHubは読み取りだけ。生成予定の全ファイルを .tmp/template-repositories/ に保存
 npm run e2e:templates -- --gh
-# ソース変更をコミット後、固定3件を更新（新規作成0件）
+# ソース変更をコミット後、固定4件を更新（新規作成0件）
 npm run e2e:templates -- --gh --publish
 # 1テンプレートのみ確認する場合
 npm run e2e:templates -- --gh --publish --package=ExampleSimple
@@ -45,10 +46,11 @@ npm run e2e:templates -- --gh --publish --package=ExampleSimple
 
 ## GitHub Actionsの設定
 
-1. JuliaPackageFactoryをResource ownerとするfine-grained PATを用意し、対象を上記3リポジトリに限定します。
+1. JuliaPackageFactoryをResource ownerとするfine-grained PATを用意し、対象を上記4リポジトリに限定します。
+   固定リポジトリを追加したときは、既存PATのRepository accessにそのリポジトリを加えます（ExampleAgentic.jlの追加時も同様）。
    Repository permissionsは **Contents: Read and write**、**Workflows: Read and write**、**Metadata: Read-only**。
    作成や鍵設定はこのCIでは行わないため、Administration/Secrets権限は不要です。
-   旧E2E用のトークンが手元にある場合は、対象3件の権限を確認して再利用できます。
+   旧E2E用のトークンが手元にある場合は、対象4件の権限を確認して再利用できます。
 2. [PkgFactory.tsのActions secrets](https://github.com/JuliaPackageFactory/PkgFactory.ts/settings/secrets/actions) に
    `PKGFACTORY_E2E_TOKEN` を登録します。旧リポジトリのSecretは自動的には引き継がれません。
    トークンをチャットへ送ったり、ローカルghの広い権限の資格情報をそのままCIへコピーする必要はありません。
@@ -59,8 +61,8 @@ npm run e2e:templates -- --gh --publish --package=ExampleSimple
    `PKGFACTORY_TEMPLATE_E2E_ENABLED=true` を登録し、**Template repositories E2E → Run workflow → main** を実行します。
    有効化前とPRでは外部リポジトリへ書き込みません。
 
-Workflowは固定3件を順に更新し、ファイル一致・UUID・履歴・remote SHAを検証します。
-その後、公開用PATを渡さずにJulia 1.12のPkg.test（JETを含む）とdocsビルドを行い、結果をartifactとjob summaryへ残します。
+Workflowは固定4件を順に更新し、ファイル一致・UUID・履歴・remote SHAを検証します。
+その後、公開用PATを渡さずにJulia 1.12のPkg.test（JETを含む）を行い、simple・all-in-oneではdocsビルドも行って、結果をartifactとjob summaryへ残します。
 pushされたリポジトリ自身のCIが、Linuxでの各Julia版のテスト・品質検査・Documenter公開を担当します。
 そのCIを同じ更新について二重にdispatchしません。GITHUB_TOKENによる別リポジトリ更新には制限があるため、上記の専用PATを使います。
 [GitHubのトークンとWorkflow起動の仕様](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow)

@@ -27,7 +27,13 @@ let availabilityRevision = 0, availabilityTimer: ReturnType<typeof setTimeout> |
 let appsRevision = 0, appsAbort: AbortController | undefined, appsLoading = false;
 let suggestionRevision = 0, suggestionAbort: AbortController | undefined, suggestionComplete = false;
 const suggestionLimit = 10;
-const suggestionTemplateOrder = ['minimum', 'simple', 'all-in-one'] as const;
+const suggestionTemplateOrder = ['minimum', 'agentic', 'simple', 'all-in-one'] as const;
+// Templates whose creation configures Documenter, TagBot, and Codecov (see core/spec.ts).
+const documentationTemplates: readonly string[] = ['simple', 'all-in-one'];
+const hasDocumentation = () => documentationTemplates.includes(template.value);
+// Templates that ship TagBot.yml. Agentic runs TagBot with GITHUB_TOKEN alone, without a deploy key.
+const tagbotTemplates: readonly string[] = ['agentic', 'simple', 'all-in-one'];
+const hasTagBot = () => tagbotTemplates.includes(template.value);
 // Page lifetime only: resets and aborted/failed requests do not replenish the budget.
 let suggestionRequests = 0;
 let descriptionComposing = false;
@@ -38,7 +44,7 @@ let profileLogin = '', authRequired = false, authorsTouched = false, advancedToA
 let creating = false, creationFailed = false, appReturnPending = false;
 let selectedFile = '', fileScroll = 0, contentScroll = {top: 0, left: 0};
 const draftKey = 'pkgfactory-reconnect-settings';
-const hasAutomation = () => !!template.value && template.value !== 'minimum';
+const hasAutomation = () => hasDocumentation();
 function appConfirmed(slug: typeof displayedApps[number]) {
   return installations[slug].state === 'installed'
     || (installations[slug].state === 'unknown' && confirmedApps.get(owner.value)?.has(slug) === true);
@@ -228,7 +234,7 @@ async function loadSuggestion(query: string, revision: number) {
 function renderApps() {
   const confirmed = confirmedApps.get(owner.value);
   for (const slug of displayedApps) {
-    const excluded = slug === 'codecov' && template.value === 'minimum';
+    const excluded = slug === 'codecov' && !!template.value && !hasDocumentation();
     const installation = installations[slug];
     const selfConfirmed = installation.state === 'unknown' && !!confirmed?.has(slug);
     const installed = appConfirmed(slug);
@@ -240,7 +246,7 @@ function renderApps() {
     element(`${slug}-confirmation`).hidden = !hasAutomation() || appsLoading || installation.state !== 'unknown';
     element(`${slug}-link`).hidden = !hasAutomation();
     element<HTMLInputElement>(`${slug}-confirmed`).checked = selfConfirmed;
-    element(`${slug}-detail`).textContent = !template.value ? '' : excluded ? 'Coverage uploads are not included in the Minimum template.'
+    element(`${slug}-detail`).textContent = !template.value ? '' : excluded ? 'Coverage uploads are not included in this template.'
       : appsLoading ? `Checking apps for @${owner.value}…`
       : selfConfirmed ? `Confirmed by you for @${owner.value}. Check access for the new repository after creation.`
       : installation.state === 'installed' ? installation.selection === 'all' ? `Installed for all repositories owned by @${owner.value}.` : `Installed for selected repositories owned by @${owner.value}. Add the new repository after creation.`
@@ -300,15 +306,16 @@ async function loadProfile() {
   });
 }
 function automation() {
-  const minimum = template.value === 'minimum';
-  const documentation = !!template.value && !minimum;
+  const documentation = hasDocumentation();
+  // Minimum and Agentic: package tests and CI only.
+  const minimum = !!template.value && !documentation;
   const privateRepository = element<HTMLSelectElement>('visibility').value === 'private';
   element('documenter-state').textContent = documentation ? 'Automatic' : minimum ? 'Not included' : 'Choose a template';
   element('documenter-state').className = template.value ? 'configured-pill' : 'app-state';
-  element('tagbot-state').textContent = documentation ? 'Automatic' : minimum ? 'Not included' : 'Choose a template';
+  element('tagbot-state').textContent = hasTagBot() ? 'Automatic' : minimum ? 'Not included' : 'Choose a template';
   element('tagbot-state').className = template.value ? 'configured-pill' : 'app-state';
-  element('tagbot-detail').textContent = documentation ? 'Creates tags and GitHub releases after versions are registered in Julia’s General registry.'
-    : 'Select Simple or All-in-one to include release automation.';
+  element('tagbot-detail').textContent = hasTagBot() ? 'Creates tags and GitHub releases after versions are registered in Julia’s General registry.'
+    : 'Select Agentic, Simple, or All-in-one to include release automation.';
   element('documenter-detail').textContent = documentation ? 'Deploy key and DOCUMENTER_KEY repository secret are configured during creation.'
     : 'Select Simple or All-in-one to include documentation deployment.';
   element('codecov-description').textContent = documentation ? 'Coverage reports and pull request checks. Uploads use GitHub OIDC; no upload token is required.'
@@ -316,6 +323,7 @@ function automation() {
   element('registration-guide').hidden = privateRepository;
   element('private-docs-help').hidden = !privateRepository || minimum;
   element('automation-description').textContent = !template.value ? 'Choose a template to see which automation will be configured.'
+    : template.value === 'agentic' ? 'Agentic includes package tests, quality checks, Runic formatting, CI, and TagBot releases. Documentation and coverage workflows are not included.'
     : minimum ? 'Minimum includes package tests and CI. Documentation, coverage, and release workflows are not included.'
     : 'Documenter and TagBot are configured automatically.';
   renderApps();

@@ -16,7 +16,7 @@ test('workerd: deterministic templates, Ed25519/RSA and sealed-box without Node 
   const result = await build({entryPoints: ['test/worker/poc-worker.ts'], bundle: true, write: false, format: 'esm', platform: 'browser'});
   const mf = new Miniflare(convertV4MiniflareOptions({...options, script: result.outputFiles[0].text}));
   try {
-    for (const template of ['minimum', 'simple', 'all-in-one']) {
+    for (const template of ['minimum', 'agentic', 'simple', 'all-in-one']) {
       const spec = {owner: 'tester', name: 'Worker', authors: ['日本語 "Author"'], template};
       const fixed = {id: 'worker-test', uuid: 'd2719c3b-384b-42ad-bfb0-af5687f0c243', date: '2026-09-28T00:00:00.000Z'};
       const response = await mf.dispatchFetch('https://poc.test', {method: 'POST', body: JSON.stringify({spec, fixed})});
@@ -175,7 +175,7 @@ test('Worker executes the shared engine with durable metadata and stops after di
   } finally {await aborted.dispose();}
 });
 
-test('Worker native fetch completes Web/MCP OAuth and 3 templates without following redirects', async () => {
+test('Worker native fetch completes Web/MCP OAuth and 4 templates without following redirects', async () => {
   const calls: string[] = [];
   let remote = new FakeGitHub();
   const mf = new Miniflare(convertV4MiniflareOptions({...options, scriptPath: resolve('apps/cloudflare/dist/worker.js'), ratelimits,

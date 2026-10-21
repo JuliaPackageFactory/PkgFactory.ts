@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import TOML from '@iarna/toml';
 import { git, head, publishSnapshot, snapshot } from '../scripts/e2e/snapshots.js';
 import { assertFreshTestRepository, freshTestName, selectedTemplate, SingleCreation, snapshotTarget, targets } from '../scripts/e2e/config.js';
+import { hasDocumentation } from '../packages/pkgfactory/src/core/spec.js';
 
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), 'pkgfactory-snapshot-'));
@@ -43,7 +44,8 @@ test('persistent snapshots initialize, preserve history, remove stale files and 
 test('renamed fixed repositories keep UUIDs and render the same output on subsequent runs', async () => {
   for (const target of targets) {
     const {checkout} = await fixture();
-    const oldName = target.previousNames[0];
+    // A target without previous names (ExampleAgentic) starts under its current name.
+    const oldName = target.previousNames[0] ?? target.name;
     await publishSnapshot(checkout, {'Project.toml': `name = "${oldName}"\nuuid = "${uuid}"\n`, [`src/${oldName}.jl`]: `module ${oldName}\nend\n`}, 'Legacy snapshot');
     const before = head(checkout);
     const expected = await snapshot(checkout, target);
@@ -52,12 +54,14 @@ test('renamed fixed repositories keep UUIDs and render the same output on subseq
     assert(!('.pkgfactory.json' in expected.files));
     const description = `Integration tests for the ${target.template} template of [PkgFactory](https://github.com/JuliaPackageFactory/PkgFactory.ts).`;
     assert(expected.files['README.md'].includes(`\n\n${description}\n\n`));
-    if (target.template !== 'minimum') {
+    if (hasDocumentation(target.template)) {
       assert(expected.files['docs/src/index.md'].includes(`\n\n${description}\n\n`));
+    } else {
+      assert(!('docs/src/index.md' in expected.files));
     }
     await publishSnapshot(checkout, expected.files, 'Rename from PkgFactory');
     assert.equal(git(checkout, 'rev-parse', 'HEAD^'), before);
-    await assert.rejects(readFile(join(checkout, `src/${oldName}.jl`)));
+    if (oldName !== target.name) await assert.rejects(readFile(join(checkout, `src/${oldName}.jl`)));
     const again = await snapshot(checkout, target);
     assert.deepEqual(again.files, expected.files);
     assert.equal((await publishSnapshot(checkout, again.files, 'No changes')).changed, false);

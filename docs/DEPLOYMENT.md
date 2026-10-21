@@ -303,7 +303,7 @@ npm run deploy:staging
 ```
 
 ステージングで `/health`、Web OAuth、MCP OAuth、選択したテンプレートの作成1件を確認します。
-3テンプレートの継続的な生成検証には既存のExampleMinimum.jl・ExampleSimple.jl・ExampleAllInOne.jlを使います。
+4テンプレートの継続的な生成検証には既存のExampleMinimum.jl・ExampleSimple.jl・ExampleAllInOne.jl・ExampleAgentic.jlを使います。
 [固定リポジトリE2Eの設定](TESTING.md) を参照してください。
 WebとMCPで同じsubject・repositoryへの作成を競合させ、片方がロックで停止することを確認します。
 作成中にHTTP接続を切り、GitHubの操作が止まること、リース後の明示的再開で回復することを確認します。
