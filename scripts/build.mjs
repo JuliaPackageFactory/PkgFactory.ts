@@ -12,5 +12,5 @@ for (const [name, entry] of Object.entries({cli: 'node/cli', index: 'index'})) {
 // Ship declarations for the complete public API, preserving its module structure.
 execFileSync(process.execPath, ['node_modules/typescript/bin/tsc', '--project', 'tsconfig.build.json'], {stdio: 'inherit'});
 await build({entryPoints: ['apps/cloudflare/src/worker.ts'], outfile: 'apps/cloudflare/dist/worker.js', bundle: true, platform: 'browser', format: 'esm', target: 'es2023', external: ['cloudflare:workers'], conditions: ['workerd', 'worker', 'browser'], sourcemap: true});
-for (const name of ['README.md', 'LICENSE', 'NOTICE.md']) await copyFile(name, `packages/pkgfactory/${name}`);
-for (const name of ['docs', 'examples']) await cp(name, `packages/pkgfactory/${name}`, {recursive: true});
+for (const name of ['README.md', 'LICENSE']) await copyFile(name, `packages/pkgfactory/${name}`);
+for (const name of ['examples']) await cp(name, `packages/pkgfactory/${name}`, {recursive: true});

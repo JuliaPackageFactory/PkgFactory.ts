@@ -1,30 +1,41 @@
 # PkgFactory
 
-TypeScriptでJuliaパッケージを作る、Web・CLI・MCP共通の生成エンジンです。
-サービス名は **PkgFactory**、CLIは **pkgfactory**、公開npm名は
-**@juliapackagefactory/pkgfactory** です。Node.js **24 LTS** を使用します。
-サービスの実行にJulia、Docker、Git、OpenSSHは不要です。`gh` は任意の認証補助です。
+GitHubにJuliaパッケージのリポジトリを作り、CI・ドキュメント・リリース自動化まで設定するツールです。
+TypeScriptで書かれた一つの生成エンジンを、CLI・Web・MCPサーバーから共通に使います。
 
-## ローカルで使う
+| 名前 | 値 |
+|---|---|
+| サービス名 | PkgFactory |
+| CLI | `pkgfactory` |
+| npmパッケージ | `@juliapackagefactory/pkgfactory`（未公開） |
+| 公開Web / MCP | https://pkgfactory.ohnolab.workers.dev / 同origin の `/mcp` |
+| 実行環境 | Node.js 24 |
 
-公開後のインストール:
+Julia、Docker、Git、OpenSSHは不要です。GitHubへの操作はすべてREST APIで行います。
+
+## インストール
 
 ```sh
-npm install -g @juliapackagefactory/pkgfactory@0.1.0
-pkgfactory templates
-pkgfactory preview --spec package.json --out plan.json
-pkgfactory create --plan plan.json --yes --gh
-pkgfactory status --plan-id PLAN_UUID --gh
-pkgfactory resume --plan-id PLAN_UUID --yes --gh
-pkgfactory web --gh
-pkgfactory mcp --stdio
+npm ci
+npm run build
+node packages/pkgfactory/dist/cli.js --help
 ```
 
-まだnpm公開は実施していません。現時点ではこのチェックアウトで `npm ci && npm run build`
-の後、`node packages/pkgfactory/dist/cli.js` を使うか、
-`npm pack --workspace @juliapackagefactory/pkgfactory` のtarballをインストールしてください。
+`npm pack --workspace @juliapackagefactory/pkgfactory` で作ったtarballを `npm install` しても同じです。
 
-設定ファイルの例:
+## CLI
+
+```sh
+pkgfactory templates                                   # テンプレート一覧
+pkgfactory preview --spec package.json --out plan.json # オフラインで生成内容を固定
+pkgfactory create --plan plan.json --yes --gh          # プランどおりに作成
+pkgfactory status --plan-id PLAN_UUID --gh             # GitHubの状態を照合
+pkgfactory resume --plan-id PLAN_UUID --yes --gh       # 中断した作成を明示的に再開
+pkgfactory web --gh                                    # ローカルWeb（127.0.0.1:8787）
+pkgfactory mcp --stdio                                 # stdio MCPサーバー
+```
+
+`--spec` に渡す設定ファイルの例（[examples/package.json](examples/package.json)）:
 
 ```json
 {
@@ -37,107 +48,114 @@ pkgfactory mcp --stdio
 }
 ```
 
+| 項目 | 内容 |
+|---|---|
+| `owner` | 自分のアカウント、またはオーナー権限を持つ組織 |
+| `name` | パッケージ名。リポジトリ名は `<name>.jl` |
+| `authors` | 1〜20名 |
+| `description` | 省略可。READMEとdocsにはエスケープして埋め込み、GitHubのdescriptionには原文を使う |
+| `template` | `minimum` / `simple` / `all-in-one`（既定 `simple`） |
+| `visibility` | `public` / `private`（既定 `public`） |
+
+パッケージ名の規則は[PkgFactory.jl](https://github.com/JuliaPackageFactory/PkgFactory.jl/blob/6cf2962ceab3e7ee3662d5bb980960fbb434a5f9/src/verification.jl)と同じです。
+5〜100文字のASCII英数字、先頭は大文字、小文字を1文字以上含み、`Julia`/`julia` を含まず、`Ju` で始まらず、`jl` で終わらないこと。末尾の `.jl` はAPI・CLI・MCPでは取り除いて受け付けます。
+
+`preview` はネットワークなしで動き、プランID・パッケージUUID・全ファイルの内容を固定します。
+`create` と `resume` はそのプランに対してだけ動き、`--yes` を要求します。
+状態は `~/.pkgfactory/journal.json` に保存します（`--state-dir` または `PKGFACTORY_STATE_DIR` で変更）。
+同じディレクトリを使えば、CLI・ローカルWeb・stdio MCPの間で状態を共有できます。
+
+## テンプレート
+
 | テンプレート | 内容 |
 |---|---|
-| `minimum` | パッケージ、テスト、CI |
-| `simple` | 上記＋Documenter、TagBot |
-| `all-in-one` | 上記＋Aqua、JET、書式検証、引用情報、ノートブック |
+| `minimum` | パッケージ本体、テスト、CI |
+| `simple` | 上記 ＋ Documenter、TagBot、Codecov |
+| `all-in-one` | 上記 ＋ Aqua、JET、ExplicitImports、Runic書式検査、CITATION.cff、Issue/PRテンプレート、Dependabot、ノートブック、`AGENTS.md` |
 
-どのテンプレートでも、作成したGitHubリポジトリに `julia` と `juliapackagefactory` のトピックを自動付与します。再開時も既存のトピックを保持し、不足しているトピックだけを追加します。
-
-CLIのプレビューはオフラインで動作し、UUIDと全ファイルの内容を固定します。
-作成には確認済みプランと `--yes` が必要です。再開では設定の再入力やUUIDの再生成をしません。
-状態は既定で `~/.pkgfactory` に保存します。`--state-dir` または `PKGFACTORY_STATE_DIR` で変更できます。
-同じ状態ディレクトリを使えばCLI・Web・stdio MCP間で状態を共有できます。
+`simple` と `all-in-one` では、作成時にDeploy keyと `DOCUMENTER_KEY` Secretを登録し、`gh-pages` ブランチとGitHub Pagesを設定します。
+どのテンプレートでも、リポジトリに `julia` と `juliapackagefactory` のトピックを付けます。
 
 ## 認証
 
-- ローカル: `GITHUB_TOKEN` → `GH_TOKEN` の順。明示した場合だけ `--gh` で `gh auth token` を使用。
-- Device Flow: Device Flowを有効にしたOAuth AppのClient IDを `PKGFACTORY_GITHUB_CLIENT_ID` に設定して `--device`。認証後のトークンはプロセス内だけに保持。
-  公開Web・MCPの本番用OAuth AppはDevice Flowを無効にしているため使えません。CLI用には別のOAuth Appを用意してください。
-- stdio MCP: PATまたは `--gh`。対話ログインは開始しません。`--read-only` で作成・再開ツールを非公開にできます。
-- 公開Web: GitHub OAuth認可コード＋S256 PKCE。HttpOnly・Secure・SameSite Cookie。
-- 公開MCP: OAuth 2.1、S256 PKCE、GitHubへの上流認可。GitHub PATをMCPのBearerとして受け付けません。
+| 入口 | 資格情報 |
+|---|---|
+| CLI / ローカルWeb | `GITHUB_TOKEN` または `GH_TOKEN`。`--gh` で `gh auth token`、`--device` でDevice Flow |
+| stdio MCP | `GITHUB_TOKEN` / `GH_TOKEN` または `--gh` |
+| 公開Web | GitHub OAuth 認可コード ＋ S256 PKCE。セッションはHttpOnly/Secure Cookie |
+| 公開MCP | OAuth 2.1（S256 PKCE）。GitHubへ上流認可する |
 
-GitHubのclassic PAT/OAuthは `repo`・`workflow` が必要です。Webでのプロフィール・組織一覧には `read:user`・`read:org` も要求します。組織側のOAuth承認とDeploy key許可も確認してください。
-Fine-grained PATでは対象リポジトリの作成、Administration、Contents、Workflows、Secrets、Pagesの権限が必要です。
-ローカルWebは `127.0.0.1` のみで待受し、Host・Origin・CSRFを検証します。
+Device Flowは、Device Flowを有効にしたOAuth AppのClient IDを `PKGFACTORY_GITHUB_CLIENT_ID`（または `--client-id`）に設定して使います。取得したトークンはプロセス内にだけ保持します。
 
-Web画面は旧版の認証から始まる手順、ロゴ、配色を引き継いでいます。
-認証後に個人アカウントとオーナー権限のある組織を選択でき、著者名はGitHubの表示名（未設定ならlogin）から補完されます。
-入力中とプレビュー保存時に、名前の形式・作成先の権限・既存リポジトリの有無を確認します。
-名前は5〜100文字のASCII英数字で、先頭は大文字、小文字を1文字以上含めます。`Julia`／`julia`を含む名前、`Ju`で始まる名前、`jl`で終わる名前は受け付けません。
-これらは[Julia版の検証規則](https://github.com/JuliaPackageFactory/PkgFactory.jl/blob/6cf2962ceab3e7ee3662d5bb980960fbb434a5f9/src/verification.jl)に合わせています。Webでは`.jl`を入力した場合だけ、自動付加される旨を警告します。API・CLI・MCPでは従来どおり`.jl`付きの入力も正規化します。
-作成時にも権限を確認します。組織のポリシーやトークンの権限によってGitHubが作成を拒否する場合は、その結果を表示します。
-既存リポジトリへ新規作成はしません。Webの再開フォームは一時非表示です。保存済みplanIdによる状態確認・再開はCLI・MCP・APIで引き続き利用できます。
+要求するスコープは `repo workflow read:user read:org` です。
+Fine-grained PATを使う場合は、対象リポジトリの作成権限と、Administration・Contents・Workflows・Secrets・Pagesの読み書きが必要です。
+組織へ作成するには、その組織のオーナーであることと、組織がOAuth AppとDeploy keyを許可していることが必要です。
 
-Webは完了したセクションを緑、次のセクションを紫のREADYで表示します。著者名のカンマ・セミコロンは改行に変換します。
-テンプレートは未選択で始まり、入力が揃うと入力中の操作を妨げずに自動設定へ案内します。レビュー生成で続けて画面を移動せず、閲覧中のファイルとスクロール位置を保ちます。Documenter・TagBot・Codecovの行は選択にかかわらず表示します。
-WebのSimple／All-in-oneでは、Codecovの導入確認が済むまで第4セクションをREADY、第5セクションをUPCOMINGに保ちます。GitHubで導入済みと確認できるか、確認不能の場合に手動でチェックするとレビューを自動生成します。チェックを外すと作成確認も解除されます。作成中はスピナー・進行バー・経過時間を表示します。
-作成後はプレビューを残したまま、第6セクションにリポジトリへのリンクと、Actions・ドキュメント・必要なCodecov設定・General登録の案内をリンク付きの文章で表示します。
-MinimumではDocumenter・TagBot・Codecovを緑の「NOT INCLUDED」で表示し、App確認とインストール操作を省きます。Codecovのインストール状況は、GitHubが読み取りを許可する組織で確認します。
-現在のOAuth認証では個人アカウントの他社App一覧を取得できず、組織も権限により確認できない場合があります。その場合はGitHubで確認し、画面で確認済みにできます。
-「Installed」はオーナーへのインストールを表し、選択したリポジトリだけにアクセスを許可する場合は作成後に追加が必要です。GitHubの設定リンクから戻ると状態を自動再確認します。
-Privateを選んだ場合はDocumenterの利用条件と公開範囲への案内を表示します（Minimumは対象外）。
-認証切れの際は再接続を案内し、同じアカウントで戻れば入力設定を復元します。確認チェックや作成要求は復元しません。作成に失敗した場合は同じ要求の再送を止め、再開設計は[Issue #5](https://github.com/JuliaPackageFactory/PkgFactory.ts/issues/5)で検討します。
+資格情報なしでも `templates`、`preview`、MCPの `list_templates` / `preview_package` は使えます。
 
-## MCPとAPI
+## Web
 
-MCPツールは `list_templates`、`preview_package`、`create_package`、`repository_status`、
-`resume_package`。作成・再開には保存済み `planId` と `confirm: true` が必要です。
-クライアント設定は [examples/mcp.json](examples/mcp.json) を参照してください。
-公開MCPのURLは設定したWorker originの `/mcp` です。
+画面は7段階で進みます。GitHub接続、リポジトリ設定、パッケージ情報、自動化の確認、レビューと作成、結果、AIエージェントへの引き継ぎ。
+
+- 接続後、自分のアカウントとオーナー権限のある組織を作成先に選べます。著者名はGitHubの表示名から補完します。
+- 名前の形式と既存リポジトリの有無を入力中に確認し、設定が揃うとプレビューを自動生成します。
+- `simple` / `all-in-one` ではCodecov Appの導入を確認します。組織では自動で確認し、確認できない場合は手動のチェックで進めます。
+- 公開Webでは、説明文からテンプレートを推薦します（Cloudflare Workers AIの `typesafe/jev`）。
+- 作成後はリポジトリ、Actions、ドキュメントへのリンクと、AIエージェント用のプロンプトを表示します。
+
+ローカルWebは `127.0.0.1` だけで待ち受け、Host・Origin・CSRFトークンを検証します。中断したプランはCLIかMCPの `status` / `resume` で扱います。
+
+## MCP
+
+| ツール | 内容 |
+|---|---|
+| `list_templates` | テンプレート一覧 |
+| `preview_package` | プランを生成して保存する。認証済みなら作成先の権限と既存リポジトリを確認する |
+| `repository_status` | 保存済みプランとGitHubの状態を照合する |
+| `create_package` | `planId` と `confirm: true` で作成する |
+| `resume_package` | `planId` と `confirm: true` で明示的に再開する |
+
+`pkgfactory mcp --stdio --read-only` では `create_package` と `resume_package` を公開しません。
+クライアント設定の例は [examples/mcp.json](examples/mcp.json) です。
+
+## ライブラリ
 
 ```ts
 import { Factory, MemoryStore } from '@juliapackagefactory/pkgfactory';
+
 const factory = new Factory(new MemoryStore());
-const plan = await factory.preview({owner: 'YourGitHubOwner', name: 'MyPackage', authors: ['You']}, githubUserId);
-// 確認したプランに対してのみ実行する
-await factory.execute(plan.id, {subject: githubUserId, token: githubToken}, false, signal);
+const plan = await factory.preview({owner: 'YourGitHubOwner', name: 'MyPackage', authors: ['You']}, subject);
+// 利用者がプランを確認してから実行する
+await factory.execute(plan.id, {subject, token: githubToken}, false, signal);
 ```
 
-`MemoryStore` は埋め込み用です。プロセス再起動を跨ぐ利用は永続ストアを渡してください。
-公開Web・MCPは同じDurable Objectの排他制御を使います。
+`subject` はGitHubユーザーIDの文字列で、実行時にトークンの持ち主と照合します。
+`MemoryStore` はプロセス内だけの保存です。永続化するには `StateStore` を実装したストアを渡します。
 
 ## 中断と再開
 
-GitHubへの書き込みは送信前に操作ジャーナルへ記録し、自動再送しません。
-切断・120秒の実行期限・30秒の個別要求期限で以後のGitHub操作を停止します。
-既に送信した操作の取り消しは保証できないため、結果不明ならロックを残します。
-`status` でGitHubを確認し、記録された150秒のリース期限後に `resume` を明示的に呼びます。
-再開時にもリポジトリID・回復マーカー・Project.tomlを照合し、既存変更を強制上書きしません。
+GitHubへの書き込みは、送信前にジャーナルへ記録します。自動では再送しません。
+接続切断、120秒の実行期限、30秒の要求期限のいずれかで、以後のGitHub操作を止めます。
+結果が不明な操作はロックとして残り、150秒のリース期限後に `status` で照合してから `resume` で再開します。
+再開時はリポジトリID、回復マーカー `.pkgfactory.json`、Project.tomlを照合し、他人や別プランのリポジトリを上書きしません。
 
-秘密鍵は保存しません。Secret登録の結果が不明な場合、明示的再開で新しい鍵ペアを生成し、
-登録成功後にそのプランが作った古い鍵のみ削除します。既存のユーザー鍵は対象外です。
-Deploy keyの既定値はEd25519。`--key-algorithm rsa4096` / Workerの `KEY_ALGORITHM=rsa4096` で切替可能です。
+秘密鍵は保存しません。Secret登録の結果が不明なら、再開時に新しい鍵ペアを作り、登録後にそのプランの古い鍵だけを削除します。
+Deploy keyは既定でEd25519です。`--key-algorithm rsa4096`（Workerでは `KEY_ALGORITHM=rsa4096`）でRSA-4096に切り替えられます。
 
-## 開発・配備
-
-テンプレートの編集元は `packages/pkgfactory/templates/` です。
-`src/core/templates.json` はNode.js版とCloudflare Workers版にテンプレートを埋め込むための生成ファイルで、Git管理しません。
-`npm ci`、型検査・テスト・ローカルE2E、ビルドの際に自動生成し、npmパッケージの `pack` / `publish` 前にもビルドします。
-テンプレート編集後にソースを直接 `tsx` で実行する場合や、インストール時に `--ignore-scripts` を使った場合は、先に `npm run templates` を実行してください。
+## 開発
 
 ```sh
 npm ci
-npm run check
+npm run check          # typecheck, test, build, test:worker
 node scripts/pack-smoke.mjs
-npm run poc
-# 既存の固定3リポジトリを読み取り、更新内容をローカルに生成
-npm run e2e:templates -- --gh
-# 新規作成が必要な検証だけ、1回に1件
-npm run e2e -- --gh --template=simple --confirm-create-test-repository
 ```
 
-通常のテンプレートE2Eは既存の `ExampleMinimum.jl`・`ExampleSimple.jl`・`ExampleAllInOne.jl` を継続更新します。
-新規作成E2Eは `JuliaPackageFactory/TestYYYYMMDDHHMMSS.jl`（UTC）の1件だけです。
-テンプレートを選択して実行し、途中停止時は保存済みplanIdを明示的に再開します。自動削除はしません。
-OpenSSHとJuliaは開発時の鍵PoC・生成パッケージ検証にのみ使用します。
+構成、作成手順、Cloudflare Workerの設計、配備、テストは [AGENTS.md](AGENTS.md) を参照してください。
 
-- [構成と安全な再開](docs/ARCHITECTURE.md)
-- [固定リポジトリのE2E・CI設定](docs/TESTING.md)
-- [配備・外部設定・切替手順](docs/DEPLOYMENT.md)
-- [実施した検証と未完了の受入条件](docs/ACCEPTANCE.md)
+## ライセンスと帰属
 
-旧PkgFactory.jlの `7c7d4af` にある58ファイルを参照しています。旧リポジトリは変更していません。
-旧API・CLI・生成物の完全互換や移行ガイドは対象外です。
+MITライセンスです（[LICENSE](LICENSE)）。Copyright (c) 2025-2026 Shuhei Ohno and contributors.
+
+- テンプレート（58ファイル）とWeb画面のスタイルシート・ロゴは、[PkgFactory.jl](https://github.com/JuliaPackageFactory/PkgFactory.jl) のコミット `7c7d4afeaa3b4b708726af4795c13c192fc3c948`（MIT）に由来します。テンプレートの描画はJulia文字列をエスケープするため、旧版とバイト単位の互換はありません。
+- OAuthには [@cloudflare/workers-oauth-provider](https://github.com/cloudflare/workers-oauth-provider)（MIT）、MCPには [@modelcontextprotocol/sdk](https://github.com/modelcontextprotocol/typescript-sdk)（MIT）を使用しています。
+- `packages/pkgfactory/src/web/github.svg` のGitHub Invertocatロゴは、[GitHubのロゴ使用ガイドライン](https://brand.github.com/foundations/logo)に従います。
