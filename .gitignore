@@ -9,5 +9,6 @@ dist/
 .tmp/
 artifacts/
 packages/pkgfactory/src/core/templates.json
-packages/pkgfactory/docs/
 packages/pkgfactory/examples/
+packages/pkgfactory/README.md
+packages/pkgfactory/LICENSE
