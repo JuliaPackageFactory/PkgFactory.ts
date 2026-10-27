@@ -31,7 +31,7 @@ export async function localWeb(factory: Factory, token: string | undefined, port
       else if (request.method === 'GET' && path === '/assets/ogp.png') response = new Response(unbase64(assets.ogp), {headers: {'Content-Type': 'image/png'}});
       else if (path.startsWith('/api/')) {
         if (request.method !== 'GET' && (headers.get('origin') !== origin || headers.get('x-pkgfactory-csrf') !== csrf)) throw new FactoryError('csrf', 'Invalid CSRF token or Origin', 403);
-        response = await api(request, factory, 'local', () => {if (!token) throw new FactoryError('auth', 'Start pkgfactory web with GITHUB_TOKEN, --device, or --gh', 401); return {token, subject: 'local'};});
+        response = await api(request, factory, () => {if (!token) throw new FactoryError('auth', 'Start pkgfactory web with GITHUB_TOKEN, --device, or --gh', 401); return {token, subject: 'local'};});
       } else response = json({error: 'Not found'}, 404);
       response.headers.set('Content-Security-Policy', "default-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
       response.headers.set('Referrer-Policy', 'no-referrer'); response.headers.set('Cache-Control', 'no-store'); response.headers.set('X-Content-Type-Options', 'nosniff');

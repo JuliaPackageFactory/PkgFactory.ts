@@ -11,8 +11,8 @@
   // stay disabled, and query strings (OAuth codes) are removed from any URL.
   "observability": {"enabled": true, "redact_query_string": true, "logs": {"invocation_logs": false}},
   "vars": {"ORIGIN": "https://pkgfactory-staging.ohnolab.workers.dev", "GITHUB_OAUTH_CLIENT_ID": "Ov23li7iF0SLvIWtqPyX", "KEY_ALGORITHM": "ed25519", "MAINTENANCE": "false"},
-  "durable_objects": {"bindings": [{"name": "STATE", "class_name": "ApplicationState"}, {"name": "AUTH", "class_name": "AuthState"}]},
-  "migrations": [{"tag": "v1", "new_sqlite_classes": ["ApplicationState", "AuthState"]}],
+  "durable_objects": {"bindings": [{"name": "AUTH", "class_name": "AuthState"}]},
+  "migrations": [{"tag": "v1", "new_sqlite_classes": ["ApplicationState", "AuthState"]}, {"tag": "v2", "deleted_classes": ["ApplicationState"]}],
   "kv_namespaces": [{"binding": "OAUTH_KV", "id": "646e8c10e0ac4f089ae34654751aa2cd"}],
   // namespace_id must be unique within the Cloudflare account; staging and
   // production keep separate counters.
@@ -25,7 +25,7 @@
     "name": "pkgfactory",
     "ai": {"binding": "AI"},
     "vars": {"ORIGIN": "https://pkgfactory.ohnolab.workers.dev", "GITHUB_OAUTH_CLIENT_ID": "Ov23liW9Mpoaeo70n071", "KEY_ALGORITHM": "ed25519", "MAINTENANCE": "false"},
-    "durable_objects": {"bindings": [{"name": "STATE", "class_name": "ApplicationState"}, {"name": "AUTH", "class_name": "AuthState"}]},
+    "durable_objects": {"bindings": [{"name": "AUTH", "class_name": "AuthState"}]},
     "kv_namespaces": [{"binding": "OAUTH_KV", "id": "7458325f1140408f9cc44ae5ad273e34"}],
     "ratelimits": [
       {"name": "SOURCE_RATE_LIMIT", "namespace_id": "7311", "simple": {"limit": 120, "period": 60}},

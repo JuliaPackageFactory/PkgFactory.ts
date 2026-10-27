@@ -26,7 +26,7 @@ export function assertFreshTestRepository(repository: string): void {
 }
 
 // Shared by Node and public MCP acceptance. A failed/uncertain call consumes the
-// only attempt too: the next operation must inspect and explicitly resume it.
+// only attempt too: the repository it may have left is inspected by hand.
 export class SingleCreation {
   private attempted = false;
   async run<T>(repository: string, create: () => Promise<T>): Promise<T> {

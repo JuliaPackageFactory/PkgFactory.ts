@@ -9,12 +9,11 @@ import { mcpHttp } from '../../../packages/pkgfactory/src/mcp/server.js';
 import { webAuth, session, sessionKeyValid, type Env } from './auth.js';
 import { oauthRoutes, refreshGitHub } from './oauth.js';
 import { registrationPolicy } from './consent.js';
-import { DurableStore } from './state.js';
 import { connectedJson } from './connection.js';
 import { suggestTemplate } from './template-suggestion.js';
 import { limited, securityEvent, sourceKey } from './limits.js';
-export { ApplicationState, AuthState } from './state.js';
-const factory = (env: Env, subject: string, beforeRequest?: () => Promise<void>) => new Factory(new DurableStore(env.STATE, subject), {algorithm: env.KEY_ALGORITHM ?? 'ed25519', beforeRequest});
+export { AuthState } from './auth-state.js';
+const factory = (env: Env, beforeRequest?: () => Promise<void>) => new Factory({algorithm: env.KEY_ALGORITHM ?? 'ed25519', beforeRequest});
 // Anonymous routes that write OAuth KV/AuthState or call GitHub. Web and MCP
 // requests from one GitHub account share ACCOUNT_RATE_LIMIT instead.
 const anonymousRoutes = new Set(['/authorize', '/callback', '/oauth/token', '/oauth/register', '/auth/login', '/auth/callback', '/auth/logout']);
@@ -34,12 +33,12 @@ async function web(request: Request, env: Env): Promise<Response> {
   const identity = await session(request, env);
   if (url.pathname === '/' && request.method === 'GET') return new Response(page(identity?.csrf ?? '', true, !!identity, env.ORIGIN, !!env.AI), {headers: {'Content-Type': 'text/html; charset=utf-8'}});
   if (url.pathname.startsWith('/api/')) {
-    if (!identity) return json({error: 'Connect GitHub to save and execute a preview'}, 401);
+    if (!identity) return json({error: 'Connect GitHub to preview and create a package'}, 401);
     if (request.method !== 'GET' && (request.headers.get('origin') !== env.ORIGIN || request.headers.get('x-pkgfactory-csrf') !== identity.csrf)) {securityEvent('csrf_rejected', request); return json({error: 'Invalid CSRF token or Origin'}, 403);}
     const limit = await accountLimit(env, identity.subject, request); if (limit) return limit;
     if (url.pathname === '/api/template-suggestion' && request.method === 'POST') return json(await suggestTemplate(env.AI, await readJson(request)));
-    if (url.pathname === '/api/create' || url.pathname === '/api/resume') return connectedJson(request, (signal, check) => api(new Request(request, {signal}), factory(env, identity.subject, check), identity.subject, () => identity));
-    return api(request, factory(env, identity.subject), identity.subject, () => identity);
+    if (url.pathname === '/api/create') return connectedJson(request, (signal, check) => api(new Request(request, {signal}), factory(env, check), () => identity));
+    return api(request, factory(env), () => identity);
   }
   return json({error: 'Not found'}, 404);
 }
@@ -47,16 +46,17 @@ function oauthProvider(env: Env) {return new OAuthProvider<Env>({
   apiRoute: '/mcp',
   apiHandler: {async fetch(request, env, ctx) {
     const props = ctx.props as {userId: string; githubToken: string};
+    const credentials = {subject: props.userId, token: props.githubToken};
     const limit = await accountLimit(env, props.userId, request); if (limit) return limit;
-    if (request.method !== 'POST') return mcpHttp(request, factory(env, props.userId), {subject: props.userId, token: props.githubToken});
+    if (request.method !== 'POST') return mcpHttp(request, factory(env), credentials);
     let payload: any;
     try {payload = await request.clone().json();} catch {return rpcError(-32700, 'Parse error');}
     // A batch would carry tools/call past the disconnect guard below. MCP
     // 2025-06-18 removed JSON-RPC batching; the SDK still accepts arrays.
     if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return rpcError(-32600, 'Send one JSON-RPC message per request.');
     // Notifications and protocol handshakes retain SDK status/header semantics.
-    if (payload.method !== 'tools/call') return mcpHttp(request, factory(env, props.userId), {subject: props.userId, token: props.githubToken});
-    return connectedJson(request, (signal, check) => mcpHttp(new Request(request, {signal}), factory(env, props.userId, check), {subject: props.userId, token: props.githubToken}));
+    if (payload.method !== 'tools/call') return mcpHttp(request, factory(env), credentials);
+    return connectedJson(request, (signal, check) => mcpHttp(new Request(request, {signal}), factory(env, check), credentials));
   }},
   defaultHandler: {fetch: web}, authorizeEndpoint: '/authorize', tokenEndpoint: '/oauth/token', clientRegistrationEndpoint: '/oauth/register',
   scopesSupported: ['pkgfactory'], resourceMetadata: {resource: env.ORIGIN + '/mcp', scopes_supported: ['pkgfactory']},
@@ -76,7 +76,7 @@ export default {
       if (url.pathname !== '/health' && (!env.GITHUB_OAUTH_CLIENT_SECRET || !env.GITHUB_OAUTH_CLIENT_ID || env.GITHUB_OAUTH_CLIENT_ID === 'CONFIGURE_ME')) return json({error: 'GitHub OAuth is not configured'}, 503);
       if (url.pathname !== '/health' && !sessionKeyValid(env.SESSION_KEY)) return json({error: 'SESSION_KEY must be 32 bytes of Base64'}, 503);
       if (url.pathname !== '/health' && (!env.SOURCE_RATE_LIMIT || !env.REGISTRATION_RATE_LIMIT || !env.ACCOUNT_RATE_LIMIT)) return json({error: 'Rate limiting is not configured'}, 503);
-      if (env.MAINTENANCE === 'true' && (url.pathname === '/mcp' || url.pathname === '/api/create' || url.pathname === '/api/resume')) return json({error: 'Maintenance: creation is temporarily paused'}, 503);
+      if (env.MAINTENANCE === 'true' && (url.pathname === '/mcp' || url.pathname === '/api/create')) return json({error: 'Maintenance: creation is temporarily paused'}, 503);
       if (anonymousRoutes.has(url.pathname)) {
         const source = await sourceKey(request, env);
         const limit = await limited(env.SOURCE_RATE_LIMIT, `source:${source}`, request)

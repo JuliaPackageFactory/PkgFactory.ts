@@ -11,6 +11,9 @@
 - GitHubトークンは利用者側が持つ。Webは `SESSION_KEY` で暗号化したCookie、CLIはプロセスメモリ、MCPはクライアントのトークンでしか復号できないgrant
 - 新しい状態を保存する前に、置かずに済む方法を先に検討する
 
+サーバーに残る状態は、`AuthState` のログイン制限カウンター・使用済みOAuth `state`・ログアウト済みセッションIDのハッシュと、MCPのgrant（KV。クライアントのトークンでしか復号できない）だけです。
+プランとジャーナルは保存しません。プレビューは純粋な計算で、作成は1回の要求の中で完了するか失敗し、再開機能はありません。
+
 ## 構成
 
 npm workspacesで `packages/pkgfactory`（公開npmパッケージ）と `apps/cloudflare`（Worker）を管理します。
@@ -19,12 +22,12 @@ npm workspacesで `packages/pkgfactory`（公開npmパッケージ）と `apps/c
 |---|---|
 | `packages/pkgfactory/src/core` | 入力検証（Zod）、Mustacheによるファイル生成、プランの固定とハッシュ、名前規則、Markdownエスケープ |
 | `packages/pkgfactory/src/github` | GitHub REST クライアント、Device Flow、Deploy key生成、Secretのsealed box、GitHub App導入状況 |
-| `packages/pkgfactory/src/application` | `Factory`（プレビュー・作成・照合・再開）と `StateStore` |
-| `packages/pkgfactory/src/node` | CLI、`FileStore`、ローカルWeb、資格情報の取得 |
+| `packages/pkgfactory/src/application` | `Factory`（プレビュー・作成） |
+| `packages/pkgfactory/src/node` | CLI、ローカルWeb、資格情報の取得 |
 | `packages/pkgfactory/src/web` | HTML、ブラウザー側スクリプト、`/api/*` ルート、共通のエラー応答 |
 | `packages/pkgfactory/src/mcp` | MCPサーバー（stdio / Streamable HTTP） |
 | `packages/pkgfactory/templates` | 3テンプレートの原本（58ファイル） |
-| `apps/cloudflare/src` | Worker本体、OAuth、セッション、Durable Objects、レート制限、切断検出、テンプレート推薦 |
+| `apps/cloudflare/src` | Worker本体、OAuth、セッションCookie、`AuthState` Durable Object、レート制限、切断検出、テンプレート推薦 |
 | `scripts` | ビルド、テンプレート埋め込み、E2E、配備確認 |
 | `test` | Nodeテストとworkerdテスト |
 
@@ -53,72 +56,36 @@ npm workspacesで `packages/pkgfactory`（公開npmパッケージ）と `apps/c
 - `.pkgfactory.json`: 回復マーカー。`planId`、`digest`、`uuid`、`state`、Project.tomlのSHA-256を持つ
 
 `validatePlan` は同じ入力と固定値から再生成して一致を確かめます。CLIの `--plan` はこの検証を通してから使います。
+クライアントがプレビューから保持するのは設定と `{id, uuid, createdAt}`（`PlanReference`）だけです。作成時に `restorePlan(spec, reference)` が同じファイルを再生成するため、サーバーはプランを保存しません。
 
 説明文は3通りに描画します。README向けはCommonMarkの記号をバックスラッシュでエスケープし、Documenter向けは固定の `@raw html` ブロック内のテキストとして `&<>` と記号をエンティティ化し、GitHubのdescriptionには原文を使います。
 
-## 状態
+## 作成手順
 
-```mermaid
-stateDiagram-v2
-    preview --> running: create
-    running --> complete: 完了マーカー
-    running --> paused: 失敗・切断・期限
-    paused --> running: リース期限後の明示的resume
-```
+`Factory.execute(plan, credentials, signal)` は1回の要求の中で次の順に進みます。ジャーナルは持ちません。
 
 | 項目 | 値 |
 |---|---|
-| プレビュー・完了結果の保持 | 15分 |
-| subjectごとの保存プラン数 | 16 |
-| 同時実行数 | 8 |
-| 実行リース | 150秒 |
 | 実行全体の期限 | 120秒 |
 | GitHub要求ごとの期限 | 30秒 |
 
-`subject` はGitHubユーザーIDです。実行前に `/user` を読み、保存されたsubjectと一致しないプランは拒否します。Nodeローカルアダプターはsubjectを `local` とし、この照合を省きます。
-`paused` と `running` の記録は期限削除の対象外です。リース期限は再開を許可する時刻です。
+1. `/user` を読み、`subject`（GitHubユーザーID）が資格情報の持ち主と一致することを確かめる。Nodeローカルアダプターはsubjectを `local` とし、この照合を省く
+2. 作成先のオーナー権限と、リポジトリが存在しないことを確かめる。存在すれば `code: exists` で止まり、何も書かない
+3. リポジトリを作成する（descriptionは利用者の入力）
+4. Contents APIでREADMEを置き、`main` を初期化する。コミット名は `Using PkgFactory`
+5. 全ファイルのtreeとコミットを作り、`main` を非強制で更新する。このコミットには `[skip ci]` を付ける。default branchが `main` でなければ変更する
+6. トピック `julia`、`juliapackagefactory` を設定する
+7. `simple` / `all-in-one` のみ: `gh-pages` ブランチ、Deploy key（書き込み可、タイトル `PkgFactory:<planId>`）、sealed boxで暗号化した `DOCUMENTER_KEY`、Pages（`gh-pages` の `/`）を設定する
+8. 回復マーカー `.pkgfactory.json` の `state` を `complete` に更新する。このコミットでpush CIが1回起動する
 
-| ストア | 用途 | 排他 |
-|---|---|---|
-| `MemoryStore` | ライブラリ埋め込み、テスト | Promiseチェーンによる直列化 |
-| `FileStore` | CLI、ローカルWeb、stdio MCP | `journal.lock` と一時ファイルのrename。複数プロセスで同じディレクトリを共有できる |
-| `DurableStore` | 公開Web・MCP | SQLite Durable Object `ApplicationState` でのCAS更新（最大20回再試行） |
+結果にはリポジトリのURLと、Pagesを設定した場合はそのURL（`pagesUrl`）を含めます。
 
-`ApplicationState` はメタデータと不変プランを別カラムに保存し、subject・リポジトリ・実行中リースに索引を置きます。
-トランザクションは自分のsubjectの記録と、排他判定に必要な他subjectの記録だけを読みます。
-旧KV形式の記録は初回起動時に移行し、プラン本体が欠けた記録は `recoveryError: 'missing_plan'` として隔離します（実行と期限削除を拒否し、ジャーナルとロックは残す）。
+## 失敗時
 
-## 作成手順
+通信例外、5xx、応答の読み取り失敗、429、切断、期限のいずれでも、以後のGitHub要求を送らず、`code: incomplete` のエラーで止まった段階とリポジトリのURLを返します。再開機能はありません。
+送信済みの要求がGitHubで完了した可能性は残るため、利用者はリポジトリを確認し、未完成なら削除してから作り直します。回復マーカーの `state` が `complete` でなければ未完成です。
 
-`Factory.execute` は次の順に進みます。各GitHub書き込みの前に `pending` をジャーナルへ保存し、成功後にチェックポイントを保存します。
-
-1. 現在のGitHub状態を読む（リポジトリ、default branchのhead、回復マーカー、Deploy key、`DOCUMENTER_KEY`、Pages）
-2. リポジトリを作成する。descriptionには一時的に `PkgFactory setup <planId>` を置く
-3. Contents APIでREADMEを置き、`main` を初期化する。コミット名は `Using PkgFactory`
-4. 全ファイルのtreeとコミットを作り、`main` を非強制で更新する。このコミットには `[skip ci]` を付ける
-5. default branchを `main`、descriptionを利用者の入力に変更する
-6. トピック `julia`、`juliapackagefactory` を追加する（既存のトピックは保持）
-7. `simple` / `all-in-one` のみ: `gh-pages` ブランチ、Deploy key（書き込み可）、sealed boxで暗号化した `DOCUMENTER_KEY`、Pages（`gh-pages` の `/`）を設定する
-8. 回復マーカーの `state` を `complete` に更新する。このコミットでpush CIが1回起動する
-
-各段階は既存の状態を読んでから書くため、再開時は未完了の段階だけを実行します。
-
-## 再開
-
-通信例外、5xx、応答の読み取り失敗、429は結果不明として扱います。
-切断や期限で `AbortSignal` が発火すると、以後のGitHub要求を送らず、ジャーナルの保存だけを行います。送信済みの要求がGitHubで完了した可能性は残ります。
-
-`resume` は次を照合してから再開します。
-
-- 保存したリポジトリIDと現在のIDが一致する
-- 回復マーカーの `planId` と `digest` がプランと一致する。マーカーがなければ、descriptionが `PkgFactory setup <planId>` である
-- マーカーがある場合、Project.tomlのSHA-256がマーカーの値と一致する
-- `main` が記録したコミットから進んでいない
-
-いずれかが一致しなければ拒否します。
-Secretは読み戻せないため、登録結果が不明なら新しい鍵ペアを作り直します。古い鍵は、そのプランが作ったもの（`PkgFactory:<planId>:` で始まるタイトル）だけを、Secret登録の成功後に削除します。
-
-鍵はWeb Cryptoで生成し、Ed25519はOpenSSH形式、RSA-4096はPKCS#1 PEM形式に変換します。
+鍵はWeb Cryptoで生成し、Ed25519はOpenSSH形式、RSA-4096はPKCS#1 PEM形式に変換します。秘密鍵はメモリにだけ存在し、どこにも保存しません。
 `DOCUMENTER_KEY` の値は秘密鍵PEMのBase64で、GitHubにはlibsodium互換のsealed boxで暗号化して送ります。
 
 ## Cloudflare Worker
@@ -164,7 +131,7 @@ Secretは読み戻せないため、登録結果が不明なら新しい鍵ペ�
 
 ### 切断検出
 
-`/api/create`、`/api/resume`、MCPの `tools/call` は、応答を先に開き、50ms間隔と各GitHub要求の直前に空白を書き込んで接続を確かめます。
+`/api/create` とMCPの `tools/call` は、応答を先に開き、50ms間隔と各GitHub要求の直前に空白を書き込んで接続を確かめます。
 書き込みに失敗すると `AbortSignal` を発火し、以後のGitHub要求を止めます。
 この応答ではHTTP 200のまま本文に `error`（MCPでは `isError`）が入ることがあります。
 
@@ -176,7 +143,7 @@ Secretは読み戻せないため、登録結果が不明なら新しい鍵ペ�
 - Base64で復号して32バイトになる `SESSION_KEY`
 - 3つのレート制限バインディング
 
-`MAINTENANCE=true` のとき、`/mcp`、`/api/create`、`/api/resume` は503を返します。
+`MAINTENANCE=true` のとき、`/mcp` と `/api/create` は503を返します。
 
 ### ログ
 
@@ -203,12 +170,11 @@ invocationログは無効にし、URLのクエリ文字列は削除します。
 | var | `ORIGIN` | Workerの公開origin。Host・Origin・Cookieの検証に使う |
 | var | `GITHUB_OAUTH_CLIENT_ID` | GitHub OAuth AppのClient ID |
 | var | `KEY_ALGORITHM` | `ed25519`（既定）または `rsa4096` |
-| var | `MAINTENANCE` | `true` で作成と再開を止める |
+| var | `MAINTENANCE` | `true` で作成を止める |
 | secret | `GITHUB_OAUTH_CLIENT_SECRET` | GitHub OAuth AppのClient secret |
 | secret | `SESSION_KEY` | 乱数32バイトのBase64 |
 | KV | `OAUTH_KV` | OAuth providerのクライアント・grant・トークン |
-| Durable Object | `STATE` (`ApplicationState`) | プランとジャーナル |
-| Durable Object | `AUTH` (`AuthState`) | ログイン制限、state消費、ログアウト済みセッションIDのハッシュ |
+| Durable Object | `AUTH` (`AuthState`) | ログイン制限、state消費、ログアウト済みセッションIDのハッシュ。旧 `ApplicationState` クラスはmigration `v2` で削除済み |
 | Rate limit | `SOURCE_RATE_LIMIT` `REGISTRATION_RATE_LIMIT` `ACCOUNT_RATE_LIMIT` | 上記のレート制限 |
 | AI | `AI` | テンプレート推薦 |
 
@@ -272,13 +238,13 @@ GitHubの `staging` / `production` environmentには、Cloudflareの **Edit Clou
 | tarball検証 | `node scripts/pack-smoke.mjs` | なし。`npm pack` の成果物をインストールしてCLI・stdio MCP・ローカルWebを起動する |
 | 生成パッケージのJulia実行 | CI `generated-julia` ジョブ | なし。3テンプレートで `Pkg.test` とdocsビルドを行い、説明文が実行されないことを確認する |
 | 固定リポジトリE2E | `npm run e2e:templates` | 既存3リポジトリへの差分commit/push |
-| 作成・再開の受入 | `npm run e2e`、`npm run e2e:staging` | 1回の実行で新規リポジトリ1件まで |
+| 作成の受入 | `npm run e2e`、`npm run e2e:staging` | 1回の実行で新規リポジトリ1件まで |
 
 `npm run check` は型検査、Nodeテスト、ビルド、workerdテストをまとめて実行します。
 
-Nodeテスト（`test/*.test.ts`）の対象: 説明文のエスケープと名前規則（`core`）、切断・他subject・競合・改変の拒否（`engine`）、プロフィールと組織オーナー判定（`github-context`）、ローカルWebと `FileStore` とstdio MCP（`local`）、Streamable HTTP（`mcp-http`）、セッション・同意画面・戻り先・PKCE（`auth`）、jsdomでのブラウザー側の挙動（`web-workflow`、`web-interactions`）、Jev応答の検証（`template-suggestion`）、本番配備前の照合（`release`）、ローカルGitでの固定リポジトリ更新（`e2e-repositories`）。
+Nodeテスト（`test/*.test.ts`）の対象: 説明文のエスケープと名前規則（`core`）、段階ごとの失敗・切断・他subject・既存リポジトリの拒否とプラン参照の再生成（`engine`）、プロフィールと組織オーナー判定（`github-context`）、ローカルWebとstdio MCP（`local`）、Streamable HTTP（`mcp-http`）、セッションCookie・同意画面・戻り先・PKCE（`auth`）、jsdomでのブラウザー側の挙動（`web-workflow`、`web-interactions`）、Jev応答の検証（`template-suggestion`）、本番配備前の照合（`release`）、ローカルGitでの固定リポジトリ更新（`e2e-repositories`）。
 
-workerdテスト（`test/worker/*.test.ts`）の対象: テンプレート生成のNodeとの一致、鍵生成とsealed box、ルートとDurable Objectの永続化、OAuth PKCEとCSRF、切断後の停止、ネイティブfetchでのWeb/MCP認可と3テンプレートの作成（`runtime`）、subjectごとの容量分離、旧形式の移行、欠損プランの隔離、ログインとアカウントのレート制限、`SESSION_KEY` の鍵長（`security`）。
+workerdテスト（`test/worker/*.test.ts`）の対象: テンプレート生成のNodeとの一致、鍵生成とsealed box、ルートとセッションCookie、OAuth PKCEとCSRF、切断後の停止、ネイティブfetchでのWeb/MCP認可と3テンプレートの作成（`runtime`）、ログインとアカウントのレート制限、`SESSION_KEY` の鍵長（`security`）。
 
 ### 固定リポジトリE2E
 
@@ -308,24 +274,20 @@ GitHub Actionsの `Template E2E tests` は、mainへのテンプレート関連�
 1. 対象3リポジトリに限定したfine-grained PAT（Contents: Read and write、Workflows: Read and write、Metadata: Read-only）をActions secret `PKGFACTORY_E2E_TOKEN` に登録する
 2. Actions variable `PKGFACTORY_TEMPLATE_E2E_ENABLED` を `true` にする
 
-### 作成・再開の受入
+### 作成の受入
 
-新規作成は `JuliaPackageFactory/TestYYYYMMDDHHMMSS.jl`（UTC）を1回の実行で1件だけ作ります。失敗や結果不明も1件に数え、保存したplanIdで再開します。
+新規作成は `JuliaPackageFactory/TestYYYYMMDDHHMMSS.jl`（UTC）を1回の実行で1件だけ作ります。失敗や結果不明も1件に数え、残ったリポジトリは手動で確認・削除します。
 
 ```sh
-# Node（状態は .tmp/e2e-state、記録は artifacts/github-e2e-*.json）
+# Node（記録は artifacts/github-e2e-*.json）
 npm run e2e -- --gh --template=simple --confirm-create-test-repository
-npm run e2e -- --gh --resume-plan=PLAN_ID --confirm-resume
 
 # ステージングの公開MCP（OAuth認可をブラウザーで行う。引数なしでは8同時プレビューのみ）
 npm run e2e:staging
 npm run e2e:staging -- --template=all-in-one --confirm-create-test-repository
-npm run e2e:staging -- --resume-plan=PLAN_ID --confirm-resume
-# 作成中にHTTP接続を切り、停止・照合・明示的再開を確認する
-npm run e2e:staging -- --template=simple --confirm-create-test-repository --confirm-disconnect-and-resume
 ```
 
-ステージングの記録は `artifacts/staging-{mcp,disconnect,resume}-*.json` に保存します。
+ステージングの記録は `artifacts/staging-mcp-*.json` に保存します。
 
 Deploy keyの実機検証には、その実行で作ったリポジトリに手動実行のワークフローを追加し、TagBotのSSH設定とタグpushを実行します。
 
@@ -336,6 +298,6 @@ npm run poc   # Ed25519 / RSA-4096 の鍵生成の計測
 
 ## 運用
 
-- **メンテナンス:** `MAINTENANCE=true` で配備すると作成と再開を止めます。この応答はGitHubの操作を始める前に返ります。
-- **残存ロック:** `status` で照合し、リース期限後に `resume` で再開します。照合に失敗した場合はリポジトリを手動で確認します。ローカルの `journal.lock` は、記録されたPIDが終了していることを確認できた場合にだけ取り除けます。
+- **メンテナンス:** `MAINTENANCE=true` で配備すると作成を止めます。この応答はGitHubの操作を始める前に返ります。
+- **未完成のリポジトリ:** 作成が途中で止まると、`code: incomplete` のエラーが段階とURLを示します。サーバーに記録は残りません。利用者がリポジトリを確認し、削除してから作り直します。
 - **認証エラー:** `code` が `oauth_client_credentials` ならClient IDとsecretの組、`oauth_redirect_uri` なら登録済みcallback URL、`oauth_code_invalid` ならコードの期限切れ・再利用、`oauth_scopes` なら `repo`/`workflow` の付与を確認します。

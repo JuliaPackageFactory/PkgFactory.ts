@@ -36,8 +36,8 @@ export async function snapshot(directory: string, target: Target) {
   if (plan.files['docs/src/index.md']) {
     plan.files['docs/src/index.md'] = plan.files['docs/src/index.md'].replace(documenterText(description), description);
   }
-  // The operation journal marker belongs to create/resume tests, not to these
-  // continuously regenerated snapshots, which have no Factory operation.
+  // The recovery marker belongs to repositories created by the engine, not to
+  // these continuously regenerated snapshots.
   delete plan.files[markerPath];
   return {files: plan.files, uuid};
 }

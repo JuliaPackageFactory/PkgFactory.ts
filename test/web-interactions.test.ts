@@ -29,14 +29,18 @@ async function fixture(options: {draft?: string; login?: string; suggestions?: b
     else if (url === '/api/github/apps') {await state.appsGate?.promise; if (state.appsFailure) throw Error('Network unavailable'); result = {codecov: {...state.app}, juliaregistrator: {state: 'unknown'}};}
     else if (url === '/api/preview') {
       if (state.failPreview) return {ok: false, status: 502, json: async () => ({error: 'Preview temporarily unavailable'})};
-      result = {id: `plan-${++nextPlan}`, repository: `${body.owner}/${body.name}.jl`, spec: body, files: {'Project.toml': body.description || 'Initial', 'src/TestPackage.jl': 'module TestPackage\nend'}};
+      result = {id: `plan-${++nextPlan}`, uuid: `uuid-${nextPlan}`, createdAt: '2026-01-02T03:04:05.000Z', repository: `${body.owner}/${body.name}.jl`, spec: body, files: {'Project.toml': body.description || 'Initial', 'src/TestPackage.jl': 'module TestPackage\nend'}};
     } else if (url === '/api/template-suggestion') {
       if (state.suggestionFailure) throw Error('Workers AI unavailable');
       if (state.suggestionApiError) return {ok: false, status: 502, json: async () => ({error: state.suggestionApiError, code: 'suggestion_upstream'})};
       result = state.suggestionGate ? await state.suggestionGate.promise : suggested;
-    } else if (url === '/api/create') result = await state.createGate.promise;
-    else if (url === '/api/status') result = {planId: body.planId, pagesUrl: 'https://docs.example.test/'};
-    else throw Error(`Unexpected request ${url}`);
+    } else if (url === '/api/create') {
+      // The browser must send back the previewed settings and the plan's fixed values.
+      assert.deepEqual(body.plan, {id: `plan-${nextPlan}`, uuid: `uuid-${nextPlan}`, createdAt: '2026-01-02T03:04:05.000Z'});
+      assert.equal(body.confirm, true); assert.equal(typeof body.name, 'string');
+      assert.equal(body.planId, undefined);
+      result = await state.createGate.promise;
+    } else throw Error(`Unexpected request ${url}`);
     return {ok: true, status: 200, json: async () => result};
   };
   w.matchMedia = () => ({matches: true});
@@ -442,7 +446,7 @@ test('failed creation exposes attention and cannot resubmit the same request', a
   try {
     f.input('package-name', 'TestPackage'); f.select('template', 'minimum'); await f.wait(f.ready);
     f.$('confirm').click(); f.$('create').click(); assert.equal(f.badge(5), 'Creating'); assert.equal(f.$('creation-progress').hidden, false);
-    f.state.createGate.resolve({error: 'Inspect status, then explicitly resume', code: 'resume'});
+    f.state.createGate.resolve({error: 'Setup of tester/TestPackage.jl stopped at the "tree" step.', code: 'incomplete'});
     await f.wait(() => !f.$('creation-error').hidden && f.$('create-spinner').hidden);
     assert.equal(f.badge(5), 'Needs attention'); assert.equal(f.$('create').disabled, true); assert.equal(f.$('creation-recovery').hidden, false);
     assert.equal(f.$('ai-handoff').hidden, true); assert.equal(f.badge(7), 'Upcoming');
@@ -455,7 +459,7 @@ test('success preserves review and combines relevant next steps in one plain par
   try {
     f.state.app = {state: 'installed', selection: 'selected'};
     f.input('package-name', 'TestPackage'); f.select('template', 'simple'); await f.wait(f.ready);
-    f.$('confirm').click(); f.$('create').click(); f.state.createGate.resolve({state: 'complete', repository: 'tester/TestPackage.jl'});
+    f.$('confirm').click(); f.$('create').click(); f.state.createGate.resolve({state: 'complete', repository: 'tester/TestPackage.jl', pagesUrl: 'https://docs.example.test/'});
     await f.wait(() => !f.$('success-panel').hidden && f.$('documentation-link').textContent === 'view your documentation');
     assert.equal(f.$('preview').hidden, false); assert.equal(f.$('actions-link').href, 'https://github.com/tester/TestPackage.jl/actions');
     assert.equal(f.$('documentation-link').href, 'https://docs.example.test/'); assert.equal(f.$('codecov-followup').hidden, false);
@@ -540,7 +544,7 @@ test('AI prompt copying falls back to selection and ignores stale clipboard comp
   try {
     const {$, w} = f;
     f.input('package-name', 'TestPackage'); f.select('template', 'minimum'); await f.wait(f.ready);
-    $('confirm').click(); $('create').click(); f.state.createGate.resolve({state: 'complete', repository: 'tester/TestPackage.jl'});
+    $('confirm').click(); $('create').click(); f.state.createGate.resolve({state: 'complete', repository: 'tester/TestPackage.jl', pagesUrl: 'https://docs.example.test/'});
     await f.wait(() => !$('ai-handoff').hidden && !$('create-another').disabled);
     for (const clipboard of [undefined, {writeText: async () => {throw Error('Permission denied');}}]) {
       Object.defineProperty(w.navigator, 'clipboard', {configurable: true, value: clipboard});
@@ -598,7 +602,7 @@ test('a private Minimum package has only the relevant Actions sentence after cre
   const f = await fixture();
   try {
     f.input('package-name', 'TestPackage'); f.select('template', 'minimum'); f.select('visibility', 'private'); await f.wait(f.ready);
-    f.$('confirm').click(); f.$('create').click(); f.state.createGate.resolve({state: 'complete', repository: 'tester/TestPackage.jl'});
+    f.$('confirm').click(); f.$('create').click(); f.state.createGate.resolve({state: 'complete', repository: 'tester/TestPackage.jl', pagesUrl: 'https://docs.example.test/'});
     await f.wait(() => !f.$('success-panel').hidden);
     for (const id of ['documentation-followup', 'codecov-followup', 'registration-guide']) assert.equal(f.$(id).hidden, true);
     const visible = f.$('next-steps').cloneNode(true); for (const hidden of visible.querySelectorAll('[hidden]')) hidden.remove();
