@@ -10,13 +10,14 @@ function fixture() {
 }
 const input = (template = 'simple') => ({owner: 'tester', name: 'TestPackage', authors: ['Tester'], template});
 const writes = (remote: FakeGitHub) => remote.calls.filter(c => c.method !== 'GET');
-for (const template of ['minimum', 'simple', 'all-in-one']) test(`create ${template} from a regenerated preview; an existing repository refuses every write`, async () => {
+for (const template of ['minimum', 'agentic', 'simple', 'all-in-one']) test(`create ${template} from a regenerated preview; an existing repository refuses every write`, async () => {
+  const docs = template === 'simple' || template === 'all-in-one';
   const {factory, remote} = fixture(); const previewed = await factory.preview(input(template));
   // Clients keep only the spec and the fixed values; the server regenerates the identical files.
   const plan = await restorePlan(previewed.spec, planReference(previewed));
   assert.deepEqual(plan, previewed);
   const result = await factory.execute(plan, credentials); assert.equal(result.state, 'complete');
-  assert.equal(result.pagesUrl, template === 'minimum' ? undefined : 'https://tester.github.io/Test.jl/');
+  assert.equal(result.pagesUrl, docs ? 'https://tester.github.io/Test.jl/' : undefined);
   assert.equal(remote.files['Project.toml'], plan.files['Project.toml']);
   assert.deepEqual(JSON.parse(remote.files['.pkgfactory.json']).state, 'complete');
   assert.deepEqual(remote.repository.topics, ['julia', 'juliapackagefactory']);
@@ -27,10 +28,10 @@ for (const template of ['minimum', 'simple', 'all-in-one']) test(`create ${templ
   assert.match(templateCommit.body.message, /\[skip ci\]/);
   const complete = remote.calls.find(c => c.method === 'PUT' && c.path.endsWith('/contents/.pkgfactory.json'))!;
   assert.doesNotMatch(complete.body.message, /\[skip ci\]/);
-  if (template !== 'minimum') {
+  if (docs) {
     assert(remote.calls.indexOf(complete) > remote.calls.findIndex(c => c.method === 'PUT' && c.path.endsWith('/DOCUMENTER_KEY')));
     assert.equal(remote.keys.length, 1); assert.equal(remote.keys[0].title, `PkgFactory:${plan.id}`);
-  }
+  } else assert.equal(remote.calls.some(c => c.path.endsWith('/pages') || c.path.endsWith('/keys') || c.path.endsWith('/DOCUMENTER_KEY')), false);
   const count = remote.calls.length;
   await assert.rejects(factory.execute(plan, credentials), /already exists/);
 

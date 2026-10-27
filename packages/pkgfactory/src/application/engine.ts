@@ -1,5 +1,5 @@
 import { planPackage, markerPath, type PackagePlan } from '../core/plan.js';
-import { specSchema } from '../core/spec.js';
+import { hasDocumentation, specSchema } from '../core/spec.js';
 import { base64, unbase64, utf8 } from '../core/encoding.js';
 import { GitHub, GitHubError } from '../github/client.js';
 import { organizationInstallations, unknownInstallations } from '../github/apps.js';
@@ -112,7 +112,7 @@ export class Factory {
       await write('files', 'PATCH', `${root}/git/refs/heads/main`, {sha: commit.sha, force: false});
       if (repo.default_branch !== 'main') await write('settings', 'PATCH', root, {default_branch: 'main'});
       await write('topics', 'PUT', `${root}/topics`, {names: ['julia', 'juliapackagefactory']});
-      if (plan.spec.template !== 'minimum') {
+      if (hasDocumentation(plan.spec.template)) {
         await write('gh-pages', 'POST', `${root}/git/refs`, {ref: 'refs/heads/gh-pages', sha: commit.sha});
         // The private key exists only in memory until it is sealed for GitHub.
         const key = await (this.options.keyGenerator ?? generateDeployKey)(this.options.algorithm ?? 'ed25519');

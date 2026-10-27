@@ -6,8 +6,8 @@ import {page} from '../packages/pkgfactory/src/web/page.js';
 const {JSDOM} = createRequire(import.meta.url)('jsdom');
 const {outputFiles} = await build({entryPoints: ['packages/pkgfactory/src/web/app.ts'], bundle: true, write: false, platform: 'browser'});
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-const suggested = {template: 'all-in-one', probabilities: {minimum: 0.05, simple: 0.15, 'all-in-one': 0.8}};
-const suggestionMessage = 'Jev recommends All-in-one. (minimum: 5%, simple: 15%, all-in-one: 80%)';
+const suggested = {template: 'all-in-one', probabilities: {minimum: 0.05, agentic: 0.05, simple: 0.1, 'all-in-one': 0.8}};
+const suggestionMessage = 'Jev recommends All-in-one. (minimum: 5%, agentic: 5%, simple: 10%, all-in-one: 80%)';
 const deferred = () => {let resolve!: (value?: any) => void; const promise = new Promise<any>(r => {resolve = r;}); return {promise, resolve};};
 async function fixture(options: {draft?: string; login?: string; suggestions?: boolean; language?: string} = {}) {
   const dom = new JSDOM(page('csrf', true, true, 'https://pkgfactory.test', options.suggestions), {url: 'https://pkgfactory.test/', runScripts: 'outside-only'});
@@ -86,9 +86,9 @@ test('typing announces suggestions without sending; keyboard focus starts infere
     assert.equal(f.count('/api/template-suggestion'), 1, 'Focus starts the request without advancing the clock');
     assert.deepEqual(f.calls.find(call => call.url === '/api/template-suggestion')!.body, {description: 'A Julia package for few-body Schrödinger equations.'});
     assert.equal(f.$('suggestion-message').textContent, 'Suggesting a template…');
-    pending.resolve({template: 'minimum', probabilities: {minimum: 0.8, simple: 0.15, 'all-in-one': 0.05}});
+    pending.resolve({template: 'minimum', probabilities: {minimum: 0.8, agentic: 0.05, simple: 0.1, 'all-in-one': 0.05}});
     await tick(0);
-    assert.equal(f.$('template-suggestion').textContent, 'Jev recommends Minimum. (minimum: 80%, simple: 15%, all-in-one: 5%)');
+    assert.equal(f.$('template-suggestion').textContent, 'Jev recommends Minimum. (minimum: 80%, agentic: 5%, simple: 10%, all-in-one: 5%)');
     assert.equal(f.$('template-suggestion').hidden, false);
     assert.equal(f.$('suggestion-spinner').hidden, true);
     assert.equal(f.$('template').value, 'simple');
@@ -180,7 +180,7 @@ test('suggestions discard stale responses and reset cancels pending work', async
     f.state.suggestionGate = undefined; await tick(6000);
     assert.equal(f.count('/api/template-suggestion'), 1);
     activateTemplate(f); await tick(0);
-    old.resolve({template: 'minimum', probabilities: {minimum: 1, simple: 0, 'all-in-one': 0}}); await tick(0);
+    old.resolve({template: 'minimum', probabilities: {minimum: 1, agentic: 0, simple: 0, 'all-in-one': 0}}); await tick(0);
     assert.equal(f.$('template-suggestion').textContent, suggestionMessage);
     assert.equal(f.$('suggestion-spinner').hidden, true);
     assert.equal(f.$('template').value, '');
@@ -267,7 +267,7 @@ test('suggestion timeout stops loading, refocusing retries, and late responses a
     f.state.suggestionGate = undefined; activateTemplate(f); await tick(0);
     assert.equal(f.count('/api/template-suggestion'), 2);
     assert.equal(f.$('template-suggestion').textContent, suggestionMessage);
-    pending.resolve({template: 'minimum', probabilities: {minimum: 1, simple: 0, 'all-in-one': 0}}); await tick(0);
+    pending.resolve({template: 'minimum', probabilities: {minimum: 1, agentic: 0, simple: 0, 'all-in-one': 0}}); await tick(0);
     assert.equal(f.$('template-suggestion').textContent, suggestionMessage);
     assert.equal(f.$('suggestion-spinner').hidden, true);
   } finally {f.close();}
@@ -292,8 +292,8 @@ test('probabilities use fixed option order and whole percentages, including zero
   const tick = suggestionClock(t, f);
   try {
     for (const [probabilities, expected] of [
-      [{'all-in-one': 0, simple: 0, minimum: 1}, 'minimum: 100%, simple: 0%, all-in-one: 0%'],
-      [{'all-in-one': 0.001, simple: 0.333, minimum: 0.666}, 'minimum: 67%, simple: 33%, all-in-one: 0%'],
+      [{'all-in-one': 0, simple: 0, agentic: 0, minimum: 1}, 'minimum: 100%, agentic: 0%, simple: 0%, all-in-one: 0%'],
+      [{'all-in-one': 0.001, simple: 0.333, agentic: 0, minimum: 0.666}, 'minimum: 67%, agentic: 0%, simple: 33%, all-in-one: 0%'],
     ] as const) {
       const pending = deferred(); f.state.suggestionGate = pending;
       f.input('description', expected); activateTemplate(f);
@@ -412,6 +412,21 @@ test('Minimum skips apps, reports field errors, preserves inspected files, and n
     await wait(() => !$('codecov-confirmation').hidden); assert.match($('codecov-detail').textContent, /Confirmed by you/);
     $('codecov-confirmed').click(); assert.equal($('codecov-state').textContent, 'Check on GitHub');
     assert.equal(f.badge(4), 'Ready'); assert.equal(f.badge(5), 'Upcoming'); assert.equal($('create').disabled, true);
+  } finally {f.close();}
+});
+
+test('Agentic is treated like Minimum: no app checks and no documentation automation', async () => {
+  const f = await fixture(); const {$, input, select, wait, ready} = f;
+  try {
+    input('package-name', 'TestPackage'); await wait(() => $('package-availability').classList.contains('is-available'));
+    select('template', 'agentic'); await wait(ready);
+    assert.equal(f.count('/api/github/apps'), 0);
+    for (const id of ['documenter', 'codecov']) {assert.equal($(`${id}-state`).textContent, 'Not included'); assert.equal($(`${id}-state`).className, 'configured-pill');}
+    assert.equal($('tagbot-state').textContent, 'Automatic'); assert.equal($('tagbot-state').className, 'configured-pill');
+    assert.equal($('codecov-detail').textContent, 'Coverage uploads are not included in this template.');
+    assert.match($('automation-description').textContent, /^Agentic includes package tests, quality checks, Runic formatting, CI, and TagBot releases./);
+    select('visibility', 'private'); await wait(ready); assert.equal($('private-docs-help').hidden, true);
+    assert.equal(f.calls.find(call => call.url === '/api/preview')!.body.template, 'agentic');
   } finally {f.close();}
 });
 

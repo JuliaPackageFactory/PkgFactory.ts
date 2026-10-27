@@ -53,7 +53,7 @@ pkgfactory mcp --stdio                                 # stdio MCPサーバー
 | `name` | パッケージ名。リポジトリ名は `<name>.jl` |
 | `authors` | 1〜20名 |
 | `description` | 省略可。READMEとdocsにはエスケープして埋め込み、GitHubのdescriptionには原文を使う |
-| `template` | `minimum` / `simple` / `all-in-one`（既定 `simple`） |
+| `template` | `minimum` / `agentic` / `simple` / `all-in-one`（既定 `simple`） |
 | `visibility` | `public` / `private`（既定 `public`） |
 
 パッケージ名の規則は[PkgFactory.jl](https://github.com/JuliaPackageFactory/PkgFactory.jl/blob/6cf2962ceab3e7ee3662d5bb980960fbb434a5f9/src/verification.jl)と同じです。
@@ -68,7 +68,8 @@ pkgfactory mcp --stdio                                 # stdio MCPサーバー
 | テンプレート | 内容 |
 |---|---|
 | `minimum` | パッケージ本体、テスト、CI |
-| `simple` | 上記 ＋ Documenter、TagBot、Codecov |
+| `agentic` | `minimum` ＋ Aqua、JET、ExplicitImports、Runic書式検査、doctest、CITATION.cff、Issue/PRテンプレート、Dependabot、TagBot、AIコーディングエージェント向けの `AGENTS.md`（ドキュメントサイトなし） |
+| `simple` | `minimum` ＋ Documenter、TagBot、Codecov |
 | `all-in-one` | 上記 ＋ Aqua、JET、ExplicitImports、Runic書式検査、CITATION.cff、Issue/PRテンプレート、Dependabot、ノートブック、`AGENTS.md` |
 
 `simple` と `all-in-one` では、作成時にDeploy keyと `DOCUMENTER_KEY` Secretを登録し、`gh-pages` ブランチとGitHub Pagesを設定します。

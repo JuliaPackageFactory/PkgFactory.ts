@@ -36,7 +36,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        template: [minimum, simple, all-in-one]
+        template: [minimum, agentic, simple, all-in-one]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -55,10 +55,10 @@ jobs:
         env:
           JET_TEST: 'true'
         working-directory: artifacts/generated/${{ matrix.template }}
-      - if: matrix.template != 'minimum'
+      - if: matrix.template == 'simple' || matrix.template == 'all-in-one'
         run: julia --project=docs --startup-file=no -e 'using Pkg; Pkg.develop(PackageSpec(path=pwd())); Pkg.instantiate(); include("docs/make.jl")'
         working-directory: artifacts/generated/${{ matrix.template }}
-      - if: matrix.template != 'minimum'
+      - if: matrix.template == 'simple' || matrix.template == 'all-in-one'
         run: node scripts/check-description.mjs artifacts/generated/${{ matrix.template }}
   deploy-staging:
     name: Deploy staging
