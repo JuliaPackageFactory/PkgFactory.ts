@@ -19,9 +19,12 @@ const setAiRepository = setupAiHandoff();
 setAiRepository();
 const displayedApps = appSlugs.filter(slug => document.getElementById(`${slug}-row`));
 let profileReady = false, working = false, available = false, previewReady = false, created = false;
-let planId = '', checkedAppsOwner = '', composing = false;
-let previewKey = '', previewRevision = 0, previewInFlight = false, previewPending = false, previewFailed = false, previewPreparedAt = 0;
-let previewTimer: ReturnType<typeof setTimeout> | undefined, previewExpiry: ReturnType<typeof setTimeout> | undefined;
+// The previewed plan lives only in this page. Creation sends its settings and
+// fixed values back, and the server regenerates the identical files.
+let previewedPlan: {id: string; uuid: string; createdAt: string; spec: Record<string, unknown>} | null = null;
+let checkedAppsOwner = '', composing = false;
+let previewKey = '', previewRevision = 0, previewInFlight = false, previewPending = false, previewFailed = false;
+let previewTimer: ReturnType<typeof setTimeout> | undefined;
 let creationTimer: ReturnType<typeof setInterval> | undefined;
 let availabilityRevision = 0, availabilityTimer: ReturnType<typeof setTimeout> | undefined, availabilityAbort: AbortController | undefined;
 let appsRevision = 0, appsAbort: AbortController | undefined, appsLoading = false;
@@ -128,8 +131,8 @@ function synchronizePreview(ready: boolean) {
     contentScroll = {top: element('content').scrollTop, left: element('content').scrollLeft};
   }
   previewKey = key; previewRevision++; previewReady = false; previewFailed = false; previewPending = !!key;
-  creationFailed = false;
-  clearTimeout(previewTimer); clearTimeout(previewExpiry);
+  creationFailed = false; previewedPlan = null;
+  clearTimeout(previewTimer);
   element('preview').hidden = true; element<HTMLInputElement>('confirm').checked = false; output.textContent = '';
   element('creation-error').hidden = true;
   element('creation-recovery').hidden = true;
@@ -377,13 +380,11 @@ async function preparePreview(revision: number) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 30000);
   try {
-    // Serialize requests so a superseded response can be replaced without storing
-    // a new plan for every edit. Never render it or reuse its confirmation.
-    const plan = await call('/api/preview', {...JSON.parse(previewKey), ...(planId ? {replacePlanId: planId} : {})}, controller.signal);
-    planId = plan.id;
+    // Serialize requests so a superseded response is never rendered or confirmed.
+    const plan = await call('/api/preview', JSON.parse(previewKey), controller.signal);
     if (revision !== previewRevision) return;
+    previewedPlan = {id: plan.id, uuid: plan.uuid, createdAt: plan.createdAt, spec: plan.spec};
     previewReady = true;
-    previewPreparedAt = Date.now();
     element('target').textContent = `${plan.repository} · ${plan.spec.visibility}`;
     element<HTMLInputElement>('confirm').checked = false;
     const container = element('files'); container.replaceChildren(); element('content').hidden = true;
@@ -404,9 +405,8 @@ async function preparePreview(revision: number) {
     element('preview').hidden = false; element('hint').textContent = `${Object.keys(plan.files).length} files. Select a file to inspect it.`;
     container.scrollTop = fileScroll;
     element('content').scrollTop = contentScroll.top; element('content').scrollLeft = contentScroll.left;
-    element('review-status').textContent = 'Review the files and confirm below. Changes to your settings update this preview automatically.';
     // Review is ready below automation. Keep the reader's focus in place.
-    previewExpiry = setTimeout(() => {previewKey = ''; controls();}, 14 * 60000);
+    element('review-status').textContent = 'Review the files and confirm below. Changes to your settings update this preview automatically.';
   } catch (error) {
     if (revision === previewRevision) {previewFailed = true; element('review-status').textContent = (error as Error).message;}
   } finally {
@@ -432,12 +432,12 @@ function creationProgress(active: boolean) {
   controls();
 }
 element('create').onclick = () => void busy(async () => {
-  if (creationFailed || authRequired || !previewReady || !element<HTMLInputElement>('confirm').checked || created) throw new Error('Review a fresh preview and tick the confirmation checkbox.');
-  if (Date.now() - previewPreparedAt >= 14 * 60000) {previewKey = ''; return;}
-  clearTimeout(previewExpiry); creationProgress(true); output.textContent = '';
+  const plan = previewedPlan;
+  if (creationFailed || authRequired || !previewReady || !plan || !element<HTMLInputElement>('confirm').checked || created) throw new Error('Review a fresh preview and tick the confirmation checkbox.');
+  creationProgress(true); output.textContent = '';
   element('creation-error').hidden = true;
   try {
-    const result = await call('/api/create', {planId, confirm: true});
+    const result = await call('/api/create', {...plan.spec, plan: {id: plan.id, uuid: plan.uuid, createdAt: plan.createdAt}, confirm: true});
     if (result.state !== 'complete') throw new Error(result.error || 'Setup did not finish.');
     created = true; previewReady = false;
     output.textContent = '';
@@ -450,11 +450,12 @@ element('create').onclick = () => void busy(async () => {
     element('documentation-followup').hidden = !hasAutomation(); docsLink.href = `${repositoryUrl}/settings/pages`;
     renderApps();
     controls(); focusStep(6);
-    if (hasAutomation()) void call('/api/status', {planId}).then(status => {
-      if (!created || status.planId !== planId || !status.pagesUrl) return;
-      const url = new URL(status.pagesUrl);
-      if (url.protocol === 'https:') {docsLink.href = url.href; docsLink.textContent = 'view your documentation';}
-    }).catch(() => { /* Keep the Pages settings link if the URL cannot be read. */ });
+    if (hasAutomation() && typeof result.pagesUrl === 'string') {
+      try {
+        const url = new URL(result.pagesUrl);
+        if (url.protocol === 'https:') {docsLink.href = url.href; docsLink.textContent = 'view your documentation';}
+      } catch { /* Keep the Pages settings link if the URL cannot be read. */ }
+    }
     void loadApps();
   } catch (error) {
     creationFailed = true;
@@ -465,7 +466,7 @@ element('create').onclick = () => void busy(async () => {
   finally {creationProgress(false);}
 });
 element('create-another').onclick = () => {
-  form.reset(); authors.value = defaultAuthor; planId = ''; created = false;
+  form.reset(); authors.value = defaultAuthor; previewedPlan = null; created = false;
   setAiRepository();
   creationFailed = false; authorsTouched = false; advancedToAutomation = false; selectedFile = ''; fileScroll = 0; contentScroll = {top: 0, left: 0};
   element('documentation-link').textContent = 'check documentation deployment';
