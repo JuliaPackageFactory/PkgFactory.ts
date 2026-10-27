@@ -17,8 +17,8 @@ export async function limitedBody(request: Request, limit: number) {
 }
 export function errorResponse(error: unknown) {
   if (error instanceof FactoryError) return json({error: error.message, code: error.code}, error.status);
-  if (error instanceof GitHubError) return json({error: `${error.message} Check status before explicit resume.`, ...(error.status === 401 ? {code: 'auth'} : {})}, error.status === 401 ? 401 : 502);
+  if (error instanceof GitHubError) return json({error: error.message, ...(error.status === 401 ? {code: 'auth'} : {})}, error.status === 401 ? 401 : 502);
   if (error instanceof ZodError) return json({error: error.issues.map(issue => `${issue.path.join('.') || 'input'}: ${issue.message}`).join('; ')}, 400);
   if (error instanceof SyntaxError) return json({error: 'Invalid request input'}, 400);
-  return json({error: 'Operation stopped. Inspect status before explicitly resuming.'}, 502);
+  return json({error: 'Operation stopped unexpectedly. Retry.'}, 502);
 }

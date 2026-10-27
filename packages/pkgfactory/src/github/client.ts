@@ -1,6 +1,6 @@
 export class GitHubError extends Error {
   constructor(public status: number, public uncertain: boolean, public requestId?: string, public fields?: string) {
-    super(`GitHub request failed (${status || 'network'}).${fields ? ` Fields: ${fields}.` : ''}${uncertain ? ' Outcome unknown; inspect status before explicit resume.' : ''}`);
+    super(`GitHub request failed (${status || 'network'}).${fields ? ` Fields: ${fields}.` : ''}${uncertain ? ' The outcome of that request is unknown.' : ''}`);
   }
 }
 export class GitHub {

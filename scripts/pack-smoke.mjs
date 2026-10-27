@@ -23,10 +23,10 @@ for (const template of ['minimum', 'simple']) {
   const plan = JSON.parse(execFileSync(process.execPath, [bin, 'preview', '--spec', spec], {encoding: 'utf8'}));
   assert.ok(plan.files['src/PackSmoke.jl']);
 }
-const env = {...process.env, GITHUB_TOKEN: '', GH_TOKEN: '', PKGFACTORY_STATE_DIR: `${destination}/state`};
+const env = {...process.env, GITHUB_TOKEN: '', GH_TOKEN: ''};
 const transport = new StdioClientTransport({command: process.execPath, args: [bin, 'mcp', '--stdio'], env, stderr: 'pipe'});
 const client = new Client({name: 'pack-smoke', version: '1'});
-try {await client.connect(transport); assert.equal((await client.listTools()).tools.length, 5);} finally {await client.close();}
+try {await client.connect(transport); assert.equal((await client.listTools()).tools.length, 3);} finally {await client.close();}
 const child = spawn(process.execPath, [bin, 'web', '--port', '0'], {env, stdio: ['ignore', 'ignore', 'pipe']});
 try {
   const origin = await new Promise((resolve, reject) => {

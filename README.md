@@ -29,8 +29,7 @@ node packages/pkgfactory/dist/cli.js --help
 pkgfactory templates                                   # テンプレート一覧
 pkgfactory preview --spec package.json --out plan.json # オフラインで生成内容を固定
 pkgfactory create --plan plan.json --yes --gh          # プランどおりに作成
-pkgfactory status --plan-id PLAN_UUID --gh             # GitHubの状態を照合
-pkgfactory resume --plan-id PLAN_UUID --yes --gh       # 中断した作成を明示的に再開
+pkgfactory create --spec package.json --yes --gh       # プレビューを省いて作成
 pkgfactory web --gh                                    # ローカルWeb（127.0.0.1:8787）
 pkgfactory mcp --stdio                                 # stdio MCPサーバー
 ```
@@ -61,9 +60,8 @@ pkgfactory mcp --stdio                                 # stdio MCPサーバー
 5〜100文字のASCII英数字、先頭は大文字、小文字を1文字以上含み、`Julia`/`julia` を含まず、`Ju` で始まらず、`jl` で終わらないこと。末尾の `.jl` はAPI・CLI・MCPでは取り除いて受け付けます。
 
 `preview` はネットワークなしで動き、プランID・パッケージUUID・全ファイルの内容を固定します。
-`create` と `resume` はそのプランに対してだけ動き、`--yes` を要求します。
-状態は `~/.pkgfactory/journal.json` に保存します（`--state-dir` または `PKGFACTORY_STATE_DIR` で変更）。
-同じディレクトリを使えば、CLI・ローカルWeb・stdio MCPの間で状態を共有できます。
+`create --plan` は保存したプランを再生成して一致を確かめてから作成し、`--yes` を要求します。
+状態はどこにも保存しません。
 
 ## テンプレート
 
@@ -83,7 +81,7 @@ pkgfactory mcp --stdio                                 # stdio MCPサーバー
 |---|---|
 | CLI / ローカルWeb | `GITHUB_TOKEN` または `GH_TOKEN`。`--gh` で `gh auth token`、`--device` でDevice Flow |
 | stdio MCP | `GITHUB_TOKEN` / `GH_TOKEN` または `--gh` |
-| 公開Web | GitHub OAuth 認可コード ＋ S256 PKCE。セッションはHttpOnly/Secure Cookie |
+| 公開Web | GitHub OAuth 認可コード ＋ S256 PKCE。セッションは暗号化したHttpOnly/Secure Cookieにだけ置き、サーバーには保存しない。有効期間は1時間 |
 | 公開MCP | OAuth 2.1（S256 PKCE）。GitHubへ上流認可する |
 
 Device Flowは、Device Flowを有効にしたOAuth AppのClient IDを `PKGFACTORY_GITHUB_CLIENT_ID`（または `--client-id`）に設定して使います。取得したトークンはプロセス内にだけ保持します。
@@ -104,43 +102,40 @@ Fine-grained PATを使う場合は、対象リポジトリの作成権限と、A
 - 公開Webでは、説明文からテンプレートを推薦します（Cloudflare Workers AIの `typesafe/jev`）。
 - 作成後はリポジトリ、Actions、ドキュメントへのリンクと、AIエージェント用のプロンプトを表示します。
 
-ローカルWebは `127.0.0.1` だけで待ち受け、Host・Origin・CSRFトークンを検証します。中断したプランはCLIかMCPの `status` / `resume` で扱います。
+ローカルWebは `127.0.0.1` だけで待ち受け、Host・Origin・CSRFトークンを検証します。プレビューはページの中にだけあり、作成時に設定と固定値を送り返してサーバーが同じファイルを再生成します。
 
 ## MCP
 
 | ツール | 内容 |
 |---|---|
 | `list_templates` | テンプレート一覧 |
-| `preview_package` | プランを生成して保存する。認証済みなら作成先の権限と既存リポジトリを確認する |
-| `repository_status` | 保存済みプランとGitHubの状態を照合する |
-| `create_package` | `planId` と `confirm: true` で作成する |
-| `resume_package` | `planId` と `confirm: true` で明示的に再開する |
+| `preview_package` | プランを生成して返す。認証済みなら作成先の権限と既存リポジトリを確認する。サーバーには保存しない |
+| `create_package` | プレビューと同じ設定に `plan: {id, uuid, createdAt}` と `confirm: true` を添えて作成する |
 
-`pkgfactory mcp --stdio --read-only` では `create_package` と `resume_package` を公開しません。
+`pkgfactory mcp --stdio --read-only` では `create_package` を公開しません。
 クライアント設定の例は [examples/mcp.json](examples/mcp.json) です。
 
 ## ライブラリ
 
 ```ts
-import { Factory, MemoryStore } from '@juliapackagefactory/pkgfactory';
+import { Factory } from '@juliapackagefactory/pkgfactory';
 
-const factory = new Factory(new MemoryStore());
-const plan = await factory.preview({owner: 'YourGitHubOwner', name: 'MyPackage', authors: ['You']}, subject);
+const factory = new Factory();
+const plan = await factory.preview({owner: 'YourGitHubOwner', name: 'MyPackage', authors: ['You']});
 // 利用者がプランを確認してから実行する
-await factory.execute(plan.id, {subject, token: githubToken}, false, signal);
+await factory.execute(plan, {subject, token: githubToken}, signal);
 ```
 
 `subject` はGitHubユーザーIDの文字列で、実行時にトークンの持ち主と照合します。
-`MemoryStore` はプロセス内だけの保存です。永続化するには `StateStore` を実装したストアを渡します。
+`Factory` は状態を持ちません。プランを後で使うなら `planReference(plan)` の `{id, uuid, createdAt}` と設定を保持し、`restorePlan(spec, reference)` で同じプランを再生成します。
 
-## 中断と再開
+## 失敗時
 
-GitHubへの書き込みは、送信前にジャーナルへ記録します。自動では再送しません。
-接続切断、120秒の実行期限、30秒の要求期限のいずれかで、以後のGitHub操作を止めます。
-結果が不明な操作はロックとして残り、150秒のリース期限後に `status` で照合してから `resume` で再開します。
-再開時はリポジトリID、回復マーカー `.pkgfactory.json`、Project.tomlを照合し、他人や別プランのリポジトリを上書きしません。
+接続切断、120秒の実行期限、30秒の要求期限、GitHubのエラーのいずれでも、以後のGitHub操作を止め、止まった段階とリポジトリのURLを含むエラーを返します。
+自動では再送せず、再開機能もありません。送信済みの操作がGitHubで完了している可能性があるため、リポジトリを確認し、未完成（`.pkgfactory.json` の `state` が `complete` でない）なら削除してから作り直してください。
+サーバーにも手元にも記録は残りません。
 
-秘密鍵は保存しません。Secret登録の結果が不明なら、再開時に新しい鍵ペアを作り、登録後にそのプランの古い鍵だけを削除します。
+秘密鍵は保存しません。生成直後に暗号化してGitHubのSecretに登録し、メモリから捨てます。
 Deploy keyは既定でEd25519です。`--key-algorithm rsa4096`（Workerでは `KEY_ALGORITHM=rsa4096`）でRSA-4096に切り替えられます。
 
 ## 開発

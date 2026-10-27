@@ -1,4 +1,5 @@
 import Mustache from 'mustache';
+import { z } from 'zod';
 import sources from './templates.json' with {type: 'json'};
 import { specSchema, type PackageSpec } from './spec.js';
 import { sha256 } from './encoding.js';
@@ -33,4 +34,13 @@ export async function planPackage(input: unknown, fixed?: {id: string; uuid: str
 export async function validatePlan(plan: PackagePlan): Promise<void> {
   const expected = await planPackage(plan.spec, {id: plan.id, uuid: plan.uuid, date: plan.createdAt});
   if (JSON.stringify(expected) !== JSON.stringify(plan)) throw new Error('Plan is invalid or was modified. Create a new preview.');
+}
+/** The fixed values a client keeps from a preview. Together with the same
+ * settings they regenerate the identical plan, so no plan is stored anywhere. */
+export const planReferenceSchema = z.object({id: z.uuid(), uuid: z.uuid(), createdAt: z.iso.datetime()}).strict();
+export type PlanReference = z.infer<typeof planReferenceSchema>;
+export const planReference = (plan: PackagePlan): PlanReference => ({id: plan.id, uuid: plan.uuid, createdAt: plan.createdAt});
+export async function restorePlan(spec: unknown, reference: unknown): Promise<PackagePlan> {
+  const fixed = planReferenceSchema.parse(reference);
+  return planPackage(spec, {id: fixed.id, uuid: fixed.uuid, date: fixed.createdAt});
 }
