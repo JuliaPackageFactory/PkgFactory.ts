@@ -43,5 +43,10 @@
     "typescript": "7.0.2",
     "wrangler": "4.151.1",
     "yaml": "2.9.1"
+  },
+  "allowScripts": {
+    "workerd@1.20260926.1": true,
+    "workerd@1.20261012.1": true,
+    "esbuild@0.28.2": true
   }
 }

@@ -2,6 +2,15 @@
 
 保守者とコーディングエージェント向けです。利用者向けの説明は [README.md](README.md) にあります。
 
+## 方針
+
+サーバーに置く情報は最小限にします。
+
+- サーバー（Durable Object、KV、ログ）に置くのは、GitHubから読み直せず、利用者側にも持たせられないものだけにする
+- 置く場合は、個人情報とトークンを含まない形（ハッシュ、カウンター、期限）にする
+- GitHubトークンは利用者側が持つ。Webは `SESSION_KEY` で暗号化したCookie、CLIはプロセスメモリ、MCPはクライアントのトークンでしか復号できないgrant
+- 新しい状態を保存する前に、置かずに済む方法を先に検討する
+
 ## 構成
 
 npm workspacesで `packages/pkgfactory`（公開npmパッケージ）と `apps/cloudflare`（Worker）を管理します。
@@ -131,9 +140,9 @@ Secretは読み戻せないため、登録結果が不明なら新しい鍵ペ�
 - ログイン開始時、`state`・PKCE verifier・10分の期限をAES-256-GCMで暗号化し、`__Host-pkgfactory-login` Cookieに置く
 - コールバックでCookieと `state` の一致と期限を検証し、`state` のハッシュを `AuthState` で一度だけ消費してから、認可コードを交換する
 - トークンのスコープに `repo` と `workflow` があることを確認し、`/user` でユーザーIDを得る
-- セッションはランダムIDとそのHMAC署名をCookie `__Host-pkgfactory-session` に置き、サーバーにはIDのハッシュをキーとして暗号化したセッションを8時間保存する。署名鍵と暗号鍵は `SESSION_KEY` からHKDFで別々に派生する
-- 復号できないセッション（`SESSION_KEY` 変更後など）は未ログインとして扱う
-- ログアウトはサーバーのセッションを削除し、GitHubのトークンをOAuth AppのAPIで失効させる
+- セッション `{id, subject, token, csrf, expiresAt}` は `SESSION_KEY` でAES-256-GCM暗号化（AADは `web-session:<ORIGIN>`）し、Cookie `__Host-pkgfactory-session` にだけ置く。サーバーにセッションは保存しない。期限は1時間で、Cookieの `Max-Age` と暗号文内の `expiresAt` の両方で検証する
+- 復号できないCookie（`SESSION_KEY` 変更後など）は未ログインとして扱う
+- ログアウトはGitHubのトークンをOAuth AppのAPIで失効させ、セッションIDのハッシュを期限まで `AuthState` に記録して同じCookieの再利用を拒む
 
 ### MCP OAuth
 
@@ -199,7 +208,7 @@ invocationログは無効にし、URLのクエリ文字列は削除します。
 | secret | `SESSION_KEY` | 乱数32バイトのBase64 |
 | KV | `OAUTH_KV` | OAuth providerのクライアント・grant・トークン |
 | Durable Object | `STATE` (`ApplicationState`) | プランとジャーナル |
-| Durable Object | `AUTH` (`AuthState`) | セッション、ログイン制限、state消費 |
+| Durable Object | `AUTH` (`AuthState`) | ログイン制限、state消費、ログアウト済みセッションIDのハッシュ |
 | Rate limit | `SOURCE_RATE_LIMIT` `REGISTRATION_RATE_LIMIT` `ACCOUNT_RATE_LIMIT` | 上記のレート制限 |
 | AI | `AI` | テンプレート推薦 |
 
@@ -214,7 +223,8 @@ invocationログは無効にし、URLのクエリ文字列は削除します。
 | Homepage URL | Workerのorigin |
 | Authorization callback URL | `<origin>/auth/callback`（Web）と `<origin>/callback`（MCP） |
 | Enable Device Flow | 本番は無効。公開Client IDだけで開始でき、本番アプリ名を使ったフィッシングに使えるため |
-| Expire user access tokens | 有効 |
+
+OAuth Appのトークンは期限切れしません（期限付きトークンはGitHub Appの機能です）。Webのログアウトで失効させ、それ以外は利用者がGitHubの設定でアプリの認可を取り消します。
 
 CLIの `--device` には、Device Flowを有効にした別のOAuth Appを使います。
 

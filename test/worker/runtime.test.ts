@@ -112,20 +112,17 @@ test('Worker routes, Durable Object persistence, OAuth PKCE and CSRF rejection',
     assert.deepEqual(await snapshot.json(), {revision: 0, entries: []});
     const cas = (revision: number) => stub.fetch('https://state', {method: 'POST', body: JSON.stringify({action: 'cas', subject: '42', revision, put: [], remove: []})});
     assert.equal((await cas(0)).status, 200); assert.equal((await cas(0)).status, 409);
-    // Seed an encrypted authenticated session to exercise the production route and store.
-    const authNs = await mf.getDurableObjectNamespace('AUTH'); const authStub = authNs.get(authNs.idFromName('auth-v1'));
-    const crypt = {SESSION_KEY: btoa('a'.repeat(32))};
-    const sid = 's'.repeat(43), csrf = 'csrf-test'; const key = `session:${await sha256(sid)}`;
-    await authStub.fetch('https://auth', {method: 'POST', body: JSON.stringify({action: 'put', key, ttl: 60000, value: await encrypt(crypt, {subject: '42', token: 'hidden', csrf}, key)})});
-    const headers = {Cookie: `__Host-pkgfactory-session=${await sessionCookieValue(crypt, sid)}`, Origin: 'https://pkgfactory.test', 'Content-Type': 'application/json', 'X-PkgFactory-CSRF': csrf};
-    // The stored ID alone, or with another ID's signature, is not a session.
-    for (const forged of [sid, `${sid}.${(await sessionCookieValue(crypt, 't'.repeat(43))).split('.')[1]}`]) {
+    // The browser cookie is the only copy of the session; nothing is seeded on the server.
+    const crypt = {SESSION_KEY: btoa('a'.repeat(32)), ORIGIN: 'https://pkgfactory.test'};
+    const csrf = 'csrf-test', current = {id: 's'.repeat(43), subject: '42', token: 'hidden', csrf, expiresAt: Date.now() + 60000};
+    const sessionCookie = await sessionCookieValue(crypt, current);
+    const headers = {Cookie: `__Host-pkgfactory-session=${sessionCookie}`, Origin: 'https://pkgfactory.test', 'Content-Type': 'application/json', 'X-PkgFactory-CSRF': csrf};
+    // Tampered ciphertext, another origin's cookie, or a past deadline is not a session.
+    for (const forged of [sessionCookie.slice(0, -6) + 'AAAAAA', await sessionCookieValue({...crypt, ORIGIN: 'https://other.test'}, current), await sessionCookieValue(crypt, {...current, expiresAt: Date.now() - 1})]) {
       assert.equal((await mf.dispatchFetch('https://pkgfactory.test/api/templates', {headers: {Cookie: `__Host-pkgfactory-session=${forged}`}})).status, 401);
     }
-    // A record that no longer decrypts (for example after SESSION_KEY rotation) signs out.
-    const rotated = 'r'.repeat(43), rotatedKey = `session:${await sha256(rotated)}`;
-    await authStub.fetch('https://auth', {method: 'POST', body: JSON.stringify({action: 'put', key: rotatedKey, ttl: 60000, value: await encrypt({SESSION_KEY: btoa('b'.repeat(32))}, {subject: '42', token: 'hidden', csrf}, rotatedKey)})});
-    const rotatedCookie = {Cookie: `__Host-pkgfactory-session=${await sessionCookieValue(crypt, rotated)}`};
+    // A cookie that no longer decrypts (for example after SESSION_KEY rotation) signs out.
+    const rotatedCookie = {Cookie: `__Host-pkgfactory-session=${await sessionCookieValue({...crypt, SESSION_KEY: btoa('b'.repeat(32))}, current)}`};
     const signedOut = await mf.dispatchFetch('https://pkgfactory.test/', {headers: rotatedCookie});
     assert.equal(signedOut.status, 200); assert.match(await signedOut.text(), /data-authenticated="false"/);
     assert.equal((await mf.dispatchFetch('https://pkgfactory.test/api/templates', {headers: rotatedCookie})).status, 401);

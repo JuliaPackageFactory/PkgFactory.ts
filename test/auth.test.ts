@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { encrypt, decrypt, exchangeGitHub, revokeGitHub, sessionKeyValid, type Env } from '../apps/cloudflare/src/auth.js';
+import { encrypt, decrypt, exchangeGitHub, revokeGitHub, session, sessionCookieValue, sessionKeyValid, type Env } from '../apps/cloudflare/src/auth.js';
 import { errorResponse } from '../packages/pkgfactory/src/web/http.js';
 import { deviceLogin } from '../packages/pkgfactory/src/github/device.js';
 import { consentNotices, redirectAllowed, registrationPolicy } from '../apps/cloudflare/src/consent.js';
@@ -43,13 +43,29 @@ test('logout revocation authenticates as the OAuth App and keeps the token out o
   for (const status of [404, 422, 302, 500]) assert.equal(await revokeGitHub(env, 'hidden-token', async () => new Response(null, {status})), false);
   assert.equal(await revokeGitHub(env, 'hidden-token', async () => {throw new TypeError('network');}), false);
 });
-test('session ciphertext is authenticated and bound to its server-side identifier', async () => {
+test('session ciphertext is authenticated and bound to its context', async () => {
   const env = {SESSION_KEY: btoa('s'.repeat(32))}; const session = {token: 'never-log', subject: '42'};
-  const encrypted = await encrypt(env, session, 'session:one');
+  const encrypted = await encrypt(env, session, 'web-session:one');
   assert.equal(JSON.stringify(encrypted).includes(session.token), false);
-  assert.deepEqual(await decrypt(env, encrypted, 'session:one'), session);
-  await assert.rejects(decrypt(env, encrypted, 'session:two'));
-  await assert.rejects(decrypt({SESSION_KEY: btoa('x'.repeat(32))}, encrypted, 'session:one'));
+  assert.deepEqual(await decrypt(env, encrypted, 'web-session:one'), session);
+  await assert.rejects(decrypt(env, encrypted, 'web-session:two'));
+  await assert.rejects(decrypt({SESSION_KEY: btoa('x'.repeat(32))}, encrypted, 'web-session:one'));
+});
+test('the session cookie is the only copy of the token and is bound to the origin, key and deadline', async () => {
+  const env = {SESSION_KEY: btoa('s'.repeat(32)), ORIGIN: 'https://pkgfactory.test', AUTH: {idFromName: () => 'auth', get: () => ({fetch: async () => Response.json(null)})}} as unknown as Env;
+  const value = {id: 'i'.repeat(43), subject: '42', token: 'never-log', csrf: 'c'.repeat(43), expiresAt: Date.now() + 60000};
+  const cookie = await sessionCookieValue(env, value);
+  assert.equal(cookie.includes(value.token), false); assert.equal(cookie.includes(value.subject), false);
+  const request = (c: string) => new Request('https://pkgfactory.test/', {headers: {Cookie: `__Host-pkgfactory-session=${c}`}});
+  assert.deepEqual(await session(request(cookie), env), value);
+  assert.equal(await session(request(await sessionCookieValue({...env, ORIGIN: 'https://other.test'}, value)), env), null);
+  assert.equal(await session(request(await sessionCookieValue({...env, SESSION_KEY: btoa('x'.repeat(32))}, value)), env), null);
+  assert.equal(await session(request(await sessionCookieValue(env, {...value, expiresAt: Date.now() - 1})), env), null);
+  assert.equal(await session(request(cookie.slice(0, -6) + 'AAAAAA'), env), null);
+  assert.equal(await session(new Request('https://pkgfactory.test/'), env), null);
+  // A revoked session ID, recorded at logout, refuses the same cookie without any stored token.
+  const revoked = {...env, AUTH: {idFromName: () => 'auth', get: () => ({fetch: async () => Response.json(true)})}} as unknown as Env;
+  assert.equal(await session(request(cookie), revoked), null);
 });
 test('SESSION_KEY must decode to exactly 32 bytes', () => {
   assert.equal(sessionKeyValid(btoa('k'.repeat(32))), true);

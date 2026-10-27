@@ -82,7 +82,7 @@ pkgfactory mcp --stdio                                 # stdio MCPサーバー
 |---|---|
 | CLI / ローカルWeb | `GITHUB_TOKEN` または `GH_TOKEN`。`--gh` で `gh auth token`、`--device` でDevice Flow |
 | stdio MCP | `GITHUB_TOKEN` / `GH_TOKEN` または `--gh` |
-| 公開Web | GitHub OAuth 認可コード ＋ S256 PKCE。セッションはHttpOnly/Secure Cookie |
+| 公開Web | GitHub OAuth 認可コード ＋ S256 PKCE。セッションは暗号化したHttpOnly/Secure Cookieにだけ置き、サーバーには保存しない。有効期間は1時間 |
 | 公開MCP | OAuth 2.1（S256 PKCE）。GitHubへ上流認可する |
 
 Device Flowは、Device Flowを有効にしたOAuth AppのClient IDを `PKGFACTORY_GITHUB_CLIENT_ID`（または `--client-id`）に設定して使います。取得したトークンはプロセス内にだけ保持します。

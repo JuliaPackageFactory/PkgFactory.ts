@@ -124,8 +124,8 @@ test('login flood is throttled per source without exhausting sessions; parallel 
     },
   }));
   try {
-    const auth = await stateStub(mf, 'AUTH', 'auth-v1'), sid = 's'.repeat(43), key = `session:${await sha256(sid)}`;
-    await call(auth, {action: 'put', key, value: await encrypt(crypt, {subject: '42', token: 'test', csrf: 'test'}, key), ttl: 60000});
+    const auth = await stateStub(mf, 'AUTH', 'auth-v1');
+    const env = {...crypt, ORIGIN: 'https://pkgfactory.test'};
     let login!: Response;
     for (let i = 0; i < 21; i++) {
       login = await mf.dispatchFetch('https://pkgfactory.test/auth/login', {redirect: 'manual', headers: {'CF-Connecting-IP': '192.0.2.1'}}) as unknown as Response;
@@ -144,7 +144,7 @@ test('login flood is throttled per source without exhausting sessions; parallel 
     assert.equal(prefix.status, 302, 'A different /64 has its own limit');
     const mapped = await mf.dispatchFetch('https://pkgfactory.test/auth/login', {redirect: 'manual', headers: {'CF-Connecting-IP': '::ffff:192.0.2.1'}});
     assert.equal(mapped.status, 429, 'Mapped IPv4 shares the IPv4 limit');
-    const headers = {Cookie: `__Host-pkgfactory-session=${await sessionCookieValue(crypt, sid)}`};
+    const headers = {Cookie: `__Host-pkgfactory-session=${await sessionCookieValue(env, {id: 's'.repeat(43), subject: '42', token: 'test', csrf: 'test', expiresAt: Date.now() + 60000})}`};
     assert.equal((await mf.dispatchFetch('https://pkgfactory.test/api/templates', {headers})).status, 200);
     const fresh = await mf.dispatchFetch('https://pkgfactory.test/auth/login', {redirect: 'manual', headers: {'CF-Connecting-IP': '192.0.2.2'}});
     assert.equal(fresh.status, 302);
@@ -182,12 +182,8 @@ test('anonymous OAuth writes are limited per source and API use per GitHub accou
     assert.equal((await mf.dispatchFetch('https://pkgfactory.test/auth/login', {redirect: 'manual', headers: {'CF-Connecting-IP': '192.0.2.20'}})).status, 429);
     assert.equal((await mf.dispatchFetch('https://pkgfactory.test/health', {headers: {'CF-Connecting-IP': '192.0.2.20'}})).status, 200);
     // Signed-in API calls count per GitHub account, so users behind one address stay independent.
-    const auth = await stateStub(mf, 'AUTH', 'auth-v1');
-    const signIn = async (subject: string) => {
-      const sid = subject.repeat(43).slice(0, 43), key = `session:${await sha256(sid)}`;
-      await call(auth, {action: 'put', key, value: await encrypt(crypt, {subject, token: 'test', csrf: 'test'}, key), ttl: 60000});
-      return {Cookie: `__Host-pkgfactory-session=${await sessionCookieValue(crypt, sid)}`, 'CF-Connecting-IP': '192.0.2.30'};
-    };
+    const signIn = async (subject: string) => ({Cookie: `__Host-pkgfactory-session=${await sessionCookieValue({...crypt, ORIGIN: 'https://pkgfactory.test'},
+      {id: subject.repeat(43).slice(0, 43), subject, token: 'test', csrf: 'test', expiresAt: Date.now() + 60000})}`, 'CF-Connecting-IP': '192.0.2.30'});
     const first = await signIn('4'), second = await signIn('5');
     for (const expected of [200, 200, 200, 429]) assert.equal((await mf.dispatchFetch('https://pkgfactory.test/api/templates', {headers: first})).status, expected);
     assert.equal((await mf.dispatchFetch('https://pkgfactory.test/api/templates', {headers: second})).status, 200);
