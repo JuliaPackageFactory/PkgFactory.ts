@@ -22,20 +22,7 @@ import {{{PKG}}}; {{{PKG}}}.hello()  # returns "Hello, World!"
 
 ## Development
 
-Please open an [issue](https://github.com/{{{OWNER}}}/{{{PKG}}}.jl/issues) to discuss significant changes before you start on them.
-For collaboration, we follow the [ColPrac](https://github.com/SciML/ColPrac) guidelines.
-Everyone who changes this package, people and AI coding agents alike, follows [AGENTS.md](AGENTS.md).
-
-## Releasing
-
-This package follows [Semantic Versioning](https://semver.org/). To release a version:
-
-1. Set the same version in [Project.toml](Project.toml) (`version`) and [CITATION.cff](CITATION.cff)
-   (`version`, and `date-released` to the release date).
-2. Register the version with [Registrator](https://github.com/JuliaRegistries/Registrator.jl#via-the-github-app)
-   by commenting `@JuliaRegistrator register` on the release commit.
-3. After the registration is merged, [TagBot](https://github.com/JuliaRegistries/TagBot) creates the tag
-   and the GitHub release automatically.
+Please open an [issue](https://github.com/{{{OWNER}}}/{{{PKG}}}.jl/issues) to discuss significant changes before you start on them. For collaboration, we follow the [ColPrac](https://github.com/SciML/ColPrac) guidelines. Both human developers and AI coding agents must follow [AGENTS.md](AGENTS.md).
 
 ## Citation
 
