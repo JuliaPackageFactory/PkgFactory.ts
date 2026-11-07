@@ -1,8 +1,8 @@
 import OAuthProvider from '@cloudflare/workers-oauth-provider';
 import { Factory } from '../../../packages/pkgfactory/src/application/engine.js';
-import { api } from '../../../packages/pkgfactory/src/web/routes.js';
-import { page } from '../../../packages/pkgfactory/src/web/page.js';
-import { json, errorResponse, limitedBody, readJson } from '../../../packages/pkgfactory/src/web/http.js';
+import { api } from '../../../packages/pkgfactory/src/web/server/routes.js';
+import { page } from '../../../packages/pkgfactory/src/web/server/page.js';
+import { json, errorResponse, limitedBody, readJson } from '../../../packages/pkgfactory/src/web/server/http.js';
 import assets from '../../../packages/pkgfactory/src/web/assets.json' with {type: 'json'};
 import { unbase64 } from '../../../packages/pkgfactory/src/core/encoding.js';
 import { mcpHttp } from '../../../packages/pkgfactory/src/mcp/server.js';

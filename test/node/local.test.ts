@@ -5,16 +5,16 @@ import { resolve } from 'node:path';
 import { request as httpRequest } from 'node:http';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { Factory } from '../packages/pkgfactory/src/application/engine.js';
-import { localWeb } from '../packages/pkgfactory/src/node/web.js';
-import { FakeGitHub } from './fake-github.js';
+import { Factory } from '../../packages/pkgfactory/src/application/engine.js';
+import { localWeb } from '../../packages/pkgfactory/src/node/web.js';
+import { FakeGitHub } from '../support/fake-github.js';
 test('local Web serves the bundled hero image before connecting GitHub', async () => {
   const {server, origin} = await localWeb(new Factory({local: true}), undefined, 0);
   try {
     const hero = await fetch(origin + '/assets/hero.png');
     assert.equal(hero.status, 200);
     assert.equal(hero.headers.get('content-type'), 'image/png');
-    assert.deepEqual(Buffer.from(await hero.arrayBuffer()), await readFile(new URL('../packages/pkgfactory/src/web/hero.png', import.meta.url)));
+    assert.deepEqual(Buffer.from(await hero.arrayBuffer()), await readFile(new URL('../../packages/pkgfactory/src/web/assets/hero.png', import.meta.url)));
   } finally {server.closeAllConnections(); await new Promise<void>(r => server.close(() => r()));}
 });
 

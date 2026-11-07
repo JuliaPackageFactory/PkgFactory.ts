@@ -1,5 +1,5 @@
 import { Factory } from '../../packages/pkgfactory/src/application/engine.js';
-import { FakeGitHub } from '../fake-github.js';
+import { FakeGitHub } from './fake-github.js';
 import { connectedJson } from '../../apps/cloudflare/src/connection.js';
 const remote = new FakeGitHub();
 let delayed = false;

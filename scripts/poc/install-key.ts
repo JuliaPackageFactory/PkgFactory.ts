@@ -1,16 +1,16 @@
 // Adds a test-only workflow to one of this runner's disposable repositories.
 import { readFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
-import { GitHub } from '../packages/pkgfactory/src/github/client.js';
-import { base64, utf8, unbase64, decode } from '../packages/pkgfactory/src/core/encoding.js';
+import { GitHub } from '../../packages/pkgfactory/src/github/client.js';
+import { base64, utf8, unbase64, decode } from '../../packages/pkgfactory/src/core/encoding.js';
 import { setTimeout as delay } from 'node:timers/promises';
-import { assertFreshTestRepository } from './e2e/config.js';
+import { assertFreshTestRepository } from '../e2e/config.js';
 const repository = process.argv[2];
 if (!repository || !process.argv.includes('--confirm')) throw new Error('Supply the existing TestYYYYMMDDHHMMSS.jl repository from the acceptance run and --confirm');
 assertFreshTestRepository(repository);
 const token = process.env.GITHUB_TOKEN || execFileSync('gh', ['auth', 'token'], {encoding: 'utf8'}).trim();
 const github = new GitHub(token, AbortSignal.timeout(120000));
-const python = await readFile('scripts/poc-tagbot.py', 'utf8');
+const python = await readFile('scripts/poc/tagbot.py', 'utf8');
 const workflow = `name: Deploy key acceptance\non:\n  workflow_dispatch:\npermissions:\n  contents: write\njobs:\n  key:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n        with:\n          persist-credentials: false\n      - uses: actions/setup-python@v5\n        with:\n          python-version: '3.12'\n      - run: pip install 'tagbot @ git+https://github.com/JuliaRegistries/TagBot.git@6e5c8281b63a21cc520fddebc89982dfe1807c91'\n      - name: Actual TagBot SSH setup and push\n        env:\n          DOCUMENTER_KEY: \${{ secrets.DOCUMENTER_KEY }}\n          GITHUB_TOKEN: \${{ secrets.GITHUB_TOKEN }}\n        run: |\n          python - <<'PY'\n${python.trim().split('\n').map(s => '          ' + s).join('\n')}\n          PY\n`;
 const path = `/repos/${repository}/contents/.github/workflows/DeployKeyPoc.yml`;
 const existing = await github.request('GET', path, undefined, true);

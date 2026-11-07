@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {releaseRevision} from '../scripts/release-revision.ts';
+import {releaseRevision} from '../../scripts/release-revision.ts';
 
 const repository = 'JuliaPackageFactory/PkgFactory.ts';
 function fixture() {

@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { Factory } from '../packages/pkgfactory/src/application/engine.js';
-import { restorePlan, planReference } from '../packages/pkgfactory/src/core/plan.js';
-import { FakeGitHub } from './fake-github.js';
+import { Factory } from '../../packages/pkgfactory/src/application/engine.js';
+import { restorePlan, planReference } from '../../packages/pkgfactory/src/core/plan.js';
+import { FakeGitHub } from '../support/fake-github.js';
 const credentials = {token: 'never-log-this', subject: '42'};
 function fixture() {
   const remote = new FakeGitHub();

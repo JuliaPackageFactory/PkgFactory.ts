@@ -1,6 +1,6 @@
-import { Factory, type Credentials } from '../application/engine.js';
-import { listTemplates } from '../core/spec.js';
-import { restorePlan } from '../core/plan.js';
+import { Factory, type Credentials } from '../../application/engine.js';
+import { listTemplates } from '../../core/spec.js';
+import { restorePlan } from '../../core/plan.js';
 import { json, readJson } from './http.js';
 export async function api(request: Request, factory: Factory, credentials: () => Credentials) {
   const path = new URL(request.url).pathname;

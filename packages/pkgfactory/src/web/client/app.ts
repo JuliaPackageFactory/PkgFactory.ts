@@ -1,7 +1,7 @@
 import './header.js';
-import { appSlugs, unknownInstallations, type AppInstallations } from '../github/apps.js';
+import { appSlugs, unknownInstallations, type AppInstallations } from '../../github/apps.js';
 import { normalizeAuthorSeparators, parseAuthors, workflowStates } from './workflow.js';
-import { packageNameError } from '../core/package-name.js';
+import { packageNameError } from '../../core/package-name.js';
 import { setupAiHandoff } from './ai-handoff.js';
 
 const element = <T = HTMLElement>(id: string) => document.getElementById(id) as T;

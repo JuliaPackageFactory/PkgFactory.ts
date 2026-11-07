@@ -7,8 +7,8 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { auth, type OAuthClientProvider } from '@modelcontextprotocol/sdk/client/auth.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { OAuthClientInformationMixed, OAuthTokens } from '@modelcontextprotocol/sdk/shared/auth.js';
-import { escapeHtml } from '../packages/pkgfactory/src/web/http.js';
-import { freshTestName, selectedTemplate, SingleCreation } from './e2e/config.js';
+import { escapeHtml } from '../../packages/pkgfactory/src/web/server/http.js';
+import { freshTestName, selectedTemplate, SingleCreation } from './config.js';
 
 const origin = 'https://pkgfactory-staging.ohnolab.workers.dev';
 const serverUrl = new URL('/mcp', origin);

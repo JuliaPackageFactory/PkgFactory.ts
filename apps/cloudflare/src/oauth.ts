@@ -1,5 +1,5 @@
 import { AuthorizationError, CimdFetchError, OAuthError, type TokenExchangeCallbackOptions } from '@cloudflare/workers-oauth-provider';
-import { json, escapeHtml as e } from '../../../packages/pkgfactory/src/web/http.js';
+import { json, escapeHtml as e } from '../../../packages/pkgfactory/src/web/server/http.js';
 import { randomToken } from '../../../packages/pkgfactory/src/core/encoding.js';
 import { GitHub } from '../../../packages/pkgfactory/src/github/client.js';
 import { githubAuthorize, exchangeGitHub, type Env } from './auth.js';

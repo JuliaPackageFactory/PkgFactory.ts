@@ -1,7 +1,7 @@
 import type { OAuthHelpers } from '@cloudflare/workers-oauth-provider';
 import { base64, base64url, unbase64, unbase64url, randomToken, sha256, utf8, decode } from '../../../packages/pkgfactory/src/core/encoding.js';
 import { GitHub } from '../../../packages/pkgfactory/src/github/client.js';
-import { json } from '../../../packages/pkgfactory/src/web/http.js';
+import { json } from '../../../packages/pkgfactory/src/web/server/http.js';
 import { FactoryError } from '../../../packages/pkgfactory/src/application/engine.js';
 import { securityEvent, sourceKey, tooManyRequests } from './limits.js';
 export interface Env {

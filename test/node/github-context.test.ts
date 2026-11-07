@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { Factory } from '../packages/pkgfactory/src/application/engine.js';
-import { api } from '../packages/pkgfactory/src/web/routes.js';
-import { page } from '../packages/pkgfactory/src/web/page.js';
-import { packageNameError } from '../packages/pkgfactory/src/core/package-name.js';
+import { Factory } from '../../packages/pkgfactory/src/application/engine.js';
+import { api } from '../../packages/pkgfactory/src/web/server/routes.js';
+import { page } from '../../packages/pkgfactory/src/web/server/page.js';
+import { packageNameError } from '../../packages/pkgfactory/src/core/package-name.js';
 
 const credentials = {subject: '42', token: 'private-token'};
 const membership = (login: string, role = 'admin', state = 'active') => ({role, state, organization: {login}});

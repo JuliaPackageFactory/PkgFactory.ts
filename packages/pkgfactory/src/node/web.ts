@@ -1,8 +1,8 @@
 import { createServer } from 'node:http';
 import { Factory, FactoryError } from '../application/engine.js';
-import { api } from '../web/routes.js';
-import { page } from '../web/page.js';
-import { json, errorResponse } from '../web/http.js';
+import { api } from '../web/server/routes.js';
+import { page } from '../web/server/page.js';
+import { json, errorResponse } from '../web/server/http.js';
 import assets from '../web/assets.json' with {type: 'json'};
 import { randomToken, unbase64 } from '../core/encoding.js';
 export async function localWeb(factory: Factory, token: string | undefined, port = 8787, parentSignal?: AbortSignal) {

@@ -5,8 +5,8 @@ import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createRequire } from 'node:module';
-import { generateDeployKey, sealSecret } from '../packages/pkgfactory/src/github/keys.js';
-import { unbase64, decode } from '../packages/pkgfactory/src/core/encoding.js';
+import { generateDeployKey, sealSecret } from '../../packages/pkgfactory/src/github/keys.js';
+import { unbase64, decode } from '../../packages/pkgfactory/src/core/encoding.js';
 for (const algorithm of ['ed25519', 'rsa4096'] as const) test(`${algorithm}: OpenSSH reads generated private key`, async () => {
   const key = await generateDeployKey(algorithm);
   const dir = await mkdtemp(join(tmpdir(), 'pkgfactory-key-'));

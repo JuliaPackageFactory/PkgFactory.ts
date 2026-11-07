@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { suggestTemplate } from '../apps/cloudflare/src/template-suggestion.js';
-import { listTemplates } from '../packages/pkgfactory/src/core/spec.js';
-import { errorResponse } from '../packages/pkgfactory/src/web/http.js';
+import { suggestTemplate } from '../../apps/cloudflare/src/template-suggestion.js';
+import { listTemplates } from '../../packages/pkgfactory/src/core/spec.js';
+import { errorResponse } from '../../packages/pkgfactory/src/web/server/http.js';
 
 const ai = (run: (model: string, input: any, options?: AiOptions) => Promise<unknown>) => ({run} as Pick<Ai, 'run'>);
 const probabilities = {minimum: 0.05, simple: 0.15, 'all-in-one': 0.8};

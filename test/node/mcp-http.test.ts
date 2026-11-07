@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mcpHttp } from '../packages/pkgfactory/src/mcp/server.js';
-import { Factory } from '../packages/pkgfactory/src/application/engine.js';
-import { FakeGitHub } from './fake-github.js';
+import { mcpHttp } from '../../packages/pkgfactory/src/mcp/server.js';
+import { Factory } from '../../packages/pkgfactory/src/application/engine.js';
+import { FakeGitHub } from '../support/fake-github.js';
 test('Streamable HTTP negotiates, lists tools, previews and creates with request cancellation', async () => {
   const remote = new FakeGitHub(); const factory = new Factory({fetcher: remote.fetch});
   const credentials = {subject: '42', token: 'secret'};

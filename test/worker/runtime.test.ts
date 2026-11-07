@@ -8,12 +8,12 @@ import { createRequire } from 'node:module';
 import { planPackage } from '../../packages/pkgfactory/src/core/plan.js';
 import { encrypt, decrypt, sessionCookieValue } from '../../apps/cloudflare/src/auth.js';
 import { sha256, base64url, unbase64url, decode, utf8 } from '../../packages/pkgfactory/src/core/encoding.js';
-import { FakeGitHub } from '../fake-github.js';
+import { FakeGitHub } from '../support/fake-github.js';
 const options = {modules: true as const, compatibilityDate: '2026-09-27', compatibilityFlags: ['enable_request_signal', 'global_fetch_strictly_public']};
 // Functional tests use generous limits; security.test.ts exercises exhaustion.
 const ratelimits = Object.fromEntries(['SOURCE_RATE_LIMIT', 'REGISTRATION_RATE_LIMIT', 'ACCOUNT_RATE_LIMIT'].map((name, i) => [name, {namespace_id: String(i + 1), simple: {limit: 1000, period: 60 as const}}]));
 test('workerd: deterministic templates, Ed25519/RSA and sealed-box without Node or Julia', async () => {
-  const result = await build({entryPoints: ['test/worker/poc-worker.ts'], bundle: true, write: false, format: 'esm', platform: 'browser'});
+  const result = await build({entryPoints: ['test/support/poc-worker.ts'], bundle: true, write: false, format: 'esm', platform: 'browser'});
   const mf = new Miniflare(convertV4MiniflareOptions({...options, script: result.outputFiles[0].text}));
   try {
     for (const template of ['minimum', 'simple', 'all-in-one']) {
@@ -51,7 +51,7 @@ test('Worker routes, Durable Object persistence, OAuth PKCE and CSRF rejection',
     const hero = await mf.dispatchFetch('https://pkgfactory.test/assets/hero.png');
     assert.equal(hero.status, 200);
     assert.equal(hero.headers.get('content-type'), 'image/png');
-    assert.deepEqual(Buffer.from(await hero.arrayBuffer()), await readFile(new URL('../../packages/pkgfactory/src/web/hero.png', import.meta.url)));
+    assert.deepEqual(Buffer.from(await hero.arrayBuffer()), await readFile(new URL('../../packages/pkgfactory/src/web/assets/hero.png', import.meta.url)));
     assert.equal((await mf.dispatchFetch('https://evil.test/health')).status, 403);
     assert.equal((await mf.dispatchFetch('https://pkgfactory.test/api/preview', {method: 'POST', body: '{}', headers: {Origin: 'https://evil.test'}})).status, 403);
     assert.equal((await mf.dispatchFetch('https://pkgfactory.test/mcp', {method: 'POST'})).status, 401);
@@ -142,7 +142,7 @@ test('Worker routes, Durable Object persistence, OAuth PKCE and CSRF rejection',
   } finally {await mf.dispose();}
 });
 test('Worker executes the shared engine without stored state and stops after disconnect', async () => {
-  const result = await build({entryPoints: ['test/worker/engine-worker.ts'], bundle: true, write: false, format: 'esm', platform: 'browser', external: ['cloudflare:workers']});
+  const result = await build({entryPoints: ['test/support/engine-worker.ts'], bundle: true, write: false, format: 'esm', platform: 'browser', external: ['cloudflare:workers']});
   const mf = new Miniflare(convertV4MiniflareOptions({...options, script: result.outputFiles[0].text}));
   try {
     const plan = await (await mf.dispatchFetch('https://engine.test/preview', {method: 'POST', body: JSON.stringify({owner: 'tester', name: 'CloudEngine', authors: ['T'], template: 'simple'})})).json() as any;

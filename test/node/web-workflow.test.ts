@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeAuthorSeparators, parseAuthors, workflowStates } from '../packages/pkgfactory/src/web/workflow.js';
-import { page } from '../packages/pkgfactory/src/web/page.js';
+import { normalizeAuthorSeparators, parseAuthors, workflowStates } from '../../packages/pkgfactory/src/web/client/workflow.js';
+import { page } from '../../packages/pkgfactory/src/web/server/page.js';
 
 test('each completed section advances one ready step, and invalidating an earlier step resets the flow', () => {
   assert.deepEqual(workflowStates([false, false, false, false, false]), ['ready', 'upcoming', 'upcoming', 'upcoming', 'upcoming']);

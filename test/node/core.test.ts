@@ -2,12 +2,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import TOML from '@iarna/toml';
 import YAML from 'yaml';
-import { planPackage, validatePlan } from '../packages/pkgfactory/src/core/plan.js';
-import { templates, specSchema } from '../packages/pkgfactory/src/core/spec.js';
-import { packageNameError } from '../packages/pkgfactory/src/core/package-name.js';
-import { errorResponse } from '../packages/pkgfactory/src/web/http.js';
-import { descriptionPayload } from './description-payload.js';
-import { markdownText, documenterText } from '../packages/pkgfactory/src/core/markdown.js';
+import { planPackage, validatePlan } from '../../packages/pkgfactory/src/core/plan.js';
+import { templates, specSchema } from '../../packages/pkgfactory/src/core/spec.js';
+import { packageNameError } from '../../packages/pkgfactory/src/core/package-name.js';
+import { errorResponse } from '../../packages/pkgfactory/src/web/server/http.js';
+import { descriptionPayload } from '../support/description-payload.js';
+import { markdownText, documenterText } from '../../packages/pkgfactory/src/core/markdown.js';
 
 test('description is literal Markdown in README and Documenter, while repository metadata stays original', async () => {
   for (const template of templates) {

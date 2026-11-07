@@ -1,10 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { encrypt, decrypt, exchangeGitHub, revokeGitHub, session, sessionCookieValue, sessionKeyValid, type Env } from '../apps/cloudflare/src/auth.js';
-import { errorResponse } from '../packages/pkgfactory/src/web/http.js';
-import { deviceLogin } from '../packages/pkgfactory/src/github/device.js';
-import { consentNotices, redirectAllowed, registrationPolicy } from '../apps/cloudflare/src/consent.js';
-import { loginSource } from '../apps/cloudflare/src/ip.js';
+import { encrypt, decrypt, exchangeGitHub, revokeGitHub, session, sessionCookieValue, sessionKeyValid, type Env } from '../../apps/cloudflare/src/auth.js';
+import { errorResponse } from '../../packages/pkgfactory/src/web/server/http.js';
+import { deviceLogin } from '../../packages/pkgfactory/src/github/device.js';
+import { consentNotices, redirectAllowed, registrationPolicy } from '../../apps/cloudflare/src/consent.js';
+import { loginSource } from '../../apps/cloudflare/src/ip.js';
 
 test('login source groups IPv6 by /64 and canonicalizes IPv4-mapped aliases', () => {
   assert.equal(loginSource('2001:db8:1:2::1'), loginSource('2001:0DB8:0001:0002:ffff:ffff:ffff:ffff'));

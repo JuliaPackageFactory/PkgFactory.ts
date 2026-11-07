@@ -1,9 +1,9 @@
 // One explicitly requested creation. Never deletes, never retries.
 import { execFileSync } from 'node:child_process';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { Factory } from '../packages/pkgfactory/src/application/engine.js';
-import { GitHub } from '../packages/pkgfactory/src/github/client.js';
-import { assertFreshTestRepository, freshTestName, selectedTemplate, SingleCreation } from './e2e/config.js';
+import { Factory } from '../../packages/pkgfactory/src/application/engine.js';
+import { GitHub } from '../../packages/pkgfactory/src/github/client.js';
+import { assertFreshTestRepository, freshTestName, selectedTemplate, SingleCreation } from './config.js';
 const args = process.argv.slice(2);
 if (args.some(a => !['--confirm-create-test-repository', '--gh'].includes(a) && !a.startsWith('--template='))) throw new Error('Use --confirm-create-test-repository [--template=...] [--gh]');
 if (!args.includes('--confirm-create-test-repository')) throw new Error('Pass --confirm-create-test-repository to create one new repository');

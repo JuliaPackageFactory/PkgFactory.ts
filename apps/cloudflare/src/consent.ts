@@ -1,5 +1,5 @@
 import type { ClientRegistrationCallbackOptions, ClientRegistrationCallbackResult } from '@cloudflare/workers-oauth-provider';
-import { escapeHtml as e } from '../../../packages/pkgfactory/src/web/http.js';
+import { escapeHtml as e } from '../../../packages/pkgfactory/src/web/server/http.js';
 import { ipv4Address, ipv6Words } from './ip.js';
 import { securityEvent } from './limits.js';
 export const redirectPolicy = 'Use an HTTPS, loopback, or native application return address.';

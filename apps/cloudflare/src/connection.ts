@@ -1,4 +1,4 @@
-import { errorResponse } from '../../../packages/pkgfactory/src/web/http.js';
+import { errorResponse } from '../../../packages/pkgfactory/src/web/server/http.js';
 /** Open the response before executing writes. workerd detects response-stream
  * cancellation even where a disconnect during a buffered fetch isn't delivered.
  * JSON permits leading whitespace. There is no detached job or waitUntil here. */

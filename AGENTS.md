@@ -23,26 +23,28 @@ npm workspacesで `packages/pkgfactory`（公開npmパッケージ）と `apps/c
 | `packages/pkgfactory/src/core` | 入力検証（Zod）、Mustacheによるファイル生成、プランの固定とハッシュ、名前規則、Markdownエスケープ |
 | `packages/pkgfactory/src/github` | GitHub REST クライアント、Device Flow、Deploy key生成、Secretのsealed box、GitHub App導入状況 |
 | `packages/pkgfactory/src/application` | `Factory`（プレビュー・作成） |
-| `packages/pkgfactory/src/node` | CLI、ローカルWeb、資格情報の取得 |
-| `packages/pkgfactory/src/web` | HTML、ブラウザー側スクリプト、`/api/*` ルート、共通のエラー応答 |
+| `packages/pkgfactory/src/web/server` | HTML、`/api/*` ルート、共通のエラー応答 |
+| `packages/pkgfactory/src/web/client` | ブラウザー側スクリプト（`/app.js` に束ねる） |
+| `packages/pkgfactory/src/web/assets` | CSS、ロゴ、画像（そのまま配信する） |
 | `packages/pkgfactory/src/mcp` | MCPサーバー（stdio / Streamable HTTP） |
+| `packages/pkgfactory/src/node` | Nodeホスト（`cli.ts`）。CLI、ローカルWeb、資格情報の取得 |
 | `packages/pkgfactory/templates` | 3テンプレートの原本（58ファイル） |
-| `apps/cloudflare/src` | Worker本体、OAuth、セッションCookie、`AuthState` Durable Object、レート制限、切断検出、テンプレート推薦 |
-| `scripts` | ビルド、テンプレート埋め込み、E2E、配備確認 |
-| `test` | Nodeテストとworkerdテスト |
+| `apps/cloudflare/src` | Cloudflareホスト（`worker.ts`）。OAuth、セッションCookie、`AuthState` Durable Object、レート制限、切断検出、テンプレート推薦 |
+| `scripts` | ビルドと埋め込み、配備確認（直下）、GitHubに書き込むE2E（`e2e`）、PoC（`poc`） |
+| `test` | Nodeテスト（`node`）、workerdテスト（`worker`）、両方が使う模擬GitHubとフィクスチャ（`support`） |
 
-`core`・`github`・`application` はNode固有APIを使わず、NodeとCloudflare Workersの両方で動きます。
+`core`・`github`・`application`・`web/server`・`mcp` はNode固有APIを使わず、NodeとCloudflare Workersの両方で動きます。`node` と `apps/cloudflare` は、同じWeb面（`web`）とMCP面（`mcp`）をそれぞれのランタイムに接続するホストです。
 
 ### ビルド
 
 `scripts/build.mjs` は次を行います。
 
-1. `templates/` を `src/core/templates.json` に埋め込む（`scripts/templates.mjs`。Gitには含めない）
-2. ブラウザー側スクリプト、CSS、画像を `src/web/assets.json` に埋め込む
+1. `templates/` を `src/core/templates.json` に埋め込む（`scripts/templates.mjs`）
+2. `src/web/client` と `src/web/assets` を `src/web/assets.json` に埋め込む（`scripts/assets.mjs`）
 3. `dist/cli.js`、`dist/index.js`、型定義、`apps/cloudflare/dist/worker.js` を生成する
-4. `README.md` と `LICENSE` をパッケージへコピーする
+4. `README.md`、`LICENSE`、`examples/` をパッケージへコピーする
 
-`templates.json` は `npm ci`、`typecheck`、`test`、`e2e`、`build`、`npm pack` の前に自動生成されます。`tsx` でソースを直接実行する前には `npm run templates` を実行してください。
+`templates.json` と `assets.json` は生成物で、Gitには含めません。`npm run embed` が両方を生成し、`npm ci`、`typecheck`、`test`、`e2e`、`build`、`npm pack` の前に自動で実行されます。`tsx` でソースを直接実行する前には `npm run embed` を実行してください。
 
 ## プラン
 
@@ -233,7 +235,7 @@ GitHubの `staging` / `production` environmentには、Cloudflareの **Edit Clou
 | 層 | コマンド | GitHubへの書き込み |
 |---|---|---|
 | 型検査 | `npm run typecheck` | なし |
-| Nodeテスト | `npm test` | なし。GitHubは模擬サーバー（`test/fake-github.ts`）。鍵形式の検証に `ssh-keygen` が必要 |
+| Nodeテスト | `npm test` | なし。GitHubは模擬サーバー（`test/support/fake-github.ts`）。鍵形式の検証に `ssh-keygen` が必要 |
 | workerdテスト | `npm run test:worker` | なし。Miniflare上でWorker全体を実行する |
 | tarball検証 | `node scripts/pack-smoke.mjs` | なし。`npm pack` の成果物をインストールしてCLI・stdio MCP・ローカルWebを起動する |
 | 生成パッケージのJulia実行 | CI `generated-julia` ジョブ | なし。3テンプレートで `Pkg.test` とdocsビルドを行い、説明文が実行されないことを確認する |
@@ -242,13 +244,13 @@ GitHubの `staging` / `production` environmentには、Cloudflareの **Edit Clou
 
 `npm run check` は型検査、Nodeテスト、ビルド、workerdテストをまとめて実行します。
 
-Nodeテスト（`test/*.test.ts`）の対象: 説明文のエスケープと名前規則（`core`）、段階ごとの失敗・切断・他subject・既存リポジトリの拒否とプラン参照の再生成（`engine`）、プロフィールと組織オーナー判定（`github-context`）、ローカルWebとstdio MCP（`local`）、Streamable HTTP（`mcp-http`）、セッションCookie・同意画面・戻り先・PKCE（`auth`）、jsdomでのブラウザー側の挙動（`web-workflow`、`web-interactions`）、Jev応答の検証（`template-suggestion`）、本番配備前の照合（`release`）、ローカルGitでの固定リポジトリ更新（`e2e-repositories`）。
+Nodeテスト（`test/node/*.test.ts`）の対象: 説明文のエスケープと名前規則（`core`）、段階ごとの失敗・切断・他subject・既存リポジトリの拒否とプラン参照の再生成（`engine`）、プロフィールと組織オーナー判定（`github-context`）、ローカルWebとstdio MCP（`local`）、Streamable HTTP（`mcp-http`）、セッションCookie・同意画面・戻り先・PKCE（`auth`）、jsdomでのブラウザー側の挙動（`web-workflow`、`web-interactions`）、Jev応答の検証（`template-suggestion`）、本番配備前の照合（`release`）、ローカルGitでの固定リポジトリ更新（`e2e-repositories`）。
 
 workerdテスト（`test/worker/*.test.ts`）の対象: テンプレート生成のNodeとの一致、鍵生成とsealed box、ルートとセッションCookie、OAuth PKCEとCSRF、切断後の停止、ネイティブfetchでのWeb/MCP認可と3テンプレートの作成（`runtime`）、ログインとアカウントのレート制限、`SESSION_KEY` の鍵長（`security`）。
 
 ### 固定リポジトリE2E
 
-`scripts/template-repositories.ts` が3つの専用リポジトリを現在の生成器で更新します。
+`scripts/e2e/template-repositories.ts` が3つの専用リポジトリを現在の生成器で更新します。
 
 | テンプレート | リポジトリ |
 |---|---|
@@ -292,7 +294,7 @@ npm run e2e:staging -- --template=all-in-one --confirm-create-test-repository
 Deploy keyの実機検証には、その実行で作ったリポジトリに手動実行のワークフローを追加し、TagBotのSSH設定とタグpushを実行します。
 
 ```sh
-npx tsx scripts/install-key-poc.ts JuliaPackageFactory/TestYYYYMMDDHHMMSS.jl --confirm
+npx tsx scripts/poc/install-key.ts JuliaPackageFactory/TestYYYYMMDDHHMMSS.jl --confirm
 npm run poc   # Ed25519 / RSA-4096 の鍵生成の計測
 ```
 

@@ -1,5 +1,5 @@
 import { DurableObject } from 'cloudflare:workers';
-import { json } from '../../../packages/pkgfactory/src/web/http.js';
+import { json } from '../../../packages/pkgfactory/src/web/server/http.js';
 /** Short-lived records without personal data: login-rate counters per source
  * hash, consumed OAuth state hashes, and hashes of signed-out session IDs. */
 export class AuthState extends DurableObject {

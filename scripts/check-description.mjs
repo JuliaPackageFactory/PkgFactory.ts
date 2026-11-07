@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { descriptionPayload } from '../test/description-payload.ts';
+import { descriptionPayload } from '../test/support/description-payload.ts';
 const files = await readdir(process.argv[2], {recursive: true});
 assert(!files.some(path => path.split(/[/\\]/).at(-1) === 'description-executed'), 'User description was executed by Documenter');
 const html = await readFile(join(process.argv[2], 'docs/build/index.html'), 'utf8');

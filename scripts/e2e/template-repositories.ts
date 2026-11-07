@@ -2,9 +2,9 @@
 import { execFileSync } from 'node:child_process';
 import { appendFile, mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
-import { GitHub } from '../packages/pkgfactory/src/github/client.js';
-import { snapshotTarget, sourceRepository, targets } from './e2e/config.js';
-import { git, publishSnapshot, snapshot } from './e2e/snapshots.js';
+import { GitHub } from '../../packages/pkgfactory/src/github/client.js';
+import { snapshotTarget, sourceRepository, targets } from './config.js';
+import { git, publishSnapshot, snapshot } from './snapshots.js';
 
 const args = process.argv.slice(2);
 const publish = args.includes('--publish');

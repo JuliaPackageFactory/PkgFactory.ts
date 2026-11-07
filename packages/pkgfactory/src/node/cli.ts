@@ -2,7 +2,7 @@ import { parseArgs } from 'node:util';
 import { readFile, writeFile } from 'node:fs/promises';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { Factory } from '../application/engine.js';
-import { tokenFor } from './auth.js';
+import { tokenFor } from './credentials.js';
 import { planPackage, validatePlan, type PackagePlan } from '../core/plan.js';
 import { listTemplates } from '../core/spec.js';
 import { localWeb } from './web.js';
