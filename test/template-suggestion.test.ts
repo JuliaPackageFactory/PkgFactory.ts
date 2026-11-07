@@ -5,7 +5,7 @@ import { listTemplates } from '../packages/pkgfactory/src/core/spec.js';
 import { errorResponse } from '../packages/pkgfactory/src/web/http.js';
 
 const ai = (run: (model: string, input: any, options?: AiOptions) => Promise<unknown>) => ({run} as Pick<Ai, 'run'>);
-const probabilities = {minimum: 0.05, simple: 0.15, 'all-in-one': 0.8};
+const probabilities = {minimum: 0.05, agentic: 0.05, simple: 0.1, 'all-in-one': 0.8};
 const responseFormats = [
   (answer: unknown) => answer,
   (answer: unknown) => ({state: 'Completed', result: answer, gatewayMetadata: {keySource: 'Unified'}}),
@@ -26,9 +26,9 @@ test('Jev chooses among the existing templates through AI Gateway', async () => 
       for (const candidate of candidates) assert.ok(criteria[candidate.id].startsWith(`${candidate.description}.`));
       assert.deepEqual(options, {gateway: {id: 'default', collectLog: false}, returnRawResponse: true});
       return Response.json({model: 'jev-1.13.0', answers: {template: {type: 'choice', choice: candidate.id, confidence: 0.85,
-        probabilities: Object.fromEntries(candidates.map(option => [option.id, option.id === candidate.id ? 0.9 : 0.05]))}}});
+        probabilities: Object.fromEntries(candidates.map(option => [option.id, option.id === candidate.id ? 0.91 : 0.03]))}}});
     }), {description: '  Numerical quantum mechanics  '});
-    assert.deepEqual(result, {template: candidate.id, probabilities: Object.fromEntries(candidates.map(option => [option.id, option.id === candidate.id ? 0.9 : 0.05]))});
+    assert.deepEqual(result, {template: candidate.id, probabilities: Object.fromEntries(candidates.map(option => [option.id, option.id === candidate.id ? 0.91 : 0.03]))});
   }
 });
 
@@ -58,10 +58,10 @@ test('Cloudflare completed and API envelopes preserve each Jev template choice',
 
 test('Jev probabilities are returned unchanged, including zero and rounded distributions', async () => {
   for (const probabilities of [
-    {minimum: 0.8, simple: 0.15, 'all-in-one': 0.05},
-    {minimum: 1, simple: 0, 'all-in-one': 0},
-    {minimum: 0.334, simple: 0.333, 'all-in-one': 0.333},
-    {minimum: 0.33, simple: 0.33, 'all-in-one': 0.33},
+    {minimum: 0.8, agentic: 0.05, simple: 0.1, 'all-in-one': 0.05},
+    {minimum: 1, agentic: 0, simple: 0, 'all-in-one': 0},
+    {minimum: 0.251, agentic: 0.25, simple: 0.25, 'all-in-one': 0.249},
+    {minimum: 0.25, agentic: 0.25, simple: 0.25, 'all-in-one': 0.24},
   ]) {
     const body = {state: 'Completed', result: {answers: {template: {type: 'choice', choice: 'minimum', probabilities}}}};
     assert.deepEqual(await suggestTemplate(ai(async () => Response.json(body)), {description: 'Small utility'}),
@@ -71,12 +71,12 @@ test('Jev probabilities are returned unchanged, including zero and rounded distr
 
 test('missing or invalid probabilities are rejected instead of inventing a breakdown', async t => {
   const logs = t.mock.method(console, 'warn', () => {});
-  for (const value of [undefined, null, [], {}, {minimum: 1},
-    {minimum: 'private', simple: 0, 'all-in-one': 0},
-    {minimum: -0.1, simple: 0.5, 'all-in-one': 0.6},
-    {minimum: 1.1, simple: 0, 'all-in-one': 0},
-    {minimum: 0, simple: 0, 'all-in-one': 0},
-    {minimum: 0.8, simple: 0.8, 'all-in-one': 0.8},
+  for (const value of [undefined, null, [], {}, {minimum: 1}, {minimum: 1, simple: 0, 'all-in-one': 0},
+    {minimum: 'private', agentic: 0, simple: 0, 'all-in-one': 0},
+    {minimum: -0.1, agentic: 0, simple: 0.5, 'all-in-one': 0.6},
+    {minimum: 1.1, agentic: 0, simple: 0, 'all-in-one': 0},
+    {minimum: 0, agentic: 0, simple: 0, 'all-in-one': 0},
+    {minimum: 0.8, agentic: 0.8, simple: 0.8, 'all-in-one': 0.8},
   ]) {
     for (const wrap of responseFormats) {
       const body = wrap({answers: {template: {type: 'choice', choice: 'minimum', probabilities: value}}});

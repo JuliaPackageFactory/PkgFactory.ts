@@ -4,7 +4,7 @@ import { listTemplates, specSchema, templates, type PackageSpec } from '../../..
 
 const inputSchema = specSchema.pick({description: true});
 const probability = z.number().min(0).max(1);
-const probabilitiesSchema = z.object({minimum: probability, simple: probability, 'all-in-one': probability})
+const probabilitiesSchema = z.object({minimum: probability, agentic: probability, simple: probability, 'all-in-one': probability})
   // Allow rounding in the provider's distribution while rejecting unusable totals.
   .refine(values => Math.abs(Object.values(values).reduce((sum, value) => sum + value, 0) - 1) < 0.02);
 const resultSchema = z.object({answers: z.object({template: z.object({
@@ -13,6 +13,7 @@ const resultSchema = z.object({answers: z.object({template: z.object({
 // Describe when each existing bundle is useful, without inventing domain-specific files.
 const useCases: Record<PackageSpec['template'], string> = {
   minimum: 'For a small utility, learning exercise, experiment, or prototype that only needs the essential package structure and tests, without a documentation website or release automation.',
+  agentic: 'For a package that will be developed mainly by AI coding agents such as Claude Code, Codex, Cursor, or Copilot: agent instructions in AGENTS.md, Runic formatting, and Aqua, JET, and ExplicitImports checks that give agents fast local feedback, without a documentation website or release automation.',
   simple: 'For a reusable Julia library with a documented public API, a documentation website, and automated releases, without additional research examples or extensive quality tooling.',
   'all-in-one': 'For a scientific or numerical computing library, research software, simulations, or a substantial shared package that benefits from citations, notebook examples, documentation, and additional quality checks.',
 };

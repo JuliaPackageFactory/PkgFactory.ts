@@ -1,4 +1,4 @@
-// Updates only the three existing, dedicated template repositories. Never creates one.
+// Updates only the existing, dedicated template repositories. Never creates one.
 import { execFileSync } from 'node:child_process';
 import { appendFile, mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
@@ -8,10 +8,10 @@ import { git, publishSnapshot, snapshot } from './e2e/snapshots.js';
 
 const args = process.argv.slice(2);
 const publish = args.includes('--publish');
-if (args.some(a => !['--publish', '--gh'].includes(a) && !a.startsWith('--package='))) throw new Error('Usage: template-repositories.ts [--package=ExampleMinimum|ExampleSimple|ExampleAllInOne] [--publish] [--gh]');
+if (args.some(a => !['--publish', '--gh'].includes(a) && !a.startsWith('--package='))) throw new Error('Usage: template-repositories.ts [--package=ExampleMinimum|ExampleSimple|ExampleAllInOne|ExampleAgentic] [--publish] [--gh]');
 if (process.env.GITHUB_ACTIONS && (process.env.GITHUB_REPOSITORY !== sourceRepository || process.env.GITHUB_REF !== 'refs/heads/main')) throw new Error('Repository E2E may run only on the trusted main branch');
 const requested = args.filter(a => a.startsWith('--package='));
-if (requested.length > 1) throw new Error('Choose one package, or omit --package for all three existing repositories');
+if (requested.length > 1) throw new Error('Choose one package, or omit --package for all existing repositories');
 const selected = requested.length ? [snapshotTarget(requested[0].slice('--package='.length))] : targets;
 const token = process.env.PKGFACTORY_E2E_TOKEN || process.env.GH_TOKEN || (args.includes('--gh') ? execFileSync('gh', ['auth', 'token', '--hostname', 'github.com'], {encoding: 'utf8'}).trim() : '');
 if (!token) throw new Error('Set PKGFACTORY_E2E_TOKEN or explicitly select --gh');

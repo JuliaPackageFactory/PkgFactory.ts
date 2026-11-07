@@ -1,0 +1,8 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+authors:
+{{{CFF_AUTHORS}}}
+title: "{{{PKG}}}.jl"
+version: "{{{VERSION}}}"
+date-released: "{{{RELEASE_DATE}}}"
+repository-code: "{{{URL}}}"
