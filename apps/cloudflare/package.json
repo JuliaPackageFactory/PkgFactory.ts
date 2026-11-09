@@ -1,8 +1,0 @@
-{
-  "name": "@pkgfactory/cloudflare",
-  "private": true,
-  "type": "module",
-  "dependencies": {
-    "@cloudflare/workers-oauth-provider": "1.2.4"
-  }
-}

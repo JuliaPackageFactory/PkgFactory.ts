@@ -8,7 +8,5 @@ dist/
 *.tgz
 .tmp/
 artifacts/
-packages/pkgfactory/src/core/templates.json
-packages/pkgfactory/examples/
-packages/pkgfactory/README.md
-packages/pkgfactory/LICENSE
+src/core/templates.json
+src/web/assets.json

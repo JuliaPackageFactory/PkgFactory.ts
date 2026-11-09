@@ -18,7 +18,7 @@ Julia、Docker、Git、OpenSSHは不要です。GitHubへの操作はすべてRE
 ```sh
 npm ci
 npm run build
-node packages/pkgfactory/dist/cli.js --help
+node dist/cli.js --help
 ```
 
 `npm pack --workspace @juliapackagefactory/pkgfactory` で作ったtarballを `npm install` しても同じです。
@@ -143,7 +143,7 @@ Deploy keyは既定でEd25519です。`--key-algorithm rsa4096`（Workerでは `
 ```sh
 npm ci
 npm run check          # typecheck, test, build, test:worker
-node scripts/pack-smoke.mjs
+node test/tarball/pack-smoke.ts
 ```
 
 構成、作成手順、Cloudflare Workerの設計、配備、テストは [AGENTS.md](AGENTS.md) を参照してください。
@@ -154,4 +154,4 @@ MITライセンスです（[LICENSE](LICENSE)）。Copyright (c) 2025-2026 Shuhe
 
 - テンプレート（58ファイル）とWeb画面のスタイルシート・ロゴは、[PkgFactory.jl](https://github.com/JuliaPackageFactory/PkgFactory.jl) のコミット `7c7d4afeaa3b4b708726af4795c13c192fc3c948`（MIT）に由来します。テンプレートの描画はJulia文字列をエスケープするため、旧版とバイト単位の互換はありません。
 - OAuthには [@cloudflare/workers-oauth-provider](https://github.com/cloudflare/workers-oauth-provider)（MIT）、MCPには [@modelcontextprotocol/sdk](https://github.com/modelcontextprotocol/typescript-sdk)（MIT）を使用しています。
-- `packages/pkgfactory/src/web/github.svg` のGitHub Invertocatロゴは、[GitHubのロゴ使用ガイドライン](https://brand.github.com/foundations/logo)に従います。
+- `src/web/assets/github.svg` のGitHub Invertocatロゴは、[GitHubのロゴ使用ガイドライン](https://brand.github.com/foundations/logo)に従います。
