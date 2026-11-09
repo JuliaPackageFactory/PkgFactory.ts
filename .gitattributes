@@ -1,4 +1,4 @@
 * text=auto eol=lf
 *.png binary
 *.ico binary
-packages/pkgfactory/templates/** whitespace=-blank-at-eof
+templates/** whitespace=-blank-at-eof

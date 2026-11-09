@@ -1,47 +1,79 @@
 {
-  "name": "pkgfactory-repository",
-  "private": true,
+  "name": "@juliapackagefactory/pkgfactory",
+  "version": "0.1.0",
+  "description": "Create Julia packages from Node.js, the web, and MCP",
   "type": "module",
-  "workspaces": [
-    "packages/*",
-    "apps/*"
-  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/JuliaPackageFactory/PkgFactory.ts.git"
+  },
   "engines": {
     "node": ">=24 <25"
   },
+  "bin": {
+    "pkgfactory": "dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "!dist/cloudflare",
+    "examples"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
-    "templates": "node scripts/templates.mjs",
-    "prepare": "npm run templates",
-    "build": "node scripts/build.mjs",
-    "pretypecheck": "npm run templates",
+    "embed": "node scripts/templates.ts && node scripts/assets.ts",
+    "prepare": "npm run embed",
+    "build": "node scripts/build.ts",
+    "prepack": "npm run build --silent",
+    "pretypecheck": "npm run embed",
     "typecheck": "tsc --noEmit",
-    "pretest": "npm run templates",
-    "test": "tsx --test test/*.test.ts",
-    "pretest:worker": "npm run templates",
+    "pretest": "npm run embed",
+    "test": "tsx --test test/node/*.test.ts",
+    "pretest:worker": "npm run embed",
     "test:worker": "tsx --test test/worker/*.test.ts",
     "check": "npm run typecheck && npm test && npm run build && npm run test:worker",
-    "poc": "tsx scripts/key-poc.ts",
-    "pree2e": "npm run templates",
-    "e2e": "tsx scripts/github-e2e.ts",
-    "pree2e:templates": "npm run templates",
-    "e2e:templates": "tsx scripts/template-repositories.ts",
-    "e2e:staging": "tsx scripts/staging-mcp-e2e.ts",
-    "dev:worker": "wrangler dev --config apps/cloudflare/wrangler.jsonc",
-    "deploy:staging": "wrangler deploy --config apps/cloudflare/wrangler.jsonc",
-    "deploy:production": "wrangler deploy --config apps/cloudflare/wrangler.jsonc --env production"
+    "benchmark": "tsx scripts/benchmark.ts",
+    "pree2e": "npm run embed",
+    "e2e": "tsx test/e2e/node.ts",
+    "pree2e:templates": "npm run embed",
+    "e2e:templates": "tsx test/e2e/template-repositories.ts",
+    "e2e:staging": "tsx test/e2e/staging.ts",
+    "dev:worker": "wrangler dev",
+    "deploy:staging": "wrangler deploy",
+    "deploy:production": "wrangler deploy --env production"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "@serenity-kit/noble-sodium": "0.2.3",
+    "mustache": "4.2.0",
+    "zod": "4.6.7"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "5.20261004.1",
-    "@types/mustache": "4.2.6",
-    "@types/node": "26.6.4",
+    "@cloudflare/workers-oauth-provider": "1.2.4",
+    "@cloudflare/workers-types": "5.20261101.1",
     "@iarna/toml": "2.2.5",
+    "@types/mustache": "4.2.6",
+    "@types/node": "26.6.6",
     "esbuild": "0.28.2",
-    "jsdom": "30.1.2",
+    "jsdom": "30.1.3",
     "libsodium-wrappers": "0.8.4",
     "miniflare": "5.20260926.1-alpha",
     "tsx": "4.23.15",
     "typescript": "7.0.2",
-    "wrangler": "4.147.0",
+    "wrangler": "4.156.1",
     "yaml": "2.9.1"
+  },
+  "allowScripts": {
+    "workerd@1.20260926.1": true,
+    "workerd@1.20261012.1": true,
+    "esbuild@0.28.2": true
   }
 }

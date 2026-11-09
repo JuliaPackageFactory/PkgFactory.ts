@@ -1,20 +1,16 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { build } from 'esbuild';
-import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
-import { resolve } from 'node:path';
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
-import { planPackage } from '../../packages/pkgfactory/src/core/plan.js';
-import { encrypt, decrypt, sessionCookieValue } from '../../apps/cloudflare/src/auth.js';
-import { sha256, base64url, unbase64url, decode, utf8 } from '../../packages/pkgfactory/src/core/encoding.js';
-import { FakeGitHub } from '../fake-github.js';
-const options = {modules: true as const, compatibilityDate: '2026-09-27', compatibilityFlags: ['enable_request_signal', 'global_fetch_strictly_public']};
-// Functional tests use generous limits; security.test.ts exercises exhaustion.
-const ratelimits = Object.fromEntries(['SOURCE_RATE_LIMIT', 'REGISTRATION_RATE_LIMIT', 'ACCOUNT_RATE_LIMIT'].map((name, i) => [name, {namespace_id: String(i + 1), simple: {limit: 1000, period: 60 as const}}]));
+import { planPackage } from '../../src/core/plan.js';
+import { encrypt, decrypt, sessionCookieValue } from '../../src/cloudflare/auth.js';
+import { sha256, base64url, unbase64url, decode, utf8 } from '../../src/core/encoding.js';
+import { FakeGitHub } from '../support/fake-github.js';
+import { worker, workerd } from '../support/miniflare.js';
 test('workerd: deterministic templates, Ed25519/RSA and sealed-box without Node or Julia', async () => {
-  const result = await build({entryPoints: ['test/worker/poc-worker.ts'], bundle: true, write: false, format: 'esm', platform: 'browser'});
-  const mf = new Miniflare(convertV4MiniflareOptions({...options, script: result.outputFiles[0].text}));
+  const result = await build({entryPoints: ['test/support/poc-worker.ts'], bundle: true, write: false, format: 'esm', platform: 'browser'});
+  const mf = workerd(result.outputFiles[0].text);
   try {
     for (const template of ['minimum', 'simple', 'all-in-one']) {
       const spec = {owner: 'tester', name: 'Worker', authors: ['日本語 "Author"'], template};
@@ -35,23 +31,19 @@ test('workerd: deterministic templates, Ed25519/RSA and sealed-box without Node 
 });
 test('Worker routes, Durable Object persistence, OAuth PKCE and CSRF rejection', async () => {
   const remote = new FakeGitHub(); const revocations: {authorization: string; body: unknown}[] = [];
-  const mf = new Miniflare(convertV4MiniflareOptions({...options, scriptPath: resolve('apps/cloudflare/dist/worker.js'), ratelimits,
-    durableObjects: {STATE: {className: 'ApplicationState', useSQLite: true}, AUTH: {className: 'AuthState', useSQLite: true}}, kvNamespaces: ['OAUTH_KV'],
-    bindings: {ORIGIN: 'https://pkgfactory.test', GITHUB_OAUTH_CLIENT_ID: 'test-client', SESSION_KEY: btoa('a'.repeat(32)), GITHUB_OAUTH_CLIENT_SECRET: 'test-secret'},
-    outboundService: async (request: any) => {
+  const mf = worker({}, {}, async (request: any) => {
       if (request.url === 'https://api.github.com/applications/test-client/token' && request.method === 'DELETE') {
         revocations.push({authorization: request.headers.get('authorization'), body: await request.json()}); return new Response(null, {status: 204});
       }
       return remote.fetch(request.url, {method: request.method});
-    },
-  }));
+  });
   try {
     const health = await mf.dispatchFetch('https://pkgfactory.test/health');
     assert.equal(health.status, 200); assert.equal(health.headers.get('referrer-policy'), 'no-referrer');
     const hero = await mf.dispatchFetch('https://pkgfactory.test/assets/hero.png');
     assert.equal(hero.status, 200);
     assert.equal(hero.headers.get('content-type'), 'image/png');
-    assert.deepEqual(Buffer.from(await hero.arrayBuffer()), await readFile(new URL('../../packages/pkgfactory/src/web/hero.png', import.meta.url)));
+    assert.deepEqual(Buffer.from(await hero.arrayBuffer()), await readFile(new URL('../../src/web/assets/hero.png', import.meta.url)));
     assert.equal((await mf.dispatchFetch('https://evil.test/health')).status, 403);
     assert.equal((await mf.dispatchFetch('https://pkgfactory.test/api/preview', {method: 'POST', body: '{}', headers: {Origin: 'https://evil.test'}})).status, 403);
     assert.equal((await mf.dispatchFetch('https://pkgfactory.test/mcp', {method: 'POST'})).status, 401);
@@ -107,25 +99,17 @@ test('Worker routes, Durable Object persistence, OAuth PKCE and CSRF rejection',
       else {assert.match(navigation, /http:\/\/127.0.0.1:12345\/callback/); assert.match(navigation, /error=access_denied/);}
       assert.equal((await submit()).status, 400);
     }
-    const state = await mf.getDurableObjectNamespace('STATE'); const stub = state.get(state.idFromName('test'));
-    const snapshot = await stub.fetch('https://state', {method: 'POST', body: JSON.stringify({action: 'snapshot', subject: '42'})});
-    assert.deepEqual(await snapshot.json(), {revision: 0, entries: []});
-    const cas = (revision: number) => stub.fetch('https://state', {method: 'POST', body: JSON.stringify({action: 'cas', subject: '42', revision, put: [], remove: []})});
-    assert.equal((await cas(0)).status, 200); assert.equal((await cas(0)).status, 409);
-    // Seed an encrypted authenticated session to exercise the production route and store.
-    const authNs = await mf.getDurableObjectNamespace('AUTH'); const authStub = authNs.get(authNs.idFromName('auth-v1'));
-    const crypt = {SESSION_KEY: btoa('a'.repeat(32))};
-    const sid = 's'.repeat(43), csrf = 'csrf-test'; const key = `session:${await sha256(sid)}`;
-    await authStub.fetch('https://auth', {method: 'POST', body: JSON.stringify({action: 'put', key, ttl: 60000, value: await encrypt(crypt, {subject: '42', token: 'hidden', csrf}, key)})});
-    const headers = {Cookie: `__Host-pkgfactory-session=${await sessionCookieValue(crypt, sid)}`, Origin: 'https://pkgfactory.test', 'Content-Type': 'application/json', 'X-PkgFactory-CSRF': csrf};
-    // The stored ID alone, or with another ID's signature, is not a session.
-    for (const forged of [sid, `${sid}.${(await sessionCookieValue(crypt, 't'.repeat(43))).split('.')[1]}`]) {
+    // The browser cookie is the only copy of the session; nothing is seeded on the server.
+    const crypt = {SESSION_KEY: btoa('a'.repeat(32)), ORIGIN: 'https://pkgfactory.test'};
+    const csrf = 'csrf-test', current = {id: 's'.repeat(43), subject: '42', token: 'hidden', csrf, expiresAt: Date.now() + 60000};
+    const sessionCookie = await sessionCookieValue(crypt, current);
+    const headers = {Cookie: `__Host-pkgfactory-session=${sessionCookie}`, Origin: 'https://pkgfactory.test', 'Content-Type': 'application/json', 'X-PkgFactory-CSRF': csrf};
+    // Tampered ciphertext, another origin's cookie, or a past deadline is not a session.
+    for (const forged of [sessionCookie.slice(0, -6) + 'AAAAAA', await sessionCookieValue({...crypt, ORIGIN: 'https://other.test'}, current), await sessionCookieValue(crypt, {...current, expiresAt: Date.now() - 1})]) {
       assert.equal((await mf.dispatchFetch('https://pkgfactory.test/api/templates', {headers: {Cookie: `__Host-pkgfactory-session=${forged}`}})).status, 401);
     }
-    // A record that no longer decrypts (for example after SESSION_KEY rotation) signs out.
-    const rotated = 'r'.repeat(43), rotatedKey = `session:${await sha256(rotated)}`;
-    await authStub.fetch('https://auth', {method: 'POST', body: JSON.stringify({action: 'put', key: rotatedKey, ttl: 60000, value: await encrypt({SESSION_KEY: btoa('b'.repeat(32))}, {subject: '42', token: 'hidden', csrf}, rotatedKey)})});
-    const rotatedCookie = {Cookie: `__Host-pkgfactory-session=${await sessionCookieValue(crypt, rotated)}`};
+    // A cookie that no longer decrypts (for example after SESSION_KEY rotation) signs out.
+    const rotatedCookie = {Cookie: `__Host-pkgfactory-session=${await sessionCookieValue({...crypt, SESSION_KEY: btoa('b'.repeat(32))}, current)}`};
     const signedOut = await mf.dispatchFetch('https://pkgfactory.test/', {headers: rotatedCookie});
     assert.equal(signedOut.status, 200); assert.match(await signedOut.text(), /data-authenticated="false"/);
     assert.equal((await mf.dispatchFetch('https://pkgfactory.test/api/templates', {headers: rotatedCookie})).status, 401);
@@ -137,15 +121,11 @@ test('Worker routes, Durable Object persistence, OAuth PKCE and CSRF rejection',
     assert.equal((await unavailable.json() as any).code, 'suggestion_unavailable');
     const preview = await mf.dispatchFetch('https://pkgfactory.test/api/preview', {method: 'POST', headers, body: JSON.stringify({owner: 'tester', name: 'Cloud', authors: ['T']})});
     assert.equal(preview.status, 200); const plan = await preview.json() as any;
-    const shared = state.get(state.idFromName('pkgfactory-v1'));
-    const saved = await (await shared.fetch('https://state', {method: 'POST', body: JSON.stringify({action: 'get', subject: '42', id: plan.id})})).json() as any;
-    assert.equal(saved.subject, '42'); assert.equal(saved.plan.files['Project.toml'], plan.files['Project.toml']);
-    const replacement = await mf.dispatchFetch('https://pkgfactory.test/api/preview', {method: 'POST', headers, body: JSON.stringify({...plan.spec, description: 'Edited', replacePlanId: plan.id})});
-    assert.equal(replacement.status, 200); const updated = await replacement.json() as any;
-    assert.equal(await (await shared.fetch('https://state', {method: 'POST', body: JSON.stringify({action: 'get', subject: '42', id: plan.id})})).json(), null);
-    const after = await (await shared.fetch('https://state', {method: 'POST', body: JSON.stringify({action: 'snapshot', subject: '42'})})).json() as any;
-    assert.equal(after.entries.length, 1); assert.equal(after.entries[0][0], updated.id);
-    const noCsrf = await mf.dispatchFetch('https://pkgfactory.test/api/create', {method: 'POST', headers: {...headers, 'X-PkgFactory-CSRF': 'wrong'}, body: JSON.stringify({planId: plan.id, confirm: true})}); assert.equal(noCsrf.status, 403);
+    assert.equal(plan.files['Project.toml'].includes(plan.uuid), true);
+    const reference = {id: plan.id, uuid: plan.uuid, createdAt: plan.createdAt};
+    const noCsrf = await mf.dispatchFetch('https://pkgfactory.test/api/create', {method: 'POST', headers: {...headers, 'X-PkgFactory-CSRF': 'wrong'}, body: JSON.stringify({...plan.spec, plan: reference, confirm: true})}); assert.equal(noCsrf.status, 403);
+    // /api/create opens the response early, so validation errors arrive in the body of a 200.
+    const malformed = await (await mf.dispatchFetch('https://pkgfactory.test/api/create', {method: 'POST', headers, body: JSON.stringify({...plan.spec, plan: {id: plan.id}, confirm: true})})).json() as any; assert.match(malformed.error, /uuid/);
     assert.equal(revocations.length, 0);
     const logout = await mf.dispatchFetch('https://pkgfactory.test/auth/logout', {method: 'POST', headers, body: '{}'}); assert.equal(logout.status, 200);
     assert.deepEqual(await logout.json(), {ok: true, githubTokenRevoked: true});
@@ -153,20 +133,20 @@ test('Worker routes, Durable Object persistence, OAuth PKCE and CSRF rejection',
     assert.equal((await mf.dispatchFetch('https://pkgfactory.test/api/templates', {headers})).status, 401);
   } finally {await mf.dispose();}
 });
-test('Worker executes the shared engine with durable metadata and stops after disconnect', async () => {
-  const result = await build({entryPoints: ['test/worker/engine-worker.ts'], bundle: true, write: false, format: 'esm', platform: 'browser', external: ['cloudflare:workers']});
-  const mf = new Miniflare(convertV4MiniflareOptions({...options, script: result.outputFiles[0].text, durableObjects: {STATE: {className: 'ApplicationState', useSQLite: true}}}));
+test('Worker executes the shared engine without stored state and stops after disconnect', async () => {
+  const result = await build({entryPoints: ['test/support/factory-worker.ts'], bundle: true, write: false, format: 'esm', platform: 'browser', external: ['cloudflare:workers']});
+  const mf = workerd(result.outputFiles[0].text);
   try {
     const plan = await (await mf.dispatchFetch('https://engine.test/preview', {method: 'POST', body: JSON.stringify({owner: 'tester', name: 'CloudEngine', authors: ['T'], template: 'simple'})})).json() as any;
-    const created = await mf.dispatchFetch('https://engine.test/create', {method: 'POST', body: JSON.stringify({planId: plan.id})});
+    const created = await mf.dispatchFetch('https://engine.test/create', {method: 'POST', body: JSON.stringify(plan)});
     assert.equal(created.status, 200); assert.equal((await created.json() as any).state, 'complete');
   } finally {await mf.dispose();}
-  const aborted = new Miniflare(convertV4MiniflareOptions({...options, script: result.outputFiles[0].text, durableObjects: {STATE: {className: 'ApplicationState', useSQLite: true}}, unsafeDirectSockets: [{host: '127.0.0.1', port: 0, proxy: false}]}));
+  const aborted = workerd(result.outputFiles[0].text, {unsafeDirectSockets: [{host: '127.0.0.1', port: 0, proxy: false}]});
   try {
     const plan = await (await aborted.dispatchFetch('https://engine.test/preview', {method: 'POST', body: JSON.stringify({owner: 'tester', name: 'Cancelled', authors: ['T']})})).json() as any;
     const controller = new AbortController();
     const direct = await aborted.unsafeGetDirectURL();
-    const task = fetch(new URL('/cancel-test', direct), {method: 'POST', signal: controller.signal, body: JSON.stringify({planId: plan.id})}).then(r => r.text());
+    const task = fetch(new URL('/cancel-test', direct), {method: 'POST', signal: controller.signal, body: JSON.stringify(plan)}).then(r => r.text());
     const timer = setTimeout(() => controller.abort(), 100);
     await assert.rejects(task); clearTimeout(timer);
     await new Promise(r => setTimeout(r, 650));
@@ -178,12 +158,10 @@ test('Worker executes the shared engine with durable metadata and stops after di
 test('Worker native fetch completes Web/MCP OAuth and 3 templates without following redirects', async () => {
   const calls: string[] = [];
   let remote = new FakeGitHub();
-  const mf = new Miniflare(convertV4MiniflareOptions({...options, scriptPath: resolve('apps/cloudflare/dist/worker.js'), ratelimits,
-    durableObjects: {STATE: {className: 'ApplicationState', useSQLite: true}, AUTH: {className: 'AuthState', useSQLite: true}}, kvNamespaces: ['OAUTH_KV'],
-    bindings: {ORIGIN: 'https://pkgfactory.test', GITHUB_OAUTH_CLIENT_ID: 'test-client', SESSION_KEY: btoa('a'.repeat(32)), GITHUB_OAUTH_CLIENT_SECRET: 'test-secret'},
+  const mf = worker({}, {},
     // Intercept only after workerd's native Request/fetch validates its options.
     // Replacing fetch inside the application would hide runtime incompatibilities.
-    outboundService: async (request: any) => {
+    async (request: any) => {
       calls.push(request.url);
       assert.equal(request.headers.get('User-Agent'), 'PkgFactory');
       if (request.url === 'https://github.com/login/oauth/access_token') {
@@ -199,8 +177,7 @@ test('Worker native fetch completes Web/MCP OAuth and 3 templates without follow
       if (request.headers.get('Authorization') === 'Bearer redirect-user') return new Response(null, {status: 302, headers: {Location: 'https://unexpected.test/user'}});
       assert.equal(request.headers.get('Authorization'), 'Bearer test-token');
       return remote.fetch(request.url, {method: request.method, body: request.method === 'GET' ? undefined : await request.text()});
-    },
-  }));
+  });
   const signIn = async (code: string) => {
     const start = await mf.dispatchFetch('https://pkgfactory.test/auth/login', {redirect: 'manual'});
     const state = new URL(start.headers.get('location')!).searchParams.get('state')!;
@@ -244,9 +221,9 @@ test('Worker native fetch completes Web/MCP OAuth and 3 templates without follow
     for (const [i, template] of ['minimum', 'simple', 'all-in-one'].entries()) {
       remote = new FakeGitHub();
       const plan = await post('preview', {owner: 'tester', name: `Native${i}`, authors: ['Tester'], template});
-      const result = await post('create', {planId: plan.id, confirm: true});
+      const result = await post('create', {...plan.spec, plan: {id: plan.id, uuid: plan.uuid, createdAt: plan.createdAt}, confirm: true});
       assert.equal(result.state, 'complete', JSON.stringify(result));
-      assert(remote.files['Project.toml']);
+      assert.equal(remote.files['Project.toml'], plan.files['Project.toml'], 'The Worker regenerates the previewed files');
       if (template !== 'minimum') {assert(remote.secret); assert(remote.pages); assert.match(remote.keys[0].key, /^ssh-ed25519 /);}
     }
 
@@ -270,7 +247,7 @@ test('Worker native fetch completes Web/MCP OAuth and 3 templates without follow
     const mcp = (body: string) => mf.dispatchFetch('https://pkgfactory.test/mcp', {method: 'POST', headers: {Authorization: `Bearer ${credential.access_token}`, 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream', 'MCP-Protocol-Version': '2025-11-25'}, body});
     const plan = await post('preview', {owner: 'tester', name: 'Batched', authors: ['Tester'], template: 'minimum'});
     remote = new FakeGitHub();
-    const batch = await mcp(JSON.stringify([{jsonrpc: '2.0', id: 2, method: 'tools/call', params: {name: 'create_package', arguments: {planId: plan.id, confirm: true}}}]));
+    const batch = await mcp(JSON.stringify([{jsonrpc: '2.0', id: 2, method: 'tools/call', params: {name: 'create_package', arguments: {...plan.spec, plan: {id: plan.id, uuid: plan.uuid, createdAt: plan.createdAt}, confirm: true}}}]));
     assert.equal(batch.status, 400); assert.equal((await batch.json() as any).error.code, -32600);
     const malformed = await mcp('{');
     assert.equal(malformed.status, 400); assert.equal((await malformed.json() as any).error.code, -32700);

@@ -8,6 +8,5 @@ dist/
 *.tgz
 .tmp/
 artifacts/
-packages/pkgfactory/src/core/templates.json
-packages/pkgfactory/docs/
-packages/pkgfactory/examples/
+src/core/templates.json
+src/web/assets.json
