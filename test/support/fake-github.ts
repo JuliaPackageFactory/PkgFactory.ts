@@ -1,4 +1,4 @@
-import { base64, utf8, unbase64, decode } from '../../packages/pkgfactory/src/core/encoding.js';
+import { base64, utf8, unbase64, decode } from '../../src/core/encoding.js';
 import { cryptoBoxKeyPair } from '@serenity-kit/noble-sodium';
 export class FakeGitHub {
   calls: {method: string; path: string; body: any}[] = [];

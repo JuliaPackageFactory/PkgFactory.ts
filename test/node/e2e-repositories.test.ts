@@ -4,8 +4,8 @@ import { mkdir, mkdtemp, readFile, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import TOML from '@iarna/toml';
-import { git, head, publishSnapshot, snapshot } from '../../scripts/e2e/snapshots.js';
-import { assertFreshTestRepository, freshTestName, selectedTemplate, SingleCreation, snapshotTarget, targets } from '../../scripts/e2e/config.js';
+import { git, head, publishSnapshot, snapshot } from '../e2e/snapshots.js';
+import { assertFreshTestRepository, freshTestName, selectedTemplate, SingleCreation, snapshotTarget, targets } from '../e2e/config.js';
 
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), 'pkgfactory-snapshot-'));

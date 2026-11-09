@@ -1,26 +1,18 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
-import { resolve } from 'node:path';
-import { sessionCookieValue } from '../../apps/cloudflare/src/auth.js';
-import { sha256 } from '../../packages/pkgfactory/src/core/encoding.js';
-const options = {modules: true as const, compatibilityDate: '2026-09-27', compatibilityFlags: ['enable_request_signal', 'global_fetch_strictly_public'],
-  durableObjects: {AUTH: {className: 'AuthState', useSQLite: true}}};
-const ratelimits = (limits: Record<'SOURCE_RATE_LIMIT' | 'REGISTRATION_RATE_LIMIT' | 'ACCOUNT_RATE_LIMIT', number>) =>
-  Object.fromEntries(Object.entries(limits).map(([name, limit], i) => [name, {namespace_id: String(i + 1), simple: {limit, period: 60 as const}}]));
+import type { Miniflare } from 'miniflare';
+import { worker } from '../support/miniflare.js';
+import { sessionCookieValue } from '../../src/cloudflare/auth.js';
+import { sha256 } from '../../src/core/encoding.js';
 const call = (stub: {fetch: Function}, body: unknown, path = '/') => stub.fetch(`https://state${path}`, {method: 'POST', body: JSON.stringify(body)}) as Promise<Response>;
 async function stateStub(mf: Miniflare, binding = 'AUTH', name = 'auth-v1') {const ns = await mf.getDurableObjectNamespace(binding); return ns.get(ns.idFromName(name));}
 
 test('login flood is throttled per source without exhausting sessions; parallel callbacks exchange once', async () => {
   const crypt = {SESSION_KEY: btoa('a'.repeat(32))}; let exchanges = 0;
-  const mf = new Miniflare(convertV4MiniflareOptions({...options, scriptPath: resolve('apps/cloudflare/dist/worker.js'), kvNamespaces: ['OAUTH_KV'],
-    ratelimits: ratelimits({SOURCE_RATE_LIMIT: 1000, REGISTRATION_RATE_LIMIT: 1000, ACCOUNT_RATE_LIMIT: 1000}),
-    bindings: {...crypt, ORIGIN: 'https://pkgfactory.test', GITHUB_OAUTH_CLIENT_ID: 'test', GITHUB_OAUTH_CLIENT_SECRET: 'secret'},
-    outboundService: async (request: any) => {
+  const mf = worker(crypt, {}, async (request: any) => {
       if (request.url === 'https://github.com/login/oauth/access_token') {exchanges++; return Response.json({access_token: 'test', scope: 'repo,workflow'});}
       assert.equal(request.url, 'https://api.github.com/user'); return Response.json({id: 42, login: 'tester'});
-    },
-  }));
+  });
   try {
     const auth = await stateStub(mf);
     const env = {...crypt, ORIGIN: 'https://pkgfactory.test'};
@@ -62,10 +54,7 @@ test('login flood is throttled per source without exhausting sessions; parallel 
 
 test('anonymous OAuth writes are limited per source and API use per GitHub account', async () => {
   const crypt = {SESSION_KEY: btoa('a'.repeat(32))};
-  const mf = new Miniflare(convertV4MiniflareOptions({...options, scriptPath: resolve('apps/cloudflare/dist/worker.js'), kvNamespaces: ['OAUTH_KV'],
-    ratelimits: ratelimits({SOURCE_RATE_LIMIT: 6, REGISTRATION_RATE_LIMIT: 2, ACCOUNT_RATE_LIMIT: 3}),
-    bindings: {...crypt, ORIGIN: 'https://pkgfactory.test', GITHUB_OAUTH_CLIENT_ID: 'test', GITHUB_OAUTH_CLIENT_SECRET: 'secret'},
-  }));
+  const mf = worker(crypt, {SOURCE_RATE_LIMIT: 6, REGISTRATION_RATE_LIMIT: 2, ACCOUNT_RATE_LIMIT: 3});
   try {
     const register = (ip: string) => mf.dispatchFetch('https://pkgfactory.test/oauth/register', {method: 'POST', headers: {'CF-Connecting-IP': ip, 'Content-Type': 'application/json'},
       body: JSON.stringify({client_name: 'Flood', redirect_uris: ['http://127.0.0.1:1/callback'], token_endpoint_auth_method: 'none', grant_types: ['authorization_code'], response_types: ['code']})});
@@ -98,11 +87,8 @@ test('anonymous OAuth writes are limited per source and API use per GitHub accou
 });
 
 test('a SESSION_KEY that is not 32 bytes refuses every route except /health', async () => {
-  const mf = new Miniflare(convertV4MiniflareOptions({...options, scriptPath: resolve('apps/cloudflare/dist/worker.js'), kvNamespaces: ['OAUTH_KV'],
-    ratelimits: ratelimits({SOURCE_RATE_LIMIT: 1000, REGISTRATION_RATE_LIMIT: 1000, ACCOUNT_RATE_LIMIT: 1000}),
-    // A 24-byte key still encrypts with AES-GCM, so the Worker must reject it before any route runs.
-    bindings: {SESSION_KEY: btoa('a'.repeat(24)), ORIGIN: 'https://pkgfactory.test', GITHUB_OAUTH_CLIENT_ID: 'test', GITHUB_OAUTH_CLIENT_SECRET: 'secret'},
-  }));
+  // A 24-byte key still encrypts with AES-GCM, so the Worker must reject it before any route runs.
+  const mf = worker({SESSION_KEY: btoa('a'.repeat(24))});
   try {
     assert.equal((await mf.dispatchFetch('https://pkgfactory.test/health')).status, 200);
     for (const path of ['/', '/auth/login', '/api/templates', '/mcp', '/oauth/register']) {

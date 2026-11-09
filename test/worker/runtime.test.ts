@@ -1,20 +1,16 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { build } from 'esbuild';
-import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
-import { resolve } from 'node:path';
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
-import { planPackage } from '../../packages/pkgfactory/src/core/plan.js';
-import { encrypt, decrypt, sessionCookieValue } from '../../apps/cloudflare/src/auth.js';
-import { sha256, base64url, unbase64url, decode, utf8 } from '../../packages/pkgfactory/src/core/encoding.js';
+import { planPackage } from '../../src/core/plan.js';
+import { encrypt, decrypt, sessionCookieValue } from '../../src/cloudflare/auth.js';
+import { sha256, base64url, unbase64url, decode, utf8 } from '../../src/core/encoding.js';
 import { FakeGitHub } from '../support/fake-github.js';
-const options = {modules: true as const, compatibilityDate: '2026-09-27', compatibilityFlags: ['enable_request_signal', 'global_fetch_strictly_public']};
-// Functional tests use generous limits; security.test.ts exercises exhaustion.
-const ratelimits = Object.fromEntries(['SOURCE_RATE_LIMIT', 'REGISTRATION_RATE_LIMIT', 'ACCOUNT_RATE_LIMIT'].map((name, i) => [name, {namespace_id: String(i + 1), simple: {limit: 1000, period: 60 as const}}]));
+import { worker, workerd } from '../support/miniflare.js';
 test('workerd: deterministic templates, Ed25519/RSA and sealed-box without Node or Julia', async () => {
   const result = await build({entryPoints: ['test/support/poc-worker.ts'], bundle: true, write: false, format: 'esm', platform: 'browser'});
-  const mf = new Miniflare(convertV4MiniflareOptions({...options, script: result.outputFiles[0].text}));
+  const mf = workerd(result.outputFiles[0].text);
   try {
     for (const template of ['minimum', 'simple', 'all-in-one']) {
       const spec = {owner: 'tester', name: 'Worker', authors: ['日本語 "Author"'], template};
@@ -35,23 +31,19 @@ test('workerd: deterministic templates, Ed25519/RSA and sealed-box without Node 
 });
 test('Worker routes, Durable Object persistence, OAuth PKCE and CSRF rejection', async () => {
   const remote = new FakeGitHub(); const revocations: {authorization: string; body: unknown}[] = [];
-  const mf = new Miniflare(convertV4MiniflareOptions({...options, scriptPath: resolve('apps/cloudflare/dist/worker.js'), ratelimits,
-    durableObjects: {AUTH: {className: 'AuthState', useSQLite: true}}, kvNamespaces: ['OAUTH_KV'],
-    bindings: {ORIGIN: 'https://pkgfactory.test', GITHUB_OAUTH_CLIENT_ID: 'test-client', SESSION_KEY: btoa('a'.repeat(32)), GITHUB_OAUTH_CLIENT_SECRET: 'test-secret'},
-    outboundService: async (request: any) => {
+  const mf = worker({}, {}, async (request: any) => {
       if (request.url === 'https://api.github.com/applications/test-client/token' && request.method === 'DELETE') {
         revocations.push({authorization: request.headers.get('authorization'), body: await request.json()}); return new Response(null, {status: 204});
       }
       return remote.fetch(request.url, {method: request.method});
-    },
-  }));
+  });
   try {
     const health = await mf.dispatchFetch('https://pkgfactory.test/health');
     assert.equal(health.status, 200); assert.equal(health.headers.get('referrer-policy'), 'no-referrer');
     const hero = await mf.dispatchFetch('https://pkgfactory.test/assets/hero.png');
     assert.equal(hero.status, 200);
     assert.equal(hero.headers.get('content-type'), 'image/png');
-    assert.deepEqual(Buffer.from(await hero.arrayBuffer()), await readFile(new URL('../../packages/pkgfactory/src/web/assets/hero.png', import.meta.url)));
+    assert.deepEqual(Buffer.from(await hero.arrayBuffer()), await readFile(new URL('../../src/web/assets/hero.png', import.meta.url)));
     assert.equal((await mf.dispatchFetch('https://evil.test/health')).status, 403);
     assert.equal((await mf.dispatchFetch('https://pkgfactory.test/api/preview', {method: 'POST', body: '{}', headers: {Origin: 'https://evil.test'}})).status, 403);
     assert.equal((await mf.dispatchFetch('https://pkgfactory.test/mcp', {method: 'POST'})).status, 401);
@@ -142,14 +134,14 @@ test('Worker routes, Durable Object persistence, OAuth PKCE and CSRF rejection',
   } finally {await mf.dispose();}
 });
 test('Worker executes the shared engine without stored state and stops after disconnect', async () => {
-  const result = await build({entryPoints: ['test/support/engine-worker.ts'], bundle: true, write: false, format: 'esm', platform: 'browser', external: ['cloudflare:workers']});
-  const mf = new Miniflare(convertV4MiniflareOptions({...options, script: result.outputFiles[0].text}));
+  const result = await build({entryPoints: ['test/support/factory-worker.ts'], bundle: true, write: false, format: 'esm', platform: 'browser', external: ['cloudflare:workers']});
+  const mf = workerd(result.outputFiles[0].text);
   try {
     const plan = await (await mf.dispatchFetch('https://engine.test/preview', {method: 'POST', body: JSON.stringify({owner: 'tester', name: 'CloudEngine', authors: ['T'], template: 'simple'})})).json() as any;
     const created = await mf.dispatchFetch('https://engine.test/create', {method: 'POST', body: JSON.stringify(plan)});
     assert.equal(created.status, 200); assert.equal((await created.json() as any).state, 'complete');
   } finally {await mf.dispose();}
-  const aborted = new Miniflare(convertV4MiniflareOptions({...options, script: result.outputFiles[0].text, unsafeDirectSockets: [{host: '127.0.0.1', port: 0, proxy: false}]}));
+  const aborted = workerd(result.outputFiles[0].text, {unsafeDirectSockets: [{host: '127.0.0.1', port: 0, proxy: false}]});
   try {
     const plan = await (await aborted.dispatchFetch('https://engine.test/preview', {method: 'POST', body: JSON.stringify({owner: 'tester', name: 'Cancelled', authors: ['T']})})).json() as any;
     const controller = new AbortController();
@@ -166,12 +158,10 @@ test('Worker executes the shared engine without stored state and stops after dis
 test('Worker native fetch completes Web/MCP OAuth and 3 templates without following redirects', async () => {
   const calls: string[] = [];
   let remote = new FakeGitHub();
-  const mf = new Miniflare(convertV4MiniflareOptions({...options, scriptPath: resolve('apps/cloudflare/dist/worker.js'), ratelimits,
-    durableObjects: {AUTH: {className: 'AuthState', useSQLite: true}}, kvNamespaces: ['OAUTH_KV'],
-    bindings: {ORIGIN: 'https://pkgfactory.test', GITHUB_OAUTH_CLIENT_ID: 'test-client', SESSION_KEY: btoa('a'.repeat(32)), GITHUB_OAUTH_CLIENT_SECRET: 'test-secret'},
+  const mf = worker({}, {},
     // Intercept only after workerd's native Request/fetch validates its options.
     // Replacing fetch inside the application would hide runtime incompatibilities.
-    outboundService: async (request: any) => {
+    async (request: any) => {
       calls.push(request.url);
       assert.equal(request.headers.get('User-Agent'), 'PkgFactory');
       if (request.url === 'https://github.com/login/oauth/access_token') {
@@ -187,8 +177,7 @@ test('Worker native fetch completes Web/MCP OAuth and 3 templates without follow
       if (request.headers.get('Authorization') === 'Bearer redirect-user') return new Response(null, {status: 302, headers: {Location: 'https://unexpected.test/user'}});
       assert.equal(request.headers.get('Authorization'), 'Bearer test-token');
       return remote.fetch(request.url, {method: request.method, body: request.method === 'GET' ? undefined : await request.text()});
-    },
-  }));
+  });
   const signIn = async (code: string) => {
     const start = await mf.dispatchFetch('https://pkgfactory.test/auth/login', {redirect: 'manual'});
     const state = new URL(start.headers.get('location')!).searchParams.get('state')!;

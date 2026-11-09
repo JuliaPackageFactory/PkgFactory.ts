@@ -20,15 +20,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: '24'
-          cache: npm
-      - run: npm ci
+      - uses: ./.github/actions/setup
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
-      - run: node scripts/pack-smoke.mjs
+      - run: node test/tarball/pack-smoke.ts
       - run: npm run test:worker
         if: runner.os == 'Linux'
   generated-julia:
@@ -41,12 +37,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: '24'
-          cache: npm
-      - run: npm ci
-      - run: npx tsx scripts/generate-fixtures.ts
+      - uses: ./.github/actions/setup
+      - run: npx tsx test/julia/generate-fixtures.ts
       - uses: julia-actions/setup-julia@da908477b5db94c10ffce8cfea9f2b3b9d5db687 # v3.0.3
         with:
           version: '1.12'
@@ -59,7 +51,7 @@ jobs:
         run: julia --project=docs --startup-file=no -e 'using Pkg; Pkg.develop(PackageSpec(path=pwd())); Pkg.instantiate(); include("docs/make.jl")'
         working-directory: artifacts/generated/${{ matrix.template }}
       - if: matrix.template != 'minimum'
-        run: node scripts/check-description.mjs artifacts/generated/${{ matrix.template }}
+        run: node test/julia/check-description.ts artifacts/generated/${{ matrix.template }}
   deploy-staging:
     name: Deploy staging
     needs: [node, generated-julia]
@@ -76,11 +68,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: '24'
-          cache: npm
-      - run: npm ci
+      - uses: ./.github/actions/setup
       - run: npm run build
       - name: Check that the tested revision is still main
         id: revision
