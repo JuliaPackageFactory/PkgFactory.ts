@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Follow https://juliapackagefactory.github.io/julia-package-guidelines/README.md with url=https://github.com/{{{OWNER}}}/{{{PKG}}}.jl.
+Follow https://juliapackagefactory.github.io/Guidelines/JuliaPackages.md with repo={{{OWNER}}}/{{{PKG}}}.jl.
 
 ## Package
 
