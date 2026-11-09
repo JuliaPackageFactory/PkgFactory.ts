@@ -30,7 +30,7 @@
 | `src/cli` | Nodeホスト。`main.ts`（`dist/cli.js`）、`web.ts`（`pkgfactory web`）、`mcp.ts`（`pkgfactory mcp --stdio`）、`credentials.ts`（トークン取得） |
 | `src/cloudflare` | Cloudflareホスト。`worker.ts`（`dist/cloudflare/worker.js`）、OAuth、セッションCookie、`AuthState` Durable Object、レート制限、切断検出、テンプレート推薦 |
 | `src/index.ts` | 公開API |
-| `templates` | 3テンプレートの原本（57ファイル） |
+| `templates` | 4テンプレートの原本（81ファイル） |
 | `examples` | 利用者向けの設定例。パッケージに同梱する |
 | `scripts` | 生成（`build`・`templates`・`assets`）、本番配備前の照合（`release-revision`）、鍵生成の計測（`benchmark`）、原本の取り込み（`import-reference`） |
 | `test` | 「テスト」の表の各層に対応するサブディレクトリと、共通の模擬GitHub・フィクスチャ・Miniflare設定（`support`） |
@@ -158,7 +158,7 @@ invocationログは無効にし、URLのクエリ文字列は削除します。
 
 ### テンプレート推薦
 
-`/api/template-suggestion` は `AI` バインディングで `typesafe/jev` の `choice` 質問を呼び、3テンプレートの選択と確率を返します。
+`/api/template-suggestion` は `AI` バインディングで `typesafe/jev` の `choice` 質問を呼び、4テンプレートの選択と確率を返します。
 `typesafe/jev` はサードパーティーモデルのため、AI GatewayのUnified Billingを使います（`gateway: {id: 'default', collectLog: false}`）。配備先アカウントにクレジットを追加してください。
 ブラウザー側の要求は1ページあたり10回までです。失敗時は `template_suggestion_failed` イベントに `reason`、`upstreamStatus`、検証パスを記録します。
 
@@ -222,10 +222,10 @@ npx wrangler kv namespace create PKGFACTORY_TS_PRODUCTION_OAUTH --env production
 
 | ワークフロー | 契機 | 内容 |
 |---|---|---|
-| `ci.yml` | PR、mainへのpush、手動 | Nodeテスト、workerdテスト、tarballの検証、3テンプレートのJulia実行。mainで全ジョブ成功後にステージングへ配備し、`/health` を確認する |
+| `ci.yml` | PR、mainへのpush、手動 | Nodeテスト、workerdテスト、tarballの検証、4テンプレートのJulia実行。mainで全ジョブ成功後にステージングへ配備し、`/health` を確認する |
 | `production.yml` | mainから手動 | 起動時点のmainがステージングへ配備済みかを `scripts/release-revision.ts` で照合してから本番へ配備し、`/health` を確認する |
 | `release.yml` | mainから手動、確認欄に `publish` | `staging` の再配備、または `npm publish --provenance` |
-| `template-repositories.yml` | mainのテンプレート関連変更、手動 | 固定3リポジトリの更新 |
+| `template-repositories.yml` | mainのテンプレート関連変更、手動 | 固定4リポジトリの更新 |
 
 各ジョブはcheckoutの後に `.github/actions/setup`（Node 24と `npm ci`）を使います。ステージング配備は直前にmainの先頭が対象コミットのままであることを確認します。本番配備は `wrangler.jsonc` に `CONFIGURE_` が残っていればCloudflareへ接続する前に失敗します。
 
@@ -242,25 +242,26 @@ GitHubの `staging` / `production` environmentには、Cloudflareの **Edit Clou
 | Nodeテスト | `npm test` | `test/node` | なし。GitHubは模擬サーバー（`test/support/fake-github.ts`）。鍵形式の検証に `ssh-keygen` が必要 |
 | workerdテスト | `npm run test:worker` | `test/worker` | なし。Miniflare上でWorker全体を実行する（`test/support/miniflare.ts`） |
 | tarball検証 | `node test/tarball/pack-smoke.ts` | `test/tarball` | なし。`npm pack` の成果物をインストールしてCLI・stdio MCP・ローカルWebを起動する |
-| 生成パッケージのJulia実行 | CI `generated-julia` ジョブ | `test/julia` | なし。3テンプレートで `Pkg.test` とdocsビルドを行い、説明文が実行されないことを確認する |
-| 固定リポジトリE2E | `npm run e2e:templates` | `test/e2e` | 既存3リポジトリへの差分commit/push |
+| 生成パッケージのJulia実行 | CI `generated-julia` ジョブ | `test/julia` | なし。4テンプレートで `Pkg.test` を行い、`simple` と `all-in-one` ではdocsビルドで説明文が実行されないことを確認する |
+| 固定リポジトリE2E | `npm run e2e:templates` | `test/e2e` | 既存4リポジトリへの差分commit/push |
 | 作成の受入 | `npm run e2e`、`npm run e2e:staging` | `test/e2e` | 1回の実行で新規リポジトリ1件まで |
 
 `npm run check` は型検査、Nodeテスト、ビルド、workerdテストをまとめて実行します。
 
 Nodeテスト（`test/node/*.test.ts`）の対象: 説明文のエスケープと名前規則（`core`）、段階ごとの失敗・切断・他subject・既存リポジトリの拒否とプラン参照の再生成（`factory`）、プロフィールと組織オーナー判定（`github-context`）、ローカルWebとstdio MCP（`cli`）、Streamable HTTP（`mcp`）、セッションCookie・同意画面・戻り先・PKCE（`auth`）、jsdomでのブラウザー側の挙動（`web-workflow`、`web-interactions`）、Jev応答の検証（`template-suggestion`）、本番配備前の照合（`release`）、ローカルGitでの固定リポジトリ更新（`e2e-repositories`）。
 
-workerdテスト（`test/worker/*.test.ts`）の対象: テンプレート生成のNodeとの一致、鍵生成とsealed box、ルートとセッションCookie、OAuth PKCEとCSRF、切断後の停止、ネイティブfetchでのWeb/MCP認可と3テンプレートの作成（`runtime`）、ログインとアカウントのレート制限、`SESSION_KEY` の鍵長（`security`）。
+workerdテスト（`test/worker/*.test.ts`）の対象: テンプレート生成のNodeとの一致、鍵生成とsealed box、ルートとセッションCookie、OAuth PKCEとCSRF、切断後の停止、ネイティブfetchでのWeb/MCP認可と4テンプレートの作成（`runtime`）、ログインとアカウントのレート制限、`SESSION_KEY` の鍵長（`security`）。
 
 ### 固定リポジトリE2E
 
-`test/e2e/template-repositories.ts` が3つの専用リポジトリを現在の生成器で更新します。
+`test/e2e/template-repositories.ts` が4つの専用リポジトリを現在の生成器で更新します。
 
 | テンプレート | リポジトリ |
 |---|---|
 | `minimum` | [ExampleMinimum.jl](https://github.com/JuliaPackageFactory/ExampleMinimum.jl) |
 | `simple` | [ExampleSimple.jl](https://github.com/JuliaPackageFactory/ExampleSimple.jl) |
 | `all-in-one` | [ExampleAllInOne.jl](https://github.com/JuliaPackageFactory/ExampleAllInOne.jl) |
+| `agentic` | [ExampleAgentic.jl](https://github.com/JuliaPackageFactory/ExampleAgentic.jl) |
 
 - 既存のUUIDとGit履歴を維持し、日付はリポジトリの最初のコミットから取る
 - 生成物にないファイルは削除する。回復マーカー `.pkgfactory.json` は含めない
@@ -269,15 +270,15 @@ workerdテスト（`test/worker/*.test.ts`）の対象: テンプレート生成
 
 ```sh
 npm run e2e:templates -- --gh                              # 読み取りのみ。生成内容を .tmp/template-repositories/ に出力
-npm run e2e:templates -- --gh --publish                    # 3件を更新
+npm run e2e:templates -- --gh --publish                    # 4件を更新
 npm run e2e:templates -- --gh --publish --package=ExampleSimple
 ```
 
 結果は `artifacts/template-repositories*.json` に保存します。
 
-GitHub Actionsの `Template E2E tests` は、mainへのテンプレート関連の変更で1件ずつ更新し、その後に公開用トークンを渡さずにJuliaのテストとdocsビルドを行います。有効化には次が必要です。
+GitHub Actionsの `Template E2E tests` は、mainへのテンプレート関連の変更で1件ずつ更新し、その後に公開用トークンを渡さずにJuliaのテストを行い、`simple` と `all-in-one` ではdocsビルドも行います。有効化には次が必要です。
 
-1. 対象3リポジトリに限定したfine-grained PAT（Contents: Read and write、Workflows: Read and write、Metadata: Read-only）をActions secret `PKGFACTORY_E2E_TOKEN` に登録する
+1. 対象4リポジトリに限定したfine-grained PAT（Contents: Read and write、Workflows: Read and write、Metadata: Read-only）をActions secret `PKGFACTORY_E2E_TOKEN` に登録する。固定リポジトリを追加したときは、既存PATのRepository accessにも加える
 2. Actions variable `PKGFACTORY_TEMPLATE_E2E_ENABLED` を `true` にする
 
 ### 作成の受入
