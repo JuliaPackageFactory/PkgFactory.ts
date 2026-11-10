@@ -52,6 +52,16 @@ jobs:
         working-directory: artifacts/generated/${{ matrix.template }}
       - if: matrix.template != 'minimum'
         run: node test/julia/check-description.ts artifacts/generated/${{ matrix.template }}
+      - name: Check that Documenter replaces the gh-pages placeholder
+        if: matrix.template != 'minimum'
+        run: |
+          julia --project=docs --startup-file=no -e '
+            using Documenter
+            page = joinpath(ARGS[1], "index.html")
+            Documenter.HTMLWriter.generate_redirect_file(page, ["dev"])
+            occursin("url=./dev/", read(page, String)) || error("Documenter kept the gh-pages placeholder")
+          ' "$GITHUB_WORKSPACE/artifacts/gh-pages/${{ matrix.template }}"
+        working-directory: artifacts/generated/${{ matrix.template }}
   deploy-staging:
     name: Deploy staging
     needs: [node, generated-julia]

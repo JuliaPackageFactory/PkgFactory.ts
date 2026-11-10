@@ -72,6 +72,7 @@ pkgfactory mcp --stdio                                 # stdio MCPサーバー
 | `all-in-one` | 上記 ＋ Aqua、JET、ExplicitImports、Runic書式検査、CITATION.cff、Issue/PRテンプレート、Dependabot、ノートブック、`AGENTS.md` |
 
 `simple` と `all-in-one` では、作成時にDeploy keyと `DOCUMENTER_KEY` Secretを登録し、`gh-pages` ブランチとGitHub Pagesを設定します。
+ドキュメントは作成直後のCIのDocumentationジョブが公開します。それまでのPagesは「まだデプロイされていない」旨の仮ページで、数分後に再読み込みするとドキュメントに切り替わります。
 どのテンプレートでも、リポジトリに `julia` と `juliapackagefactory` のトピックを付けます。
 
 ## 認証

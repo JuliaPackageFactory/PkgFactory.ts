@@ -1,4 +1,5 @@
 import { planPackage, markerPath, type PackagePlan } from '../core/plan.js';
+import { pagesPlaceholder } from '../core/pages.js';
 import { specSchema } from '../core/spec.js';
 import { base64, unbase64, utf8 } from '../core/encoding.js';
 import { GitHub, GitHubError } from '../github/client.js';
@@ -113,7 +114,12 @@ export class Factory {
       if (repo.default_branch !== 'main') await write('settings', 'PATCH', root, {default_branch: 'main'});
       await write('topics', 'PUT', `${root}/topics`, {names: ['julia', 'juliapackagefactory']});
       if (plan.spec.template !== 'minimum') {
-        await write('gh-pages', 'POST', `${root}/git/refs`, {ref: 'refs/heads/gh-pages', sha: commit.sha});
+        // An orphan gh-pages keeps the package sources off GitHub Pages. Pages
+        // would otherwise render README.md with Jekyll as the site until the
+        // first Documenter deployment, and keep publishing every source file.
+        const pagesTree = await write('gh-pages', 'POST', `${root}/git/trees`, {tree: Object.entries(pagesPlaceholder(plan.repository)).map(([path, content]) => ({path, mode: '100644', type: 'blob', content}))});
+        const pagesCommit = await write('gh-pages', 'POST', `${root}/git/commits`, {message: `${generatedCommit}\n\nPlaceholder until Documenter.jl deploys the documentation.`, tree: pagesTree.sha, parents: []});
+        await write('gh-pages', 'POST', `${root}/git/refs`, {ref: 'refs/heads/gh-pages', sha: pagesCommit.sha});
         // The private key exists only in memory until it is sealed for GitHub.
         const key = await (this.options.keyGenerator ?? generateDeployKey)(this.options.algorithm ?? 'ed25519');
         await write('deploy-key', 'POST', `${root}/keys`, {title: `PkgFactory:${plan.id}`, key: key.publicKey, read_only: false});

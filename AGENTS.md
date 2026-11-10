@@ -81,7 +81,7 @@
 4. Contents APIでREADMEを置き、`main` を初期化する。コミット名は `Using PkgFactory`
 5. 全ファイルのtreeとコミットを作り、`main` を非強制で更新する。このコミットには `[skip ci]` を付ける。default branchが `main` でなければ変更する
 6. トピック `julia`、`juliapackagefactory` を設定する
-7. `simple` / `all-in-one` のみ: `gh-pages` ブランチ、Deploy key（書き込み可、タイトル `PkgFactory:<planId>`）、sealed boxで暗号化した `DOCUMENTER_KEY`、Pages（`gh-pages` の `/`）を設定する
+7. `simple` / `all-in-one` のみ: `gh-pages` ブランチ、Deploy key（書き込み可、タイトル `PkgFactory:<planId>`）、sealed boxで暗号化した `DOCUMENTER_KEY`、Pages（`gh-pages` の `/`）を設定する。`gh-pages` は親を持たないコミットで、`.nojekyll` と仮の `index.html`（`src/core/pages.ts`）だけを置く。`main` から分岐させると、最初のDocumenterの配備までPagesがJekyllでREADMEを表示し、その後もソース一式を公開し続けるため。仮ページはDocumenterの自動生成コメントで始まり、最初の配備で `./dev/` へのリダイレクトに置き換わる（CIの `generated-julia` ジョブで確認する）
 8. 回復マーカー `.pkgfactory.json` の `state` を `complete` に更新する。このコミットでpush CIが1回起動する
 
 結果にはリポジトリのURLと、Pagesを設定した場合はそのURL（`pagesUrl`）を含めます。
