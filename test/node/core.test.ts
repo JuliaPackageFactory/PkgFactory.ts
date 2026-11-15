@@ -39,6 +39,16 @@ for (const template of templates) test(`render and parse ${template}`, async () 
   plan.files['Project.toml'] += '\n# tampered';
   await assert.rejects(validatePlan(plan));
 });
+test('templates with docs link the central guidelines for the generated repository', async () => {
+  const guide = 'https://juliapackagefactory.github.io/Guidelines/JuliaPackages';
+  const linked = {minimum: [], simple: ['README.md'], 'all-in-one': ['AGENTS.md', 'README.md', 'docs/src/developer.md']};
+  for (const template of templates) {
+    const plan = await planPackage({owner: 'tester', name: 'SafePackage', authors: ['Tester'], template});
+    const paths = Object.keys(plan.files).filter(path => plan.files[path].includes(guide)).sort();
+    assert.deepEqual(paths, linked[template]);
+    for (const path of paths) assert(plan.files[path].includes('repo=tester/SafePackage.jl'), path);
+  }
+});
 test('input does not allow path or Julia code injection', async () => {
   for (const name of ['../X', 'A;exit()', 'a', 'A$B']) await assert.rejects(planPackage({owner: 'a', name, authors: ['a']}));
 });
