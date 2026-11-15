@@ -152,6 +152,6 @@ node test/tarball/pack-smoke.ts
 
 MITライセンスです（[LICENSE](LICENSE)）。Copyright (c) 2025-2026 Shuhei Ohno and contributors.
 
-- テンプレート（58ファイル）とWeb画面のスタイルシート・ロゴは、[PkgFactory.jl](https://github.com/JuliaPackageFactory/PkgFactory.jl) のコミット `7c7d4afeaa3b4b708726af4795c13c192fc3c948`（MIT）に由来します。テンプレートの描画はJulia文字列をエスケープするため、旧版とバイト単位の互換はありません。
+- テンプレート（58ファイル）とWeb画面のスタイルシート・ロゴは、[PkgFactory.jl](https://github.com/JuliaPackageFactory/PkgFactory.jl) のコミット `7c7d4afeaa3b4b708726af4795c13c192fc3c948`（MIT）に由来します。`agentic` テンプレートは、それらを基にこのリポジトリで追加したものです。テンプレートの描画はJulia文字列をエスケープするため、旧版とバイト単位の互換はありません。
 - OAuthには [@cloudflare/workers-oauth-provider](https://github.com/cloudflare/workers-oauth-provider)（MIT）、MCPには [@modelcontextprotocol/sdk](https://github.com/modelcontextprotocol/typescript-sdk)（MIT）を使用しています。
 - `src/web/assets/github.svg` のGitHub Invertocatロゴは、[GitHubのロゴ使用ガイドライン](https://brand.github.com/foundations/logo)に従います。

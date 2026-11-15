@@ -259,9 +259,9 @@ workerdテスト（`test/worker/*.test.ts`）の対象: テンプレート生成
 | テンプレート | リポジトリ |
 |---|---|
 | `minimum` | [ExampleMinimum.jl](https://github.com/JuliaPackageFactory/ExampleMinimum.jl) |
+| `agentic` | [ExampleAgentic.jl](https://github.com/JuliaPackageFactory/ExampleAgentic.jl) |
 | `simple` | [ExampleSimple.jl](https://github.com/JuliaPackageFactory/ExampleSimple.jl) |
 | `all-in-one` | [ExampleAllInOne.jl](https://github.com/JuliaPackageFactory/ExampleAllInOne.jl) |
-| `agentic` | [ExampleAgentic.jl](https://github.com/JuliaPackageFactory/ExampleAgentic.jl) |
 
 - 既存のUUIDとGit履歴を維持し、日付はリポジトリの最初のコミットから取る
 - 生成物にないファイルは削除する。回復マーカー `.pkgfactory.json` は含めない

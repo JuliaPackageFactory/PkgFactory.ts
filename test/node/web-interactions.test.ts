@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {build} from 'esbuild';
 import {page} from '../../src/web/server/page.js';
+import {listTemplates} from '../../src/core/spec.js';
 const {JSDOM} = createRequire(import.meta.url)('jsdom');
 const {outputFiles} = await build({entryPoints: ['src/web/client/app.ts'], bundle: true, write: false, platform: 'browser'});
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -428,6 +429,18 @@ test('Agentic is treated like Minimum: no app checks and no documentation automa
     select('visibility', 'private'); await wait(ready); assert.equal($('private-docs-help').hidden, true);
     assert.equal(f.calls.find(call => call.url === '/api/preview')!.body.template, 'agentic');
   } finally {f.close();}
+});
+
+test('the page offers every template and shows the documentation automation core/spec.ts declares', async () => {
+  for (const {id, documentation} of listTemplates()) {
+    const f = await fixture();
+    try {
+      assert.ok(f.$('template').querySelector(`option[value="${id}"]`), id);
+      f.select('template', id);
+      assert.equal(f.$('documenter-state').textContent, documentation ? 'Automatic' : 'Not included', id);
+      assert.equal(f.$('codecov-link').hidden, !documentation, id);
+    } finally {f.close();}
+  }
 });
 
 test('template-first input waits for editing to end before advancing once', async () => {

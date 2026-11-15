@@ -31,12 +31,6 @@ let appsRevision = 0, appsAbort: AbortController | undefined, appsLoading = fals
 let suggestionRevision = 0, suggestionAbort: AbortController | undefined, suggestionComplete = false;
 const suggestionLimit = 10;
 const suggestionTemplateOrder = ['minimum', 'agentic', 'simple', 'all-in-one'] as const;
-// Templates whose creation configures Documenter, TagBot, and Codecov (see core/spec.ts).
-const documentationTemplates: readonly string[] = ['simple', 'all-in-one'];
-const hasDocumentation = () => documentationTemplates.includes(template.value);
-// Templates that ship TagBot.yml. Agentic runs TagBot with GITHUB_TOKEN alone, without a deploy key.
-const tagbotTemplates: readonly string[] = ['agentic', 'simple', 'all-in-one'];
-const hasTagBot = () => tagbotTemplates.includes(template.value);
 // Page lifetime only: resets and aborted/failed requests do not replenish the budget.
 let suggestionRequests = 0;
 let descriptionComposing = false;
@@ -47,7 +41,12 @@ let profileLogin = '', authRequired = false, authorsTouched = false, advancedToA
 let creating = false, creationFailed = false, appReturnPending = false;
 let selectedFile = '', fileScroll = 0, contentScroll = {top: 0, left: 0};
 const draftKey = 'pkgfactory-reconnect-settings';
-const hasAutomation = () => hasDocumentation();
+// Templates with a Documenter site: creation configures its deployment, and CI uploads coverage to Codecov.
+// Keep in step with `documentation` in core/spec.ts.
+const documentationTemplates: readonly string[] = ['simple', 'all-in-one'];
+const hasAutomation = () => documentationTemplates.includes(template.value);
+// Agentic also ships TagBot.yml, which needs no setup: it runs on GITHUB_TOKEN alone.
+const hasTagBot = () => hasAutomation() || template.value === 'agentic';
 function appConfirmed(slug: typeof displayedApps[number]) {
   return installations[slug].state === 'installed'
     || (installations[slug].state === 'unknown' && confirmedApps.get(owner.value)?.has(slug) === true);
@@ -237,7 +236,7 @@ async function loadSuggestion(query: string, revision: number) {
 function renderApps() {
   const confirmed = confirmedApps.get(owner.value);
   for (const slug of displayedApps) {
-    const excluded = slug === 'codecov' && !!template.value && !hasDocumentation();
+    const excluded = slug === 'codecov' && !!template.value && !hasAutomation();
     const installation = installations[slug];
     const selfConfirmed = installation.state === 'unknown' && !!confirmed?.has(slug);
     const installed = appConfirmed(slug);
@@ -309,8 +308,8 @@ async function loadProfile() {
   });
 }
 function automation() {
-  const documentation = hasDocumentation();
-  // Minimum and Agentic: package tests and CI only.
+  const documentation = hasAutomation();
+  // Minimum and Agentic: nothing to configure during creation.
   const minimum = !!template.value && !documentation;
   const privateRepository = element<HTMLSelectElement>('visibility').value === 'private';
   element('documenter-state').textContent = documentation ? 'Automatic' : minimum ? 'Not included' : 'Choose a template';

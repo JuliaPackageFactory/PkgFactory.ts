@@ -3,14 +3,14 @@ import { templates, type PackageSpec } from '../../src/core/spec.js';
 export const sourceRepository = 'JuliaPackageFactory/PkgFactory.ts';
 export const targets = [
   {name: 'ExampleMinimum', template: 'minimum', previousNames: ['TestMinimum', 'TemplateMinimum', 'PkgFactoryMinimum']},
+  {name: 'ExampleAgentic', template: 'agentic', previousNames: []},
   {name: 'ExampleSimple', template: 'simple', previousNames: ['TestSimple', 'TemplateSimple', 'PkgFactorySimple']},
   {name: 'ExampleAllInOne', template: 'all-in-one', previousNames: ['TestAllInOne', 'TemplateAllInOne', 'TamplateAllInOne', 'PkgFactoryAllInOne']},
-  {name: 'ExampleAgentic', template: 'agentic', previousNames: []},
 ] as const;
 export type Target = typeof targets[number];
 export function snapshotTarget(name: string): Target {
   const target = targets.find(t => t.name === name);
-  if (!target) throw new Error('Choose ExampleMinimum, ExampleSimple, ExampleAllInOne, or ExampleAgentic');
+  if (!target) throw new Error('Choose ExampleMinimum, ExampleAgentic, ExampleSimple, or ExampleAllInOne');
   return target;
 }
 export function selectedTemplate(args: string[]): PackageSpec['template'] {
