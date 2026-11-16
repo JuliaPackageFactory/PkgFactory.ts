@@ -3,19 +3,20 @@ import { templates, type PackageSpec } from '../../src/core/spec.js';
 export const sourceRepository = 'JuliaPackageFactory/PkgFactory.ts';
 export const targets = [
   {name: 'ExampleMinimum', template: 'minimum', previousNames: ['TestMinimum', 'TemplateMinimum', 'PkgFactoryMinimum']},
+  {name: 'ExampleAgentic', template: 'agentic', previousNames: []},
   {name: 'ExampleSimple', template: 'simple', previousNames: ['TestSimple', 'TemplateSimple', 'PkgFactorySimple']},
   {name: 'ExampleAllInOne', template: 'all-in-one', previousNames: ['TestAllInOne', 'TemplateAllInOne', 'TamplateAllInOne', 'PkgFactoryAllInOne']},
 ] as const;
 export type Target = typeof targets[number];
 export function snapshotTarget(name: string): Target {
   const target = targets.find(t => t.name === name);
-  if (!target) throw new Error('Choose ExampleMinimum, ExampleSimple, or ExampleAllInOne');
+  if (!target) throw new Error('Choose ExampleMinimum, ExampleAgentic, ExampleSimple, or ExampleAllInOne');
   return target;
 }
 export function selectedTemplate(args: string[]): PackageSpec['template'] {
   const values = args.filter(a => a.startsWith('--template='));
   const value = values[0]?.slice('--template='.length) ?? 'simple';
-  if (values.length > 1 || !templates.includes(value as PackageSpec['template'])) throw new Error('Choose one --template=minimum|simple|all-in-one');
+  if (values.length > 1 || !templates.includes(value as PackageSpec['template'])) throw new Error('Choose one --template=minimum|agentic|simple|all-in-one');
   return value as PackageSpec['template'];
 }
 export function freshTestName(date = new Date()): string {

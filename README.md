@@ -53,7 +53,7 @@ pkgfactory mcp --stdio                                 # stdio MCPサーバー
 | `name` | パッケージ名。リポジトリ名は `<name>.jl` |
 | `authors` | 1〜20名 |
 | `description` | 省略可。READMEとdocsにはエスケープして埋め込み、GitHubのdescriptionには原文を使う |
-| `template` | `minimum` / `simple` / `all-in-one`（既定 `simple`） |
+| `template` | `minimum` / `agentic` / `simple` / `all-in-one`（既定 `simple`） |
 | `visibility` | `public` / `private`（既定 `public`） |
 
 パッケージ名の規則は[PkgFactory.jl](https://github.com/JuliaPackageFactory/PkgFactory.jl/blob/6cf2962ceab3e7ee3662d5bb980960fbb434a5f9/src/verification.jl)と同じです。
@@ -68,7 +68,8 @@ pkgfactory mcp --stdio                                 # stdio MCPサーバー
 | テンプレート | 内容 |
 |---|---|
 | `minimum` | パッケージ本体、テスト、CI |
-| `simple` | 上記 ＋ Documenter、TagBot、Codecov |
+| `agentic` | `minimum` ＋ Aqua、JET、ExplicitImports、Runic書式検査、doctest、CITATION.cff、Issue/PRテンプレート、Dependabot、TagBot、AIコーディングエージェント向けの `AGENTS.md`（ドキュメントサイトなし） |
+| `simple` | `minimum` ＋ Documenter、TagBot、Codecov |
 | `all-in-one` | 上記 ＋ Aqua、JET、ExplicitImports、Runic書式検査、CITATION.cff、Issue/PRテンプレート、Dependabot、ノートブック、`AGENTS.md` |
 
 `simple` と `all-in-one` では、作成時にDeploy keyと `DOCUMENTER_KEY` Secretを登録し、`gh-pages` ブランチとGitHub Pagesを設定します。
@@ -151,6 +152,6 @@ node test/tarball/pack-smoke.ts
 
 MITライセンスです（[LICENSE](LICENSE)）。Copyright (c) 2025-2026 Shuhei Ohno and contributors.
 
-- テンプレート（58ファイル）とWeb画面のスタイルシート・ロゴは、[PkgFactory.jl](https://github.com/JuliaPackageFactory/PkgFactory.jl) のコミット `7c7d4afeaa3b4b708726af4795c13c192fc3c948`（MIT）に由来します。テンプレートの描画はJulia文字列をエスケープするため、旧版とバイト単位の互換はありません。
+- テンプレート（58ファイル）とWeb画面のスタイルシート・ロゴは、[PkgFactory.jl](https://github.com/JuliaPackageFactory/PkgFactory.jl) のコミット `7c7d4afeaa3b4b708726af4795c13c192fc3c948`（MIT）に由来します。`agentic` テンプレートは、それらを基にこのリポジトリで追加したものです。テンプレートの描画はJulia文字列をエスケープするため、旧版とバイト単位の互換はありません。
 - OAuthには [@cloudflare/workers-oauth-provider](https://github.com/cloudflare/workers-oauth-provider)（MIT）、MCPには [@modelcontextprotocol/sdk](https://github.com/modelcontextprotocol/typescript-sdk)（MIT）を使用しています。
 - `src/web/assets/github.svg` のGitHub Invertocatロゴは、[GitHubのロゴ使用ガイドライン](https://brand.github.com/foundations/logo)に従います。
