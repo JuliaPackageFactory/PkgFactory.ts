@@ -215,6 +215,7 @@ test('Worker native fetch completes Web/MCP OAuth and 4 templates without follow
     const cookie = success.headers.getSetCookie().find(c => c.startsWith('__Host-pkgfactory-session='))!.split(';')[0];
     const page = await (await mf.dispatchFetch('https://pkgfactory.test/', {headers: {Cookie: cookie}})).text();
     const csrf = page.match(/name="csrf-token" content="([^"]+)"/)![1];
+    assert.match(page, /href="https:\/\/github\.com\/settings\/connections\/applications\/test-client"/);
     const profile = await (await mf.dispatchFetch('https://pkgfactory.test/api/github/profile', {headers: {Cookie: cookie}})).json() as any;
     assert.equal(profile.user.name, 'Test Author'); assert.equal(profile.owners[0].login, 'tester');
     const post = async (path: string, body: unknown) => (await mf.dispatchFetch(`https://pkgfactory.test/api/${path}`, {method: 'POST', headers: {Cookie: cookie, Origin: 'https://pkgfactory.test', 'X-PkgFactory-CSRF': csrf, 'Content-Type': 'application/json'}, body: JSON.stringify(body)})).json() as Promise<any>;

@@ -129,3 +129,10 @@ test('Web preview repeats the availability check and new creation rechecks organ
   assert.match(page('', true, false, 'https://pkgfactory.test'), /id="package-form"[^>]*hidden/);
   assert.match(page('', true, false, 'https://pkgfactory.test'), /href="\/auth\/login"/);
 });
+
+test('public Web links the owner help to the OAuth App organization access settings', () => {
+  const link = /id="organization-access" href="https:\/\/github\.com\/settings\/connections\/applications\/Ov23li%2Fx"/;
+  assert.match(page('', true, true, 'https://pkgfactory.test', false, 'Ov23li/x'), link);
+  assert.doesNotMatch(page('', false, true, 'https://pkgfactory.test', false, 'Ov23li/x'), /organization-access/);
+  assert.doesNotMatch(page('', true, true, 'https://pkgfactory.test'), /organization-access/);
+});

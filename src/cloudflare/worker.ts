@@ -25,7 +25,7 @@ async function web(request: Request, env: Env): Promise<Response> {
   if (url.pathname === '/health' && request.method === 'GET') return json({service: 'PkgFactory', status: env.MAINTENANCE === 'true' ? 'maintenance' : 'ok'});
   const file = staticFile(request); if (file) return file;
   const identity = await session(request, env);
-  if (url.pathname === '/' && request.method === 'GET') return new Response(page(identity?.csrf ?? '', true, !!identity, env.ORIGIN, !!env.AI), {headers: {'Content-Type': 'text/html; charset=utf-8'}});
+  if (url.pathname === '/' && request.method === 'GET') return new Response(page(identity?.csrf ?? '', true, !!identity, env.ORIGIN, !!env.AI, env.GITHUB_OAUTH_CLIENT_ID), {headers: {'Content-Type': 'text/html; charset=utf-8'}});
   if (url.pathname.startsWith('/api/')) {
     if (!identity) return json({error: 'Connect GitHub to preview and create a package'}, 401);
     if (!csrfValid(request, env.ORIGIN, identity.csrf)) {securityEvent('csrf_rejected', request); return json({error: 'Invalid CSRF token or Origin'}, 403);}
