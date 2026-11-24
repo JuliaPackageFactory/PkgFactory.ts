@@ -2,7 +2,9 @@ import { escapeHtml } from './http.js';
 
 // Workflow and styling adapted from PkgFactory.jl at 7c7d4af. Authentication
 // uses the agreed server-side session and PKCE instead of tab-held tokens.
-export function page(csrf: string, publicWeb: boolean, authenticated: boolean, origin: string, templateSuggestions = false) {
+export function page(csrf: string, publicWeb: boolean, authenticated: boolean, origin: string, templateSuggestions = false, oauthClientId = '') {
+  // OAuth App tokens only see organizations that granted this app access; link to where owners grant it.
+  const appSettings = publicWeb && oauthClientId ? `https://github.com/settings/connections/applications/${encodeURIComponent(oauthClientId)}` : '';
   const pageUrl = escapeHtml(new URL('/', origin).href);
   const imageUrl = escapeHtml(new URL('/assets/ogp.png', origin).href);
   const description = 'Create a Julia package repository and set up its infrastructure from a package name and GitHub username. Use Julia Package Factory through the CLI, Web UI, or MCP.';
@@ -46,7 +48,7 @@ export function page(csrf: string, publicWeb: boolean, authenticated: boolean, o
       <fieldset id="package-fields" class="package-flow" aria-label="Package settings">
         <section class="workflow-card" data-step="2"><div class="card-heading"><span class="step-badge">2</span><div><div class="title-row"><h2 tabindex="-1">Repository settings</h2><span class="step-state" role="status">Upcoming</span></div><p>Choose where the repository will live and give your package its Julia name.</p></div></div>
           <div class="card-body field-grid two-columns">
-            <label class="field"><span>Repository owner</span><select id="owner" name="owner" required aria-describedby="owner-help"></select><small id="owner-help">Your account and organizations where you are an owner. Missing an organization? Check its access in GitHub's PkgFactory authorization settings.</small></label>
+            <label class="field"><span>Repository owner</span><select id="owner" name="owner" required aria-describedby="owner-help"></select><small id="owner-help">${appSettings ? `Missing an organization? <a id="organization-access" href="${escapeHtml(appSettings)}" target="_blank" rel="noreferrer">Grant access on GitHub</a>, then reload.` : "Your account and organizations where you are an owner. Missing an organization? Check its access in GitHub's PkgFactory authorization settings."}</small></label>
             <label class="field"><span>Visibility</span><select id="visibility" name="visibility" aria-describedby="private-docs-help"><option value="public">Public</option><option value="private">Private</option></select><small id="private-docs-help" hidden>Documenter uses GitHub Pages. Private repositories require a supported paid plan, and the documentation site may still be public. <a href="https://docs.github.com/en/pages/getting-started-with-github-pages/creating-a-github-pages-site" target="_blank" rel="noreferrer">Check GitHub Pages availability and visibility</a>.</small></label>
             <label class="field full-width"><span>Package name</span><div class="input-suffix"><input id="package-name" name="name" autocomplete="off" placeholder="MyPkg" maxlength="100" required aria-describedby="package-availability"><span>.jl</span></div><small id="package-availability" class="availability-status" role="status" aria-live="polite"></small></label>
           </div>
