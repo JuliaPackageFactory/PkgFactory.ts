@@ -53,7 +53,8 @@ test('session ciphertext is authenticated and bound to its context', async () =>
 });
 test('the session cookie is the only copy of the token and is bound to the origin, key and deadline', async () => {
   const env = {SESSION_KEY: btoa('s'.repeat(32)), ORIGIN: 'https://pkgfactory.test', AUTH: {idFromName: () => 'auth', get: () => ({fetch: async () => Response.json(null)})}} as unknown as Env;
-  const value = {id: 'i'.repeat(43), subject: '42', token: 'never-log', csrf: 'c'.repeat(43), expiresAt: Date.now() + 60000};
+  // The subject is long enough that it cannot appear by chance in the random base64url cookie; '42' did in a few percent of runs.
+  const value = {id: 'i'.repeat(43), subject: '123456789012', token: 'never-log', csrf: 'c'.repeat(43), expiresAt: Date.now() + 60000};
   const cookie = await sessionCookieValue(env, value);
   assert.equal(cookie.includes(value.token), false); assert.equal(cookie.includes(value.subject), false);
   const request = (c: string) => new Request('https://pkgfactory.test/', {headers: {Cookie: `__Host-pkgfactory-session=${c}`}});
