@@ -35,19 +35,28 @@ for (const template of templates) test(`render and parse ${template}`, async () 
   assert.deepEqual(TOML.parse(plan.files['Project.toml']).authors, plan.spec.authors);
   if (hasDocumentation(template)) assert.match(plan.files['docs/make.jl'], /\\\$x/);
   else assert.equal(Object.keys(plan.files).some(path => path.startsWith('docs/')), false);
-  if (template === 'agentic') {
+  if (template === 'agentic' || template === 'all-in-one') {
     for (const path of ['AGENTS.md', 'CITATION.cff', 'test/runic.jl', 'test/doctest.jl', 'test/aqua.jl', 'test/jet.jl', 'test/explicit_imports.jl', '.github/ISSUE_TEMPLATE/bug_report.yml', '.github/workflows/Aqua.yml', '.github/workflows/JET.yml', '.github/workflows/TagBot.yml']) assert.ok(plan.files[path], path);
+    assert.match(plan.files['AGENTS.md'], /-m Runic --inplace src test/);
+    assert.match(plan.files['test/Project.toml'], /^Runic = "1"$/m);
+  }
+  if (template === 'agentic') {
     // Human-facing extras stay out: no changelog, no formatting-suggestion workflow, no coverage service, no docs site.
     for (const path of ['CHANGELOG.md', 'CONTRIBUTING.md', '.github/workflows/Format.yml', 'docs/make.jl']) assert.equal(plan.files[path], undefined, path);
     assert.doesNotMatch(plan.files['.github/workflows/CI.yml'], /codecov/);
     assert.doesNotMatch(plan.files['.github/workflows/TagBot.yml'], /DOCUMENTER_KEY/);
-    assert.match(plan.files['AGENTS.md'], /-m Runic --inplace src test/);
-    assert.match(plan.files['test/Project.toml'], /^Runic = "1"$/m);
   }
   assert.match(plan.files['.github/workflows/CI.yml'], /\$\{\{ github.workflow \}\}/);
   await validatePlan(plan);
   plan.files['Project.toml'] += '\n# tampered';
   await assert.rejects(validatePlan(plan));
+});
+test('all-in-one shares the agentic AGENTS.md and the test suite it describes', async () => {
+  const reference = {id: 'plan', uuid: 'f5dc8578-e5a2-4e82-bf9a-9022e5ef4973', date: '2026-09-28T00:00:00.000Z'};
+  const [agentic, allInOne] = await Promise.all((['agentic', 'all-in-one'] as const).map(template =>
+    planPackage({owner: 'JuliaPackageFactory', name: 'Example', authors: ['Tester'], template}, reference)));
+  for (const path of ['AGENTS.md', 'test/Project.toml', 'test/runtests.jl', 'test/runic.jl', 'test/doctest.jl', 'test/aqua.jl', 'test/jet.jl', 'test/explicit_imports.jl'])
+    assert.equal(allInOne.files[path], agentic.files[path], path);
 });
 test('input does not allow path or Julia code injection', async () => {
   for (const name of ['../X', 'A;exit()', 'a', 'A$B']) await assert.rejects(planPackage({owner: 'a', name, authors: ['a']}));

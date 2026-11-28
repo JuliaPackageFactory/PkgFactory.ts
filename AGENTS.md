@@ -30,7 +30,7 @@
 | `src/cli` | Nodeホスト。`main.ts`（`dist/cli.js`）、`web.ts`（`pkgfactory web`）、`mcp.ts`（`pkgfactory mcp --stdio`）、`credentials.ts`（トークン取得） |
 | `src/cloudflare` | Cloudflareホスト。`worker.ts`（`dist/cloudflare/worker.js`）、OAuth、セッションCookie、`AuthState` Durable Object、レート制限、切断検出、テンプレート推薦 |
 | `src/index.ts` | 公開API |
-| `templates` | 4テンプレートの原本（81ファイル） |
+| `templates` | 4テンプレートの原本（83ファイル） |
 | `examples` | 利用者向けの設定例。パッケージに同梱する |
 | `scripts` | 生成（`build`・`templates`・`assets`）、本番配備前の照合（`release-revision`）、鍵生成の計測（`benchmark`）、原本の取り込み（`import-reference`） |
 | `test` | 「テスト」の表の各層に対応するサブディレクトリと、共通の模擬GitHub・フィクスチャ・Miniflare設定（`support`） |
